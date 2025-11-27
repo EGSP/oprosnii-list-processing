@@ -1,0 +1,18 @@
+{
+	"id": "example-tu",
+	"name": "Пример технических условий",
+	"description": "Пример структуры файла ТУ для демонстрации",
+	"rules": [
+		{
+			"parameter": "material",
+			"code": "ВД",
+			"description": "Водостойкий материал"
+		},
+		{
+			"parameter": "climate",
+			"code": "У1",
+			"description": "Умеренный климат"
+		}
+	],
+	"abbreviationTemplate": "{material}-{climate}-{size}"
+}
