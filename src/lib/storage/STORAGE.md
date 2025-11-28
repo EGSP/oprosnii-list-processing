@@ -1,0 +1,317 @@
+# Модуль хранилища данных (Storage)
+
+Модуль отвечает за хранение данных приложения: базу данных SQLite для метаданных заявок и файловое хранилище для исходных файлов.
+
+Реализация соответствует требованиям из [`../business/AGENTS.md`](../business/AGENTS.md).
+
+## Структура модуля
+
+Расположение: `src/lib/storage/`
+
+### Файлы
+
+- **`types.ts`** - TypeScript типы и Zod схемы для валидации
+- **`db.ts`** - Подключение к SQLite и утилиты для работы с БД
+- **`repository.ts`** - Репозиторий для CRUD операций с заявками
+- **`fileStorage.ts`** - Управление файлами заявок
+- **`technicalSpecs.ts`** - Управление техническими условиями (ТУ)
+- **`errors.ts`** - Классы ошибок для обработки исключений
+- **`index.ts`** - Централизованный экспорт всех функций модуля
+
+## База данных
+
+### Схема таблицы `applications`
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | TEXT PRIMARY KEY | GUID заявки |
+| `original_filename` | TEXT | Оригинальное имя файла |
+| `product_type` | TEXT | Тип изделия |
+| `ocr_result` | TEXT (JSON) | Результат OCR |
+| `llm_product_type_result` | TEXT (JSON) | Результат LLM по определению типа |
+| `llm_abbreviation_result` | TEXT (JSON) | Результат LLM по формированию аббревиатуры |
+| `arrival_date` | TEXT (DATETIME) | Дата прихода заявки |
+| `processing_start_date` | TEXT (DATETIME) | Дата начала обработки |
+| `processing_end_date` | TEXT (DATETIME) | Дата завершения обработки |
+
+### Расположение БД
+
+Файл базы данных: `data/db/applications.db`
+
+База данных автоматически инициализируется при первом подключении. Используется режим WAL (Write-Ahead Logging) для лучшей производительности.
+
+## Файловое хранилище
+
+### Структура директорий
+
+- **Загруженные файлы заявок**: `data/uploads/{guid}/`
+  - Каждая заявка имеет свою директорию, названную по GUID
+  - Файл сохраняется с именем `{guid}.{расширение}`
+
+- **Технические условия**: `data/tu/`
+  - JSON файлы с техническими условиями
+  - Имя файла: `{id}.json`
+
+## API модуля
+
+### Репозиторий заявок (`repository.ts`)
+
+#### `createApplication(originalFilename: string, guid?: string): Application`
+
+Создает новую заявку в БД с автоматической генерацией GUID.
+
+```typescript
+const application = createApplication('document.pdf');
+// или с указанным GUID
+const application = createApplication('document.pdf', 'custom-guid');
+```
+
+#### `getApplication(guid: string): Application | null`
+
+Получает заявку по GUID.
+
+```typescript
+const application = getApplication('some-guid');
+if (application) {
+  console.log(application.originalFilename);
+}
+```
+
+#### `updateApplication(guid: string, updates: ApplicationUpdate): Application | null`
+
+Обновляет заявку. Возвращает обновленную заявку или `null`, если заявка не найдена.
+
+```typescript
+const updated = updateApplication('some-guid', {
+  productType: 'Изделие А',
+  ocrResult: { text: '...' },
+  processingStartDate: new Date().toISOString()
+});
+```
+
+#### `listApplications(filters?: ApplicationFilters): Application[]`
+
+Получает список заявок с опциональной фильтрацией.
+
+```typescript
+// Все заявки
+const all = listApplications();
+
+// С фильтрами
+const filtered = listApplications({
+  startDate: new Date('2024-01-01'),
+  endDate: new Date('2024-12-31'),
+  productType: 'Изделие А'
+});
+```
+
+#### `deleteApplication(guid: string): boolean`
+
+Удаляет заявку из БД. Возвращает `true`, если удаление прошло успешно.
+
+### Файловое хранилище (`fileStorage.ts`)
+
+#### `saveApplicationFile(fileBuffer: Buffer, guid: string, originalFilename: string): string`
+
+Сохраняет файл заявки в хранилище. Возвращает путь к сохраненному файлу.
+
+```typescript
+const filePath = saveApplicationFile(buffer, 'some-guid', 'document.pdf');
+```
+
+#### `getApplicationFile(guid: string): { buffer: Buffer; filename: string } | null`
+
+Читает файл заявки. Возвращает буфер с содержимым и имя файла.
+
+```typescript
+const file = getApplicationFile('some-guid');
+if (file) {
+  console.log(file.filename, file.buffer.length);
+}
+```
+
+#### `getApplicationFilePath(guid: string): string | null`
+
+Получает путь к файлу заявки без чтения содержимого.
+
+#### `applicationFileExists(guid: string): boolean`
+
+Проверяет существование файла заявки.
+
+#### `deleteApplicationFile(guid: string): boolean`
+
+Удаляет файл заявки из хранилища.
+
+#### `getApplicationFileInfo(guid: string): { size: number; modified: Date } | null`
+
+Получает информацию о файле (размер, дата изменения).
+
+### Управление техническими условиями (`technicalSpecs.ts`)
+
+#### `listTechnicalSpecs(): TechnicalSpec[]`
+
+Получает список всех доступных технических условий из директории `data/tu/`.
+
+```typescript
+const specs = listTechnicalSpecs();
+specs.forEach(spec => console.log(spec.name));
+```
+
+#### `getTechnicalSpec(id: string): TechnicalSpec | null`
+
+Получает техническое условие по ID.
+
+```typescript
+const spec = getTechnicalSpec('example-tu');
+if (spec) {
+  console.log(spec.abbreviationTemplate);
+}
+```
+
+#### `saveTechnicalSpec(spec: TechnicalSpec): boolean`
+
+Сохраняет техническое условие в файл. Выбрасывает ошибку при валидации.
+
+```typescript
+const success = saveTechnicalSpec({
+  id: 'new-spec',
+  name: 'Новое ТУ',
+  rules: [...],
+  abbreviationTemplate: '{param1}-{param2}'
+});
+```
+
+#### `deleteTechnicalSpec(id: string): boolean`
+
+Удаляет техническое условие.
+
+### Утилиты БД (`db.ts`)
+
+#### `getDatabase(): Database`
+
+Получает экземпляр подключения к базе данных. Создает БД и таблицы при первом вызове.
+
+#### `closeDatabase(): void`
+
+Закрывает подключение к базе данных (использовать при завершении работы приложения).
+
+#### `rowToApplication(row: any): Application`
+
+Преобразует строку из БД в объект `Application`.
+
+#### `applicationToRow(application: Partial<Application>): any`
+
+Преобразует объект `Application` в формат для записи в БД.
+
+## Типы данных
+
+### `Application`
+
+```typescript
+interface Application {
+  id: string; // UUID
+  originalFilename: string;
+  productType: string | null;
+  ocrResult: Record<string, unknown> | null;
+  llmProductTypeResult: Record<string, unknown> | null;
+  llmAbbreviationResult: Record<string, unknown> | null;
+  arrivalDate: string; // ISO datetime string
+  processingStartDate: string | null; // ISO datetime string
+  processingEndDate: string | null; // ISO datetime string
+}
+```
+
+### `TechnicalSpec`
+
+```typescript
+interface TechnicalSpec {
+  id: string;
+  name: string;
+  description?: string;
+  rules: TechnicalSpecRule[];
+  abbreviationTemplate: string;
+}
+
+interface TechnicalSpecRule {
+  parameter: string;
+  code: string;
+  description: string;
+}
+```
+
+### `ApplicationFilters`
+
+```typescript
+interface ApplicationFilters {
+  startDate?: Date;
+  endDate?: Date;
+  productType?: string;
+}
+```
+
+## Обработка ошибок
+
+Модуль использует кастомные классы ошибок:
+
+- **`StorageError`** - базовая ошибка хранилища
+- **`ApplicationNotFoundError`** - заявка не найдена
+- **`TechnicalSpecNotFoundError`** - ТУ не найдено
+- **`ValidationError`** - ошибка валидации данных
+- **`FileStorageError`** - ошибка работы с файлами
+
+Все ошибки содержат сообщение и опциональную причину (cause).
+
+```typescript
+try {
+  const app = getApplication('invalid-guid');
+} catch (error) {
+  if (error instanceof StorageError) {
+    console.error('Storage error:', error.message);
+  }
+}
+```
+
+## Валидация
+
+Все данные валидируются через Zod схемы:
+
+- **`ApplicationSchema`** - валидация заявок
+- **`TechnicalSpecSchema`** - валидация технических условий
+
+Валидация происходит автоматически при создании и обновлении записей.
+
+## Конфигурация
+
+Настройки хранилища находятся в `../config.ts`:
+
+- `config.dbPath` - путь к файлу БД (по умолчанию: `data/db/applications.db`)
+- `config.uploadsDirectory` - директория для загруженных файлов (по умолчанию: `data/uploads`)
+- `config.tuDirectory` - директория для технических условий (по умолчанию: `data/tu`)
+
+## Использование
+
+Все функции модуля доступны через централизованный экспорт:
+
+```typescript
+import {
+  createApplication,
+  getApplication,
+  saveApplicationFile,
+  listTechnicalSpecs,
+  StorageError
+} from '$lib/storage';
+```
+
+## Зависимости
+
+- `better-sqlite3` - драйвер SQLite
+- `uuid` - генерация GUID
+- `zod` - валидация данных
+
+## Примечания
+
+- База данных и директории для файлов автоматически создаются при первом использовании
+- JSON поля в БД хранятся как TEXT и автоматически парсятся при чтении
+- Все даты хранятся в формате ISO 8601 (строки)
+- При ошибках парсинга JSON из БД возвращается `null` для соответствующего поля
+

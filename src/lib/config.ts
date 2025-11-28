@@ -24,5 +24,11 @@ export const config = {
 	},
 
 	// Путь к файлам ТУ
-	tuDirectory: 'data/tu'
+	tuDirectory: 'data/tu',
+
+	// Путь к базе данных
+	dbPath: 'data/db/applications.db',
+
+	// Путь к хранилищу файлов заявок
+	uploadsDirectory: 'data/uploads'
 } as const;
