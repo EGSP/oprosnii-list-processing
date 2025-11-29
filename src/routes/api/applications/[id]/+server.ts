@@ -28,4 +28,3 @@ export const GET: RequestHandler = async ({ params }) => {
 		return handleStorageError(err);
 	}
 };
-

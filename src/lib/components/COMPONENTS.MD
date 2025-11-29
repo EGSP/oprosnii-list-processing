@@ -24,23 +24,26 @@
 Главная страница приложения с двухпанельным layout.
 
 **Структура:**
+
 - Левая панель: `ApplicationList` (фиксированная ширина ~350px)
 - Правое окно: `ApplicationDetails` (занимает оставшееся пространство)
 
 **Адаптивность:**
+
 - На мобильных устройствах (< 768px) layout переключается на вертикальный (левая панель сверху, 40vh; правое окно снизу, 60vh)
 
 **Использование:**
+
 ```svelte
 <script>
-  import ApplicationList from '$lib/components/ApplicationList.svelte';
-  import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
-  
-  let selectedApplication = null;
-  
-  function handleSelect(event) {
-    selectedApplication = event.detail.application;
-  }
+	import ApplicationList from '$lib/components/ApplicationList.svelte';
+	import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
+
+	let selectedApplication = null;
+
+	function handleSelect(event) {
+		selectedApplication = event.detail.application;
+	}
 </script>
 
 <ApplicationList on:select={handleSelect} />
@@ -54,16 +57,19 @@
 Переиспользуемый компонент для отображения пустых состояний (когда нет данных для отображения).
 
 **Props:**
+
 - `message: string` - Текст сообщения (обязательный)
 - `icon?: string` - Опциональная иконка (emoji или текст)
 
 **Пример использования:**
+
 ```svelte
 <EmptyState message="Нет загруженных заявок" />
 <EmptyState message="Выберите заявку" icon="📋" />
 ```
 
 **Стили:**
+
 - Центрированное расположение
 - Серый цвет текста для вторичного контента
 - Опциональная иконка сверху
@@ -75,28 +81,33 @@
 Компонент для загрузки файлов с поддержкой drag-n-drop и валидацией.
 
 **События:**
+
 - `upload: CustomEvent<{ file: File }>` - Вызывается при успешной валидации файла
 - `error: CustomEvent<{ message: string }>` - Вызывается при ошибке валидации
 
 **Валидация:**
+
 - **Типы файлов**: PDF, DOCX, XLSX, PNG, JPG, JPEG
 - **Размер файла**: Максимум 10 МБ (настраивается через `config.maxFileSizeMB`)
 
 **Пример использования:**
+
 ```svelte
-<FileUpload 
-  on:upload={(e) => handleFileUpload(e.detail.file)}
-  on:error={(e) => showError(e.detail.message)}
+<FileUpload
+	on:upload={(e) => handleFileUpload(e.detail.file)}
+	on:error={(e) => showError(e.detail.message)}
 />
 ```
 
 **Функциональность:**
+
 - Drag-n-drop зона с визуальной обратной связью
 - Клик для выбора файла через системный диалог
 - Автоматическая валидация типа и размера
 - Визуальная индикация состояния (обычное, hover, dragging)
 
 **Стили:**
+
 - Пунктирная рамка для drag-n-drop зоны
 - Изменение цвета при наведении и перетаскивании
 - Иконка и подсказки для пользователя
@@ -108,11 +119,13 @@
 Левая панель со списком заявок и функцией загрузки новых файлов.
 
 **События:**
+
 - `select: CustomEvent<{ application: Application }>` - Вызывается при выборе заявки
 - `upload: CustomEvent<{ application: Application }>` - Вызывается после успешной загрузки файла
 - `error: CustomEvent<{ message: string }>` - Вызывается при ошибке
 
 **Функциональность:**
+
 - Автоматическая загрузка списка заявок при монтировании
 - Сортировка заявок по дате загрузки (сверху самая поздняя)
 - Визуальное выделение выбранной заявки
@@ -121,20 +134,23 @@
 - Обработка ошибок с отображением сообщений
 
 **Отображаемая информация:**
+
 - Название файла заявки
 - Дата и время загрузки
 - Статус обработки (Новая, Обрабатывается, Обработана)
 
 **Пример использования:**
+
 ```svelte
 <ApplicationList
-  on:select={(e) => handleSelect(e.detail.application)}
-  on:upload={(e) => handleUpload(e.detail.application)}
-  on:error={(e) => showError(e.detail.message)}
+	on:select={(e) => handleSelect(e.detail.application)}
+	on:upload={(e) => handleUpload(e.detail.application)}
+	on:error={(e) => showError(e.detail.message)}
 />
 ```
 
 **Стили:**
+
 - Фиксированная ширина панели
 - Вертикальный скролл для списка заявок
 - Карточки заявок с hover эффектами
@@ -148,9 +164,11 @@
 Правое окно с детальной информацией о выбранной заявке и функциями обработки.
 
 **Props:**
+
 - `applicationId: string | null` - ID выбранной заявки (null если заявка не выбрана)
 
 **Функциональность:**
+
 - Автоматическая загрузка деталей заявки при изменении `applicationId`
 - Загрузка списка технических условий (ТУ)
 - Выбор ТУ для обработки
@@ -178,17 +196,20 @@
    - Финальное обозначение продукции (выделено отдельно)
 
 **Пример использования:**
+
 ```svelte
 <ApplicationDetails applicationId={selectedApplication?.id || null} />
 ```
 
 **Состояния:**
+
 - Пустое состояние (EmptyState) когда заявка не выбрана
 - Загрузка данных
 - Отображение деталей заявки
 - Обработка ошибок
 
 **Стили:**
+
 - Вертикальный скролл для длинного контента
 - Секции с разделителями
 - JSON данные в моноширинном шрифте с фоном
@@ -210,12 +231,15 @@
 Загружает файл заявки на сервер.
 
 **Параметры:**
+
 - `file: File` - Файл для загрузки
 
 **Возвращает:**
+
 - `Promise<CreateApplicationResponse>` - Объект с `id`, `originalFilename`, `arrivalDate`
 
 **Пример:**
+
 ```typescript
 const response = await uploadApplication(file);
 console.log(response.id); // UUID новой заявки
@@ -226,17 +250,20 @@ console.log(response.id); // UUID новой заявки
 Получает список заявок с опциональной фильтрацией.
 
 **Параметры:**
+
 - `filters?: ApplicationFilters` - Опциональные фильтры (startDate, endDate, productType)
 
 **Возвращает:**
+
 - `Promise<Application[]>` - Массив заявок
 
 **Пример:**
+
 ```typescript
 const all = await getApplications();
 const filtered = await getApplications({
-  startDate: new Date('2024-01-01'),
-  endDate: new Date('2024-12-31')
+	startDate: new Date('2024-01-01'),
+	endDate: new Date('2024-12-31')
 });
 ```
 
@@ -245,12 +272,15 @@ const filtered = await getApplications({
 Получает детальную информацию о заявке.
 
 **Параметры:**
+
 - `id: string` - UUID заявки
 
 **Возвращает:**
+
 - `Promise<Application>` - Объект заявки
 
 **Пример:**
+
 ```typescript
 const application = await getApplication('some-uuid');
 console.log(application.originalFilename);
@@ -261,12 +291,14 @@ console.log(application.originalFilename);
 Получает список всех доступных технических условий.
 
 **Возвращает:**
+
 - `Promise<TechnicalSpec[]>` - Массив технических условий
 
 **Пример:**
+
 ```typescript
 const specs = await getTechnicalSpecs();
-specs.forEach(spec => console.log(spec.name));
+specs.forEach((spec) => console.log(spec.name));
 ```
 
 #### `detectProductType(id: string): Promise<void>`
@@ -274,9 +306,11 @@ specs.forEach(spec => console.log(spec.name));
 Запускает определение типа изделия для заявки.
 
 **Параметры:**
+
 - `id: string` - UUID заявки
 
 **Пример:**
+
 ```typescript
 await detectProductType('some-uuid');
 ```
@@ -286,10 +320,12 @@ await detectProductType('some-uuid');
 Формирует аббревиатуру продукции для заявки.
 
 **Параметры:**
+
 - `id: string` - UUID заявки
 - `technicalSpecId: string` - ID технических условий
 
 **Пример:**
+
 ```typescript
 await generateAbbreviation('some-uuid', 'example-tu');
 ```
@@ -299,10 +335,12 @@ await generateAbbreviation('some-uuid', 'example-tu');
 Выполняет полную обработку заявки: определение типа + формирование аббревиатуры.
 
 **Параметры:**
+
 - `id: string` - UUID заявки
 - `technicalSpecId: string` - ID технических условий
 
 **Пример:**
+
 ```typescript
 await processApplication('some-uuid', 'example-tu');
 ```
@@ -312,12 +350,13 @@ await processApplication('some-uuid', 'example-tu');
 Все функции API клиента автоматически обрабатывают ошибки HTTP и преобразуют их в исключения JavaScript с понятными сообщениями.
 
 **Пример обработки:**
+
 ```typescript
 try {
-  const application = await getApplication('invalid-id');
+	const application = await getApplication('invalid-id');
 } catch (error) {
-  console.error('Ошибка:', error.message);
-  // Показать сообщение пользователю
+	console.error('Ошибка:', error.message);
+	// Показать сообщение пользователю
 }
 ```
 
@@ -330,6 +369,7 @@ try {
 Все стили используют CSS переменные, определенные в `src/app.css`:
 
 **Цвета:**
+
 - `--color-primary` - Основной цвет (синий)
 - `--color-primary-dark` - Темный вариант основного цвета
 - `--color-primary-light` - Светлый вариант основного цвета
@@ -347,15 +387,18 @@ try {
 - `--color-status-processed` - Фон статуса "Обработана"
 
 **Отступы:**
+
 - `--spacing-xs` до `--spacing-xl` - Стандартные отступы
 
 **Радиусы скругления:**
+
 - `--border-radius` - Основной радиус (0.5rem)
 - `--border-radius-sm` - Малый радиус (0.25rem)
 
 ### Дизайн
 
 Интерфейс использует минималистичный дизайн с:
+
 - Чистыми линиями и достаточным белым пространством
 - Понятной иерархией информации
 - Плавными переходами и hover эффектами
@@ -369,15 +412,15 @@ try {
 
 ```typescript
 interface Application {
-  id: string; // UUID
-  originalFilename: string;
-  productType: string | null;
-  ocrResult: Record<string, unknown> | null;
-  llmProductTypeResult: Record<string, unknown> | null;
-  llmAbbreviationResult: Record<string, unknown> | null;
-  arrivalDate: string; // ISO datetime
-  processingStartDate: string | null; // ISO datetime
-  processingEndDate: string | null; // ISO datetime
+	id: string; // UUID
+	originalFilename: string;
+	productType: string | null;
+	ocrResult: Record<string, unknown> | null;
+	llmProductTypeResult: Record<string, unknown> | null;
+	llmAbbreviationResult: Record<string, unknown> | null;
+	arrivalDate: string; // ISO datetime
+	processingStartDate: string | null; // ISO datetime
+	processingEndDate: string | null; // ISO datetime
 }
 ```
 
@@ -385,17 +428,17 @@ interface Application {
 
 ```typescript
 interface TechnicalSpec {
-  id: string;
-  name: string;
-  description?: string;
-  rules: TechnicalSpecRule[];
-  abbreviationTemplate: string;
+	id: string;
+	name: string;
+	description?: string;
+	rules: TechnicalSpecRule[];
+	abbreviationTemplate: string;
 }
 
 interface TechnicalSpecRule {
-  parameter: string;
-  code: string;
-  description: string;
+	parameter: string;
+	code: string;
+	description: string;
 }
 ```
 
@@ -403,9 +446,9 @@ interface TechnicalSpecRule {
 
 ```typescript
 interface CreateApplicationResponse {
-  id: string;
-  originalFilename: string;
-  arrivalDate: string;
+	id: string;
+	originalFilename: string;
+	arrivalDate: string;
 }
 ```
 
@@ -417,31 +460,28 @@ interface CreateApplicationResponse {
 
 ```svelte
 <script lang="ts">
-  import ApplicationList from '$lib/components/ApplicationList.svelte';
-  import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
-  import type { Application } from '$lib/storage/types.js';
+	import ApplicationList from '$lib/components/ApplicationList.svelte';
+	import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
+	import type { Application } from '$lib/storage/types.js';
 
-  let selectedApplication: Application | null = null;
+	let selectedApplication: Application | null = null;
 
-  function handleSelect(event: CustomEvent<{ application: Application }>) {
-    selectedApplication = event.detail.application;
-  }
+	function handleSelect(event: CustomEvent<{ application: Application }>) {
+		selectedApplication = event.detail.application;
+	}
 
-  function handleUpload(event: CustomEvent<{ application: Application }>) {
-    selectedApplication = event.detail.application;
-  }
+	function handleUpload(event: CustomEvent<{ application: Application }>) {
+		selectedApplication = event.detail.application;
+	}
 </script>
 
 <div class="main-layout">
-  <div class="left-panel">
-    <ApplicationList
-      on:select={handleSelect}
-      on:upload={handleUpload}
-    />
-  </div>
-  <div class="right-panel">
-    <ApplicationDetails applicationId={selectedApplication?.id || null} />
-  </div>
+	<div class="left-panel">
+		<ApplicationList on:select={handleSelect} on:upload={handleUpload} />
+	</div>
+	<div class="right-panel">
+		<ApplicationDetails applicationId={selectedApplication?.id || null} />
+	</div>
 </div>
 ```
 
@@ -464,4 +504,3 @@ interface CreateApplicationResponse {
 - Ошибки обрабатываются на уровне компонентов и отображаются пользователю
 - Состояние загрузки и обработки отображается через индикаторы
 - Компоненты автоматически обновляют данные после операций (загрузка, обработка)
-

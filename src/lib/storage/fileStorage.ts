@@ -129,4 +129,3 @@ export function getApplicationFileInfo(guid: string): { size: number; modified: 
 		modified: stats.mtime
 	};
 }
-

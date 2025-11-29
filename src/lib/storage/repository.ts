@@ -1,19 +1,12 @@
 import { getDatabase, rowToApplication, applicationToRow } from './db.js';
 import { Application, ApplicationFilters, ApplicationUpdate, ApplicationSchema } from './types.js';
 import { v4 as uuidv4 } from 'uuid';
-import {
-	StorageError,
-	ApplicationNotFoundError,
-	ValidationError
-} from './errors.js';
+import { StorageError, ApplicationNotFoundError, ValidationError } from './errors.js';
 
 /**
  * Создает новую заявку в БД
  */
-export function createApplication(
-	originalFilename: string,
-	guid?: string
-): Application {
+export function createApplication(originalFilename: string, guid?: string): Application {
 	const db = getDatabase();
 	const id = guid || uuidv4();
 	const now = new Date().toISOString();
@@ -83,10 +76,7 @@ export function getApplication(guid: string): Application | null {
 /**
  * Обновляет заявку
  */
-export function updateApplication(
-	guid: string,
-	updates: ApplicationUpdate
-): Application | null {
+export function updateApplication(guid: string, updates: ApplicationUpdate): Application | null {
 	const db = getDatabase();
 
 	// Получаем текущую заявку
@@ -178,4 +168,3 @@ export function deleteApplication(guid: string): boolean {
 		throw new StorageError('Failed to delete application', error as Error);
 	}
 }
-

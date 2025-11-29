@@ -13,6 +13,7 @@
 - **`types.ts`** - TypeScript типы и Zod схемы для валидации
 - **`db.ts`** - Подключение к SQLite и утилиты для работы с БД
 - **`repository.ts`** - Репозиторий для CRUD операций с заявками
+- **`operationsRepository.ts`** - Репозиторий для операций обработки (OCR, LLM)
 - **`fileStorage.ts`** - Управление файлами заявок
 - **`technicalSpecs.ts`** - Управление техническими условиями (ТУ)
 - **`errors.ts`** - Классы ошибок для обработки исключений
@@ -22,23 +23,48 @@
 
 ### Схема таблицы `applications`
 
-| Поле | Тип | Описание |
-|------|-----|----------|
-| `id` | TEXT PRIMARY KEY | GUID заявки |
-| `original_filename` | TEXT | Оригинальное имя файла |
-| `product_type` | TEXT | Тип изделия |
-| `ocr_result` | TEXT (JSON) | Результат OCR |
-| `llm_product_type_result` | TEXT (JSON) | Результат LLM по определению типа |
-| `llm_abbreviation_result` | TEXT (JSON) | Результат LLM по формированию аббревиатуры |
-| `arrival_date` | TEXT (DATETIME) | Дата прихода заявки |
-| `processing_start_date` | TEXT (DATETIME) | Дата начала обработки |
-| `processing_end_date` | TEXT (DATETIME) | Дата завершения обработки |
+| Поле                      | Тип              | Описание                                   |
+| ------------------------- | ---------------- | ------------------------------------------ |
+| `id`                      | TEXT PRIMARY KEY | GUID заявки                                |
+| `original_filename`       | TEXT             | Оригинальное имя файла                     |
+| `product_type`            | TEXT             | Тип изделия                                |
+| `ocr_result`              | TEXT (JSON)      | Результат OCR                              |
+| `llm_product_type_result` | TEXT (JSON)      | Результат LLM по определению типа          |
+| `llm_abbreviation_result` | TEXT (JSON)      | Результат LLM по формированию аббревиатуры |
+| `arrival_date`            | TEXT (DATETIME)  | Дата прихода заявки                        |
+| `processing_start_date`   | TEXT (DATETIME)  | Дата начала обработки                      |
+| `processing_end_date`     | TEXT (DATETIME)  | Дата завершения обработки                  |
 
 ### Расположение БД
 
 Файл базы данных: `data/db/applications.db`
 
 База данных автоматически инициализируется при первом подключении. Используется режим WAL (Write-Ahead Logging) для лучшей производительности.
+
+### Схема таблицы `processing_operations`
+
+| Поле                    | Тип              | Описание                                                    |
+| ----------------------- | ---------------- | ----------------------------------------------------------- |
+| `id`                    | TEXT PRIMARY KEY | UUID операции                                               |
+| `application_id`        | TEXT NOT NULL    | GUID заявки (FK)                                            |
+| `type`                  | TEXT NOT NULL    | Тип операции: 'ocr', 'llm_product_type', 'llm_abbreviation' |
+| `provider`              | TEXT NOT NULL    | Провайдер сервиса: 'yandex', 'local' и т.д.                 |
+| `status`                | TEXT NOT NULL    | Статус: 'pending', 'running', 'completed', 'failed'         |
+| `external_operation_id` | TEXT             | ID операции у внешнего сервиса (для асинхронных)            |
+| `request_data`          | TEXT (JSON)      | Минимальные данные запроса (endpoint, method)               |
+| `result`                | TEXT (JSON)      | Результат операции                                          |
+| `error`                 | TEXT (JSON)      | Информация об ошибке                                        |
+| `created_at`            | TEXT (DATETIME)  | Дата создания операции                                      |
+| `started_at`            | TEXT (DATETIME)  | Дата начала выполнения                                      |
+| `completed_at`          | TEXT (DATETIME)  | Дата завершения                                             |
+| `progress`              | TEXT (JSON)      | Прогресс выполнения (опционально)                           |
+| `retry_count`           | INTEGER          | Количество попыток                                          |
+| `max_retries`           | INTEGER          | Максимальное количество попыток                             |
+
+**Ограничения:**
+
+- Уникальный индекс на `(application_id, type)` - одна операция каждого типа на заявку
+- Внешний ключ на `applications(id)` с каскадным удалением
 
 ## Файловое хранилище
 
@@ -73,7 +99,7 @@ const application = createApplication('document.pdf', 'custom-guid');
 ```typescript
 const application = getApplication('some-guid');
 if (application) {
-  console.log(application.originalFilename);
+	console.log(application.originalFilename);
 }
 ```
 
@@ -83,9 +109,9 @@ if (application) {
 
 ```typescript
 const updated = updateApplication('some-guid', {
-  productType: 'Изделие А',
-  ocrResult: { text: '...' },
-  processingStartDate: new Date().toISOString()
+	productType: 'Изделие А',
+	ocrResult: { text: '...' },
+	processingStartDate: new Date().toISOString()
 });
 ```
 
@@ -99,9 +125,9 @@ const all = listApplications();
 
 // С фильтрами
 const filtered = listApplications({
-  startDate: new Date('2024-01-01'),
-  endDate: new Date('2024-12-31'),
-  productType: 'Изделие А'
+	startDate: new Date('2024-01-01'),
+	endDate: new Date('2024-12-31'),
+	productType: 'Изделие А'
 });
 ```
 
@@ -126,7 +152,7 @@ const filePath = saveApplicationFile(buffer, 'some-guid', 'document.pdf');
 ```typescript
 const file = getApplicationFile('some-guid');
 if (file) {
-  console.log(file.filename, file.buffer.length);
+	console.log(file.filename, file.buffer.length);
 }
 ```
 
@@ -154,7 +180,7 @@ if (file) {
 
 ```typescript
 const specs = listTechnicalSpecs();
-specs.forEach(spec => console.log(spec.name));
+specs.forEach((spec) => console.log(spec.name));
 ```
 
 #### `getTechnicalSpec(id: string): TechnicalSpec | null`
@@ -164,7 +190,7 @@ specs.forEach(spec => console.log(spec.name));
 ```typescript
 const spec = getTechnicalSpec('example-tu');
 if (spec) {
-  console.log(spec.abbreviationTemplate);
+	console.log(spec.abbreviationTemplate);
 }
 ```
 
@@ -185,6 +211,81 @@ const success = saveTechnicalSpec({
 
 Удаляет техническое условие.
 
+### Репозиторий операций обработки (`operationsRepository.ts`)
+
+#### `createOrUpdateOperation(applicationId: string, type: ProcessingOperationType, provider: string, requestData: ProcessingOperationRequestData, status?: ProcessingOperationStatus, externalOperationId?: string | null): ProcessingOperation`
+
+Создает новую операцию обработки или обновляет существующую (если операция с таким типом уже есть для заявки).
+
+```typescript
+const operation = createOrUpdateOperation(
+	'application-id',
+	'ocr',
+	'yandex',
+	{
+		endpoint: 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText',
+		method: 'POST'
+	},
+	'pending'
+);
+```
+
+#### `getOperation(id: string): ProcessingOperation | null`
+
+Получает операцию по ID.
+
+```typescript
+const operation = getOperation('operation-id');
+if (operation) {
+	console.log(operation.status);
+}
+```
+
+#### `getOperationByApplicationAndType(applicationId: string, type: ProcessingOperationType): ProcessingOperation | null`
+
+Получает операцию по ID заявки и типу. Возвращает `null`, если операция не найдена.
+
+```typescript
+const ocrOperation = getOperationByApplicationAndType('application-id', 'ocr');
+```
+
+#### `getOperationsByApplication(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]`
+
+Получает список всех операций для заявки с опциональной фильтрацией по типу.
+
+```typescript
+// Все операции заявки
+const allOperations = getOperationsByApplication('application-id');
+
+// Только OCR операции
+const ocrOperations = getOperationsByApplication('application-id', 'ocr');
+```
+
+#### `updateOperation(id: string, updates: ProcessingOperationUpdate): ProcessingOperation | null`
+
+Обновляет операцию. Автоматически заполняет временные метки при изменении статуса.
+
+```typescript
+const updated = updateOperation('operation-id', {
+	status: 'completed',
+	result: { text: 'Extracted text...' }
+});
+```
+
+#### `updateOperationStatus(id: string, status: ProcessingOperationStatus, data?: {...}): ProcessingOperation | null`
+
+Обновляет статус операции с автоматическим заполнением временных меток и дополнительных данных.
+
+```typescript
+updateOperationStatus('operation-id', 'completed', {
+	result: { text: 'Extracted text...' }
+});
+
+updateOperationStatus('operation-id', 'failed', {
+	error: { message: 'Error message', code: 'ERROR_CODE' }
+});
+```
+
 ### Утилиты БД (`db.ts`)
 
 #### `getDatabase(): Database`
@@ -203,21 +304,29 @@ const success = saveTechnicalSpec({
 
 Преобразует объект `Application` в формат для записи в БД.
 
+#### `rowToProcessingOperation(row: any): ProcessingOperation`
+
+Преобразует строку из БД в объект `ProcessingOperation`.
+
+#### `processingOperationToRow(operation: Partial<ProcessingOperation>): any`
+
+Преобразует объект `ProcessingOperation` в формат для записи в БД.
+
 ## Типы данных
 
 ### `Application`
 
 ```typescript
 interface Application {
-  id: string; // UUID
-  originalFilename: string;
-  productType: string | null;
-  ocrResult: Record<string, unknown> | null;
-  llmProductTypeResult: Record<string, unknown> | null;
-  llmAbbreviationResult: Record<string, unknown> | null;
-  arrivalDate: string; // ISO datetime string
-  processingStartDate: string | null; // ISO datetime string
-  processingEndDate: string | null; // ISO datetime string
+	id: string; // UUID
+	originalFilename: string;
+	productType: string | null;
+	ocrResult: Record<string, unknown> | null;
+	llmProductTypeResult: Record<string, unknown> | null;
+	llmAbbreviationResult: Record<string, unknown> | null;
+	arrivalDate: string; // ISO datetime string
+	processingStartDate: string | null; // ISO datetime string
+	processingEndDate: string | null; // ISO datetime string
 }
 ```
 
@@ -225,17 +334,17 @@ interface Application {
 
 ```typescript
 interface TechnicalSpec {
-  id: string;
-  name: string;
-  description?: string;
-  rules: TechnicalSpecRule[];
-  abbreviationTemplate: string;
+	id: string;
+	name: string;
+	description?: string;
+	rules: TechnicalSpecRule[];
+	abbreviationTemplate: string;
 }
 
 interface TechnicalSpecRule {
-  parameter: string;
-  code: string;
-  description: string;
+	parameter: string;
+	code: string;
+	description: string;
 }
 ```
 
@@ -243,9 +352,44 @@ interface TechnicalSpecRule {
 
 ```typescript
 interface ApplicationFilters {
-  startDate?: Date;
-  endDate?: Date;
-  productType?: string;
+	startDate?: Date;
+	endDate?: Date;
+	productType?: string;
+}
+```
+
+### `ProcessingOperation`
+
+```typescript
+interface ProcessingOperation {
+	id: string; // UUID
+	applicationId: string; // UUID заявки
+	type: 'ocr' | 'llm_product_type' | 'llm_abbreviation';
+	provider: string; // 'yandex', 'local' и т.д.
+	status: 'pending' | 'running' | 'completed' | 'failed';
+	externalOperationId?: string | null; // ID операции у внешнего сервиса
+	requestData: {
+		endpoint: string;
+		method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+		headers?: Record<string, string>;
+		body?: unknown;
+	};
+	result?: Record<string, unknown> | null;
+	error?: {
+		message: string;
+		code?: string;
+		details?: unknown;
+	} | null;
+	createdAt: string; // ISO datetime
+	startedAt?: string | null; // ISO datetime
+	completedAt?: string | null; // ISO datetime
+	progress?: {
+		current: number;
+		total: number;
+		message?: string;
+	} | null;
+	retryCount?: number;
+	maxRetries?: number;
 }
 ```
 
@@ -256,6 +400,7 @@ interface ApplicationFilters {
 - **`StorageError`** - базовая ошибка хранилища
 - **`ApplicationNotFoundError`** - заявка не найдена
 - **`TechnicalSpecNotFoundError`** - ТУ не найдено
+- **`OperationNotFoundError`** - операция обработки не найдена
 - **`ValidationError`** - ошибка валидации данных
 - **`FileStorageError`** - ошибка работы с файлами
 
@@ -263,11 +408,11 @@ interface ApplicationFilters {
 
 ```typescript
 try {
-  const app = getApplication('invalid-guid');
+	const app = getApplication('invalid-guid');
 } catch (error) {
-  if (error instanceof StorageError) {
-    console.error('Storage error:', error.message);
-  }
+	if (error instanceof StorageError) {
+		console.error('Storage error:', error.message);
+	}
 }
 ```
 
@@ -277,6 +422,7 @@ try {
 
 - **`ApplicationSchema`** - валидация заявок
 - **`TechnicalSpecSchema`** - валидация технических условий
+- **`ProcessingOperationSchema`** - валидация операций обработки
 
 Валидация происходит автоматически при создании и обновлении записей.
 
@@ -294,11 +440,14 @@ try {
 
 ```typescript
 import {
-  createApplication,
-  getApplication,
-  saveApplicationFile,
-  listTechnicalSpecs,
-  StorageError
+	createApplication,
+	getApplication,
+	saveApplicationFile,
+	listTechnicalSpecs,
+	createOrUpdateOperation,
+	getOperation,
+	getOperationsByApplication,
+	StorageError
 } from '$lib/storage';
 ```
 
@@ -314,4 +463,6 @@ import {
 - JSON поля в БД хранятся как TEXT и автоматически парсятся при чтении
 - Все даты хранятся в формате ISO 8601 (строки)
 - При ошибках парсинга JSON из БД возвращается `null` для соответствующего поля
-
+- Операции обработки: одна операция каждого типа на заявку (уникальный индекс)
+- При создании операции с существующим типом - обновление, а не создание новой
+- Завершенные операции не удаляются (хранится история)

@@ -16,10 +16,7 @@
 
 <div class="main-layout">
 	<div class="left-panel">
-		<ApplicationList
-			on:select={handleSelect}
-			on:upload={handleUpload}
-		/>
+		<ApplicationList on:select={handleSelect} on:upload={handleUpload} />
 	</div>
 	<div class="right-panel">
 		<ApplicationDetails applicationId={selectedApplication?.id || null} />

@@ -3,7 +3,10 @@
  */
 
 export class StorageError extends Error {
-	constructor(message: string, public cause?: Error) {
+	constructor(
+		message: string,
+		public cause?: Error
+	) {
 		super(message);
 		this.name = 'StorageError';
 	}
@@ -24,7 +27,10 @@ export class TechnicalSpecNotFoundError extends StorageError {
 }
 
 export class ValidationError extends StorageError {
-	constructor(message: string, public details?: unknown) {
+	constructor(
+		message: string,
+		public details?: unknown
+	) {
 		super(`Validation error: ${message}`);
 		this.name = 'ValidationError';
 	}
@@ -37,3 +43,9 @@ export class FileStorageError extends StorageError {
 	}
 }
 
+export class OperationNotFoundError extends StorageError {
+	constructor(id: string) {
+		super(`Processing operation with ID ${id} not found`);
+		this.name = 'OperationNotFoundError';
+	}
+}

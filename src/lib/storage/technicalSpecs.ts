@@ -102,4 +102,3 @@ export function deleteTechnicalSpec(id: string): boolean {
 		return false;
 	}
 }
-

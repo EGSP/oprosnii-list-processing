@@ -240,4 +240,3 @@
 		background: var(--color-status-processed);
 	}
 </style>
-

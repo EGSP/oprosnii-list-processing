@@ -46,9 +46,7 @@ export async function uploadApplication(file: File): Promise<CreateApplicationRe
 /**
  * Получение списка заявок
  */
-export async function getApplications(
-	filters?: ApplicationFilters
-): Promise<Application[]> {
+export async function getApplications(filters?: ApplicationFilters): Promise<Application[]> {
 	const params = new URLSearchParams();
 	if (filters?.startDate) {
 		params.append('startDate', filters.startDate.toISOString());
@@ -94,10 +92,7 @@ export async function detectProductType(id: string): Promise<void> {
 /**
  * Формирование аббревиатуры продукции
  */
-export async function generateAbbreviation(
-	id: string,
-	technicalSpecId: string
-): Promise<void> {
+export async function generateAbbreviation(id: string, technicalSpecId: string): Promise<void> {
 	const response = await fetch(`${API_BASE}/applications/${id}/generate-abbreviation`, {
 		method: 'POST',
 		headers: {
@@ -111,13 +106,9 @@ export async function generateAbbreviation(
 /**
  * Полная обработка заявки: определение типа + формирование аббревиатуры
  */
-export async function processApplication(
-	id: string,
-	technicalSpecId: string
-): Promise<void> {
+export async function processApplication(id: string, technicalSpecId: string): Promise<void> {
 	// Сначала определяем тип изделия
 	await detectProductType(id);
 	// Затем формируем аббревиатуру
 	await generateAbbreviation(id, technicalSpecId);
 }
-

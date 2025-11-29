@@ -69,8 +69,7 @@ export function handleStorageError(err: unknown): Response {
  * Валидирует UUID формат
  */
 export function validateUUID(uuid: string): boolean {
-	const uuidRegex =
-		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 	return uuidRegex.test(uuid);
 }
 
@@ -213,4 +212,3 @@ export function notImplemented(message: string): Response {
 		{ status: 501 }
 	);
 }
-

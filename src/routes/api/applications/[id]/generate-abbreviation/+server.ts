@@ -1,13 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplication } from '$lib/storage/index.js';
-import { requireValidUUID, notImplemented, handleStorageError } from '$lib/api/index.js';
+import { getApplication, getTechnicalSpec } from '$lib/storage/index.js';
+import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
 import type { GenerateAbbreviationRequest } from '$lib/api/types.js';
+import { generateAbbreviation, ProcessingError } from '$lib/business/processing.js';
 
 /**
  * POST /api/applications/:id/generate-abbreviation - Формирование аббревиатуры
- * 
- * ⚠️ Заглушка: возвращает 501 Not Implemented
+ *
+ * Формирует аббревиатуру продукции на основе параметров из заявки и технических условий.
  */
 export const POST: RequestHandler = async ({ params, request }) => {
 	try {
@@ -43,12 +44,37 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			);
 		}
 
-		// Возвращаем ошибку "не реализовано"
-		return notImplemented(
-			'LLM сервис не настроен. Функция будет доступна после настройки внешних сервисов.'
-		);
+		// Проверяем существование технического условия
+		const technicalSpec = getTechnicalSpec(body.technicalSpecId);
+		if (!technicalSpec) {
+			return json({ error: 'Техническое условие не найдено' }, { status: 404 });
+		}
+
+		// Формируем аббревиатуру
+		const result = await generateAbbreviation(id, body.technicalSpecId);
+
+		// Возвращаем результат с ID операций
+		return json({
+			parameters: result.parameters,
+			abbreviation: result.abbreviation,
+			operations: {
+				ocr: result.ocrOperationId,
+				llm: result.llmOperationId
+			}
+		});
 	} catch (err) {
+		// Обработка ошибок обработки
+		if (err instanceof ProcessingError) {
+			return json(
+				{
+					error: err.message,
+					details: err.cause?.message
+				},
+				{ status: 500 }
+			);
+		}
+
+		// Обработка ошибок хранилища
 		return handleStorageError(err);
 	}
 };
-

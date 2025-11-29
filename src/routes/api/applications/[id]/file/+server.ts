@@ -1,7 +1,11 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getApplicationFile, getApplication } from '$lib/storage/index.js';
-import { requireValidUUID, getContentTypeFromFilename, handleStorageError } from '$lib/api/index.js';
+import {
+	requireValidUUID,
+	getContentTypeFromFilename,
+	handleStorageError
+} from '$lib/api/index.js';
 
 /**
  * GET /api/applications/:id/file - Получение файла заявки
@@ -47,4 +51,3 @@ export const GET: RequestHandler = async ({ params }: { params: { id: string } }
 		return handleStorageError(err);
 	}
 };
-

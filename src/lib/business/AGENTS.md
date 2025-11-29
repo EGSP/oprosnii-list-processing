@@ -1,10 +1,12 @@
 # Хранение данных
 
 В виде файлов:
+
 - Технические условия (ТУ)
 - Исходные файлы заявок (они могут быть разных форматов)
 
 В БД:
+
 - Заявки (название файла - GUID, тип изделия - string, результат OCR - json,результат LLM по определению типа изделия - json, результат LLM по формированию аббревиатуры - json, дата прихода - date time, дата начала обработки - date time, дата завершения обработки - date time)
 
 ## Обработка заявок
@@ -22,6 +24,7 @@
 ### Список эндпоинтов
 
 **Заявки (Applications):**
+
 1. `POST /api/applications` - Загрузка файла заявки
 2. `GET /api/applications` - Список заявок (с фильтрацией)
 3. `GET /api/applications/:id` - Получение заявки
@@ -29,8 +32,6 @@
 5. `POST /api/applications/:id/detect-product-type` - Определение типа изделия (⚠️ заглушка)
 6. `POST /api/applications/:id/generate-abbreviation` - Формирование аббревиатуры (⚠️ заглушка)
 
-**Технические условия (Technical Specifications):**
-7. `GET /api/technical-specs` - Список ТУ
-8. `GET /api/technical-specs/:id` - Получение ТУ
+**Технические условия (Technical Specifications):** 7. `GET /api/technical-specs` - Список ТУ 8. `GET /api/technical-specs/:id` - Получение ТУ
 
 Примечание: Методы, требующие OCR/LLM (5, 6), пока возвращают ошибку 501 Not Implemented. Они будут реализованы после настройки внешних сервисов.

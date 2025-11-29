@@ -81,4 +81,3 @@ export const GET: RequestHandler = async (event) => {
 		return handleStorageError(err);
 	}
 };
-
