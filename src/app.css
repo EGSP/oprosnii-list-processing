@@ -2,10 +2,51 @@
 	font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 	line-height: 1.5;
 	font-weight: 400;
+
+	/* Цвета */
+	--color-primary: #3b82f6;
+	--color-primary-dark: #2563eb;
+	--color-primary-light: #dbeafe;
+
+	--color-background: #ffffff;
+	--color-background-hover: #f9fafb;
+	--color-background-active: #f3f4f6;
+	--color-code-bg: #f8f9fa;
+
+	--color-text: #1f2937;
+	--color-text-secondary: #6b7280;
+
+	--color-border: #e5e7eb;
+
+	--color-error: #dc2626;
+	--color-error-bg: #fee2e2;
+
+	--color-success: #059669;
+	--color-success-bg: #d1fae5;
+
+	--color-status-new: #fef3c7;
+	--color-status-processed: #d1fae5;
+
+	/* Отступы */
+	--spacing-xs: 0.25rem;
+	--spacing-sm: 0.5rem;
+	--spacing-md: 1rem;
+	--spacing-lg: 1.5rem;
+	--spacing-xl: 2rem;
+
+	/* Радиусы скругления */
+	--border-radius: 0.5rem;
+	--border-radius-sm: 0.25rem;
 }
 
 body {
 	margin: 0;
 	min-width: 320px;
 	min-height: 100vh;
+	background: var(--color-background);
+	color: var(--color-text);
+}
+
+* {
+	box-sizing: border-box;
 }
