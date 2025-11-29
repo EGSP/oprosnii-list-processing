@@ -42,6 +42,7 @@ npm run format     # Форматирование кода Prettier
 ```
 src/
   lib/
+    ai/            # Модуль AI (OCR и LLM)
     business/      # Бизнес-логика (чистые функции)
     storage/       # Модуль хранилища данных
     components/    # UI компоненты
@@ -57,8 +58,10 @@ data/
 
 ## Документация
 
-- **[src/lib/storage/STORAGE.md](src/lib/storage/STORAGE.md)** - Документация модуля хранилища данных (БД, файлы, ТУ)
+- **[src/lib/storage/STORAGE.md](src/lib/storage/STORAGE.md)** - Документация модуля хранилища данных (БД, файлы, ТУ, операции)
 - **[src/lib/business/BUSINESS.md](src/lib/business/BUSINESS.md)** - Документация модуля бизнес-логики
+- **[src/lib/business/API.md](src/lib/business/API.md)** - Документация REST API
+- **[src/lib/ai/AI.md](src/lib/ai/AI.md)** - Документация модуля AI (OCR и LLM)
 - **[src/lib/components/COMPONENTS.MD](src/lib/components/COMPONENTS.MD)** - Документация UI компонентов
 - **[PROJECT.md](PROJECT.md)** - Общее описание проекта и архитектура
 
@@ -69,7 +72,15 @@ data/
 - `VITE_MAX_FILE_SIZE_MB=10`
 - `VITE_MAX_TEXT_LENGTH_FOR_LLM=6000`
 
-Серверные переменные (API ключи для LLM/OCR) указываются без префикса.
+Серверные переменные (API ключи для LLM/OCR) указываются без префикса:
+
+- `YANDEX_OCR_API_KEY` - API ключ для YandexOCR (обязательно)
+- `YANDEX_OCR_FOLDER_ID` - Folder ID для YandexOCR (опционально)
+- `YANDEX_GPT_API_KEY` - API ключ для YandexGPT (обязательно)
+- `YANDEX_GPT_FOLDER_ID` - Folder ID для YandexGPT (опционально)
+- `YANDEX_GPT_MODEL` - Модель YandexGPT (по умолчанию: "yandexgpt")
+
+Полный список переменных окружения см. в файле `.env.example`.
 
 ## Статус проекта
 
@@ -100,3 +111,26 @@ data/
 - API клиент для работы с REST API
 - Адаптивный дизайн для мобильных устройств
 - Обработка ошибок и пустых состояний
+
+✅ Этап 4: Интеграция OCR и LLM сервисов - завершен
+
+- Модуль конфигурации AI сервисов (`src/lib/ai/config.ts`) с явным определением моделей
+- Модуль OCR (`src/lib/ai/ocr.ts`) с поддержкой YandexOCR для изображений/PDF и извлечением текста из DOCX/XLSX
+- Модуль LLM (`src/lib/ai/llm.ts`) для работы с YandexGPT через REST API
+- Structured output через Zod схемы для валидации ответов LLM
+- Бизнес-логика обработки заявок (`src/lib/business/processing.ts`)
+- REST API эндпоинты для определения типа изделия и формирования аббревиатуры
+- Документация модуля AI (`src/lib/ai/AI.md`)
+
+✅ Этап 5: Система ProcessingOperation - завершен
+
+- Таблица `processing_operations` в БД для хранения операций обработки
+- Репозиторий операций (`src/lib/storage/operationsRepository.ts`) с CRUD операциями
+- Поддержка синхронных и асинхронных операций (OCR для многостраничных PDF)
+- Интеграция операций в OCR и LLM модули
+- REST API эндпоинты для работы с операциями:
+  - `GET /api/applications/:id/operations` - список операций заявки
+  - `GET /api/applications/:id/operations/:operationId` - получение операции
+  - `POST /api/applications/:id/operations/:operationId/check` - проверка статуса асинхронной операции
+- Обновление существующих эндпоинтов для возврата ID созданных операций
+- Документация обновлена во всех модулях
