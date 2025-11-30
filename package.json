@@ -34,7 +34,7 @@
 	"dependencies": {
 		"better-sqlite3": "^11.0.0",
 		"mammoth": "^1.11.0",
-		"pdf-parse": "^2.4.5",
+		"pdfjs-dist": "^4.0.379",
 		"uuid": "^9.0.0",
 		"winston": "^3.18.3",
 		"xlsx": "^0.18.5",

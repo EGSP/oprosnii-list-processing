@@ -33,6 +33,26 @@ export const POST: RequestHandler = async ({ params }) => {
 		// Определяем тип изделия
 		const result = await detectProductType(id);
 
+		// Если операция асинхронная, возвращаем HTTP 202 (Accepted)
+		if (result.isAsync) {
+			logger.info('OCR операция асинхронная, возвращаем HTTP 202', {
+				applicationId: id,
+				ocrOperationId: result.ocrOperationId
+			});
+
+			return json(
+				{
+					message: 'OCR операция выполняется асинхронно',
+					operations: {
+						ocr: result.ocrOperationId,
+						llm: result.llmOperationId
+					},
+					status: 'processing'
+				},
+				{ status: 202 }
+			);
+		}
+
 		logger.info('Тип изделия успешно определен', {
 			applicationId: id,
 			productType: result.result.type,

@@ -126,9 +126,9 @@ export async function detectProductType(applicationId: string): Promise<{
 				// Асинхронная операция - возвращаем ID операции
 				ocrOperationId = ocrResult.operationId;
 				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
-				throw new ProcessingError(
-					'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
-				);
+				// Возвращаем результат с operationId, не выбрасываем ошибку
+				// Функция вернет результат с ocrOperationId, но без extractedText
+				// API endpoint должен обработать это и вернуть HTTP 202
 			} else if (ocrResult.text) {
 				// Синхронная операция завершена
 				extractedText = ocrResult.text;
@@ -162,6 +162,24 @@ export async function detectProductType(applicationId: string): Promise<{
 			});
 			throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
 		}
+	}
+
+	// Если операция асинхронная, возвращаем результат с operationId
+	if (ocrOperationId && !extractedText) {
+		logger.info('Возврат результата с асинхронной OCR операцией', {
+			applicationId,
+			ocrOperationId
+		});
+		return {
+			result: {
+				type: '',
+				confidence: 0,
+				reasoning: 'OCR операция выполняется асинхронно. Проверьте статус операции.'
+			},
+			ocrOperationId,
+			llmOperationId: undefined,
+			isAsync: true
+		};
 	}
 
 	// Проверяем, что текст был извлечен
@@ -228,7 +246,8 @@ ${limitedText}
 		return {
 			result: productTypeResult,
 			ocrOperationId,
-			llmOperationId
+			llmOperationId,
+			isAsync: false
 		};
 	} catch (error) {
 		if (error instanceof LLMError) {

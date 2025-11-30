@@ -34,7 +34,10 @@ function getYandexOCRConfig(): YandexOCRConfig {
 		asyncEndpoint: env.YANDEX_OCR_ASYNC_ENDPOINT, // для многостраничных PDF
 		operationEndpoint:
 			env.YANDEX_OCR_OPERATION_ENDPOINT ||
-			'https://operation.api.cloud.yandex.net/operations' // для проверки статуса операций
+			'https://operation.api.cloud.yandex.net/operations', // для проверки статуса операций
+		getRecognitionEndpoint:
+			env.YANDEX_OCR_GET_RECOGNITION_ENDPOINT ||
+			'https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition' // для получения результатов распознавания
 	};
 }
 

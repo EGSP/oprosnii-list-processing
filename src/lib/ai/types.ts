@@ -9,6 +9,7 @@ export interface YandexOCRConfig {
 	endpoint?: string;
 	asyncEndpoint?: string; // для многостраничных PDF
 	operationEndpoint?: string; // для проверки статуса операций
+	getRecognitionEndpoint?: string; // для получения результатов распознавания
 }
 
 export interface YandexGPTConfig {

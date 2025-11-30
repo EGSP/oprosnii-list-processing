@@ -31,6 +31,7 @@
 - `YANDEX_OCR_ENDPOINT` (опционально) - Endpoint для синхронных запросов (по умолчанию: синхронный endpoint)
 - `YANDEX_OCR_ASYNC_ENDPOINT` (опционально) - Endpoint для асинхронных запросов (для многостраничных PDF)
 - `YANDEX_OCR_OPERATION_ENDPOINT` (опционально) - Endpoint для проверки статуса операций (по умолчанию: `https://operation.api.cloud.yandex.net/operations`)
+- `YANDEX_OCR_GET_RECOGNITION_ENDPOINT` (опционально) - Endpoint для получения результатов распознавания после завершения операции (по умолчанию: `https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition`)
 - `YANDEX_OCR_MODEL` (опционально) - Модель/версия YandexOCR (по умолчанию: "latest")
 - `YANDEX_OCR_ENDPOINT` (опционально) - Endpoint API (по умолчанию: "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText")
 
@@ -112,12 +113,18 @@
 **Возвращает:**
 
 - `{ done: false }` - операция еще выполняется
-- `{ done: true, text: string }` - операция завершена успешно
+- `{ done: true, text: string }` - операция завершена успешно (текст получен через `GetRecognition` endpoint)
 - `{ done: true, error: string }` - операция завершена с ошибкой
+
+**Особенности:**
+
+- После завершения операции (`done: true`) автоматически вызывается `GetRecognition` endpoint для получения полных результатов распознавания
+- Используется `YANDEX_OCR_GET_RECOGNITION_ENDPOINT` из конфигурации или значение по умолчанию
+- Если `GetRecognition` не удался, используется fallback - извлечение текста из ответа `Operation.Get`
 
 **Ошибки:**
 
-- `OCRError` - Ошибка при проверке статуса операции
+- `OCRError` - Ошибка при проверке статуса операции или получении результатов
 
 ### Пример использования
 
