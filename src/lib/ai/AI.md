@@ -28,6 +28,9 @@
 
 - `YANDEX_OCR_API_KEY` (обязательно) - API ключ для YandexOCR
 - `YANDEX_OCR_FOLDER_ID` (опционально) - Folder ID для YandexOCR
+- `YANDEX_OCR_ENDPOINT` (опционально) - Endpoint для синхронных запросов (по умолчанию: синхронный endpoint)
+- `YANDEX_OCR_ASYNC_ENDPOINT` (опционально) - Endpoint для асинхронных запросов (для многостраничных PDF)
+- `YANDEX_OCR_OPERATION_ENDPOINT` (опционально) - Endpoint для проверки статуса операций (по умолчанию: `https://operation.api.cloud.yandex.net/operations`)
 - `YANDEX_OCR_MODEL` (опционально) - Модель/версия YandexOCR (по умолчанию: "latest")
 - `YANDEX_OCR_ENDPOINT` (опционально) - Endpoint API (по умолчанию: "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText")
 
@@ -69,21 +72,30 @@
 
 **Примечание:** Для асинхронных операций (многостраничные PDF) используйте `extractTextFromFileWithOperation`.
 
-#### `extractTextFromFileWithOperation(applicationId: string, fileBuffer: Buffer, mimeType: string, filename?: string): Promise<{ text?: string; operationId?: string }>`
+#### `extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise<{ text?: string; operationId?: string }>`
 
 Извлекает текст из файла с созданием операции обработки. Создает операцию типа 'ocr' в БД.
 
 **Параметры:**
 
 - `applicationId` - ID заявки
-- `fileBuffer` - Buffer с содержимым файла
-- `mimeType` - MIME тип файла
-- `filename` - Имя файла (опционально)
+- `fileInfo` - Информация о файле:
+  - `buffer: Buffer` - Содержимое файла
+  - `mimeType: string` - MIME тип файла
+  - `fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown'` - Тип файла
+  - `pageCount: number` - Количество страниц (важно для PDF - если > 1, используется async endpoint)
+  - `filename?: string` - Имя файла (опционально)
 
 **Возвращает:**
 
 - `{ text: string }` - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
 - `{ operationId: string }` - для асинхронных операций (многостраничные PDF)
+
+**Особенности:**
+
+- Для многостраничных PDF (pageCount > 1) автоматически используется async endpoint из конфигурации (`YANDEX_OCR_ASYNC_ENDPOINT`)
+- Для одностраничных PDF и изображений используется синхронный endpoint
+- Рекомендуется использовать `getFileInfo()` из `$lib/storage` для получения полной информации о файле
 
 **Ошибки:**
 
@@ -91,7 +103,7 @@
 
 #### `checkYandexOCROperation(operationId: string): Promise<{ done: boolean; text?: string; error?: string }>`
 
-Проверяет статус асинхронной операции YandexOCR.
+Проверяет статус асинхронной операции YandexOCR. Использует endpoint из конфигурации (`YANDEX_OCR_OPERATION_ENDPOINT` или значение по умолчанию).
 
 **Параметры:**
 
@@ -120,13 +132,18 @@ import {
 const fileBuffer = Buffer.from(/* ... */);
 const text = await extractTextFromFile(fileBuffer, 'application/pdf', 'document.pdf');
 
-// Новый способ с операциями
-const result = await extractTextFromFileWithOperation(
-	'application-id',
-	fileBuffer,
-	'application/pdf',
-	'document.pdf'
-);
+// Новый способ с операциями (рекомендуется использовать getFileInfo)
+import { getFileInfo } from '$lib/storage';
+
+const fileInfo = await getFileInfo('application-id');
+if (fileInfo) {
+	const result = await extractTextFromFileWithOperation('application-id', {
+		buffer: fileInfo.buffer,
+		mimeType: fileInfo.mimeType,
+		fileType: fileInfo.fileType,
+		pageCount: fileInfo.pageCount,
+		filename: fileInfo.filename
+	});
 
 if (result.operationId) {
 	// Асинхронная операция - проверяем статус

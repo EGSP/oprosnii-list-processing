@@ -7,6 +7,8 @@ export interface YandexOCRConfig {
 	folderId?: string;
 	model?: string;
 	endpoint?: string;
+	asyncEndpoint?: string; // для многостраничных PDF
+	operationEndpoint?: string; // для проверки статуса операций
 }
 
 export interface YandexGPTConfig {

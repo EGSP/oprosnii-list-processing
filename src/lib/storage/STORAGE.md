@@ -172,6 +172,39 @@ if (file) {
 
 Получает информацию о файле (размер, дата изменения).
 
+#### `getFileInfo(applicationId: string): Promise<FileInfo | null>`
+
+Получает полную информацию о файле заявки в одном месте. Эта функция объединяет получение буфера, определение MIME типа, количества страниц (для PDF), размера файла и проверку уже извлеченного текста из OCR операции.
+
+**Возвращает:**
+```typescript
+{
+  buffer: Buffer;              // Содержимое файла
+  filename: string;            // Имя файла
+  mimeType: string;            // MIME тип (определяется по расширению)
+  fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
+  pageCount: number;          // Количество страниц (1 для всех, кроме PDF)
+  size: number;                // Размер файла в байтах
+  extractedText?: string;     // Уже извлеченный текст (если есть завершенная OCR операция)
+}
+```
+
+**Пример использования:**
+```typescript
+const fileInfo = await getFileInfo('some-guid');
+if (fileInfo) {
+  console.log(`Файл: ${fileInfo.filename}, тип: ${fileInfo.mimeType}, страниц: ${fileInfo.pageCount}`);
+  if (fileInfo.extractedText) {
+    console.log('Текст уже извлечен:', fileInfo.extractedText.substring(0, 100));
+  }
+}
+```
+
+**Особенности:**
+- Для PDF файлов автоматически определяется количество страниц через `pdf-parse`
+- Проверяет существующую завершенную OCR операцию и возвращает уже извлеченный текст, если он есть
+- Все данные о файле получаются один раз, что оптимизирует работу с файлами
+
 ### Управление техническими условиями (`technicalSpecs.ts`)
 
 #### `listTechnicalSpecs(): TechnicalSpec[]`

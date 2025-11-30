@@ -79,13 +79,28 @@ function createYandexOCRRequestBody(fileBuffer: Buffer, mimeType: string): Recor
 /**
  * Отправляет изображение или PDF в YandexOCR
  * Возвращает результат синхронно или Operation ID для асинхронных операций
+ *
+ * @param fileBuffer - Buffer с содержимым файла
+ * @param mimeType - MIME тип файла
+ * @param pageCount - Количество страниц (для PDF, если > 1, используется async endpoint)
  */
-async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<YandexOCRResult> {
+async function callYandexOCR(
+	fileBuffer: Buffer,
+	mimeType: string,
+	pageCount?: number
+): Promise<YandexOCRResult> {
 	const config = aiConfig.yandexOCR;
+
+	// Определяем, нужно ли использовать async endpoint
+	const isMultiPagePDF = mimeType === 'application/pdf' && pageCount && pageCount > 1;
+	const endpoint = isMultiPagePDF && config.asyncEndpoint ? config.asyncEndpoint : config.endpoint;
 
 	logger.debug('Вызов YandexOCR', {
 		mimeType,
-		fileSize: fileBuffer.length
+		fileSize: fileBuffer.length,
+		pageCount,
+		isMultiPagePDF,
+		endpoint
 	});
 
 	// Формируем запрос к YandexOCR API
@@ -93,11 +108,12 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 
 	try {
 		logger.debug('Отправка запроса в YandexOCR', {
-			endpoint: config.endpoint,
-			mimeType
+			endpoint,
+			mimeType,
+			pageCount
 		});
 
-		const response = await fetch(config.endpoint!, {
+		const response = await fetch(endpoint!, {
 			method: 'POST',
 			headers: {
 				Authorization: `Api-Key ${config.apiKey}`,
@@ -298,10 +314,13 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 	error?: string;
 }> {
 	const config = aiConfig.yandexOCR;
-	const operationEndpoint = `https://operation.api.cloud.yandex.net/operations/${operationId}`;
+	const baseEndpoint =
+		config.operationEndpoint || 'https://operation.api.cloud.yandex.net/operations';
+	const operationEndpoint = `${baseEndpoint}/${operationId}`;
 
 	logger.debug('Проверка статуса YandexOCR операции', {
-		externalOperationId: operationId
+		externalOperationId: operationId,
+		operationEndpoint
 	});
 
 	try {
@@ -404,18 +423,20 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
  * Извлекает текст из файла с созданием операции обработки
  *
  * @param applicationId - ID заявки
- * @param fileBuffer - Buffer с содержимым файла
- * @param mimeType - MIME тип файла
- * @param filename - Имя файла
+ * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
  * @returns Объект с текстом (если синхронно) или ID операции (если асинхронно)
  */
 export async function extractTextFromFileWithOperation(
 	applicationId: string,
-	fileBuffer: Buffer,
-	mimeType: string,
-	_filename?: string
+	fileInfo: {
+		buffer: Buffer;
+		mimeType: string;
+		fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
+		pageCount: number;
+		filename?: string;
+	}
 ): Promise<{ text?: string; operationId?: string }> {
-	const fileType = getFileType(mimeType);
+	const { buffer, mimeType, fileType, pageCount, filename } = fileInfo;
 	const config = aiConfig.yandexOCR;
 
 	// Для файлов, не требующих OCR, создаем синхронную операцию
@@ -423,7 +444,7 @@ export async function extractTextFromFileWithOperation(
 		logger.info('Извлечение текста из файла (локальное)', {
 			applicationId,
 			fileType,
-			filename: _filename
+			filename
 		});
 
 		const operation = createOrUpdateOperation(
@@ -440,9 +461,9 @@ export async function extractTextFromFileWithOperation(
 		try {
 			let text: string;
 			if (fileType === 'docx') {
-				text = await extractTextFromDOCX(fileBuffer);
+				text = await extractTextFromDOCX(buffer);
 			} else {
-				text = await extractTextFromXLSX(fileBuffer);
+				text = await extractTextFromXLSX(buffer);
 			}
 
 			logger.info('Текст успешно извлечен из файла (локальное)', {
@@ -479,8 +500,15 @@ export async function extractTextFromFileWithOperation(
 		logger.info('Извлечение текста через YandexOCR', {
 			applicationId,
 			fileType,
-			filename: _filename
+			filename,
+			pageCount
 		});
+
+		// Определяем endpoint в зависимости от количества страниц
+		const endpoint =
+			fileType === 'pdf' && pageCount > 1 && config.asyncEndpoint
+				? config.asyncEndpoint
+				: config.endpoint;
 
 		// Создаем операцию перед вызовом
 		const operation = createOrUpdateOperation(
@@ -488,14 +516,14 @@ export async function extractTextFromFileWithOperation(
 			'ocr',
 			'yandex',
 			{
-				endpoint: config.endpoint!,
+				endpoint: endpoint!,
 				method: 'POST'
 			},
 			'running'
 		);
 
 		try {
-			const ocrResult = await callYandexOCR(fileBuffer, mimeType);
+			const ocrResult = await callYandexOCR(buffer, mimeType, pageCount);
 
 			if (ocrResult.isAsync && ocrResult.operationId) {
 				// Асинхронная операция
@@ -548,7 +576,7 @@ export async function extractTextFromFileWithOperation(
 	logger.error('Неподдерживаемый тип файла', {
 		applicationId,
 		mimeType,
-		filename: _filename
+		filename: fileInfo.filename
 	});
 	throw new OCRError(
 		`Неподдерживаемый тип файла: ${mimeType}. Поддерживаются: изображения (PNG, JPG), PDF, DOCX, XLSX.`
@@ -565,8 +593,7 @@ export async function extractTextFromFileWithOperation(
  */
 export async function extractTextFromFile(
 	fileBuffer: Buffer,
-	mimeType: string,
-	_filename?: string
+	mimeType: string
 ): Promise<string> {
 	const fileType = getFileType(mimeType);
 

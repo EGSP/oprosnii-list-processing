@@ -15,17 +15,16 @@ import {
 	ProductTypeSchema,
 	AbbreviationParametersSchema,
 	validateParametersAgainstTU,
-	generateAbbreviation,
+	generateAbbreviation as generateAbbreviationFromSchema,
 	type ProductTypeResult,
 	type AbbreviationParameter
 } from './schemas.js';
 import {
 	getApplication,
 	updateApplication,
-	getApplicationFile,
+	getFileInfo,
 	getTechnicalSpec,
 	getOperation,
-	getOperationByApplicationAndType,
 	getOperationByApplicationAndTypeWithSync,
 	updateOperationStatus,
 	syncOperationToApplication
@@ -44,28 +43,6 @@ export class ProcessingError extends Error {
 	}
 }
 
-/**
- * Определяет MIME тип по расширению файла
- */
-function getMimeTypeFromFilename(filename: string): string {
-	const extension = filename.split('.').pop()?.toLowerCase();
-
-	switch (extension) {
-		case 'pdf':
-			return 'application/pdf';
-		case 'docx':
-			return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-		case 'xlsx':
-			return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-		case 'png':
-			return 'image/png';
-		case 'jpg':
-		case 'jpeg':
-			return 'image/jpeg';
-		default:
-			return 'application/octet-stream';
-	}
-}
 
 /**
  * Ограничивает текст до указанной длины
@@ -110,41 +87,40 @@ export async function detectProductType(applicationId: string): Promise<{
 		});
 	}
 
-	let extractedText: string;
+	let extractedText: string | undefined;
 	let ocrOperationId: string | undefined;
 
-	// Проверяем, есть ли уже завершенная OCR операция (с синхронизацией)
-	const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
-	if (
-		existingOCROperation &&
-		existingOCROperation.status === 'completed' &&
-		existingOCROperation.result
-	) {
-		const result = existingOCROperation.result as { text?: string };
-		if (result.text) {
-			// Используем результат из операции
-			extractedText = result.text;
-			ocrOperationId = existingOCROperation.id;
-		}
+	// Получаем информацию о файле (включая уже извлеченный текст, если есть)
+	logger.info('Получение информации о файле', { applicationId });
+	const fileInfo = await getFileInfo(applicationId);
+	if (!fileInfo) {
+		logger.error('Файл заявки не найден', { applicationId });
+		throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
+	}
+
+	// Если текст уже извлечен, используем его
+	if (fileInfo.extractedText) {
+		extractedText = fileInfo.extractedText;
+		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+		ocrOperationId = existingOCROperation?.id;
+		logger.info('Использован уже извлеченный текст', {
+			applicationId,
+			ocrOperationId,
+			textLength: extractedText.length
+		});
 	}
 
 	// Если текста нет, извлекаем через операцию
 	if (!extractedText) {
 		logger.info('Извлечение текста из файла', { applicationId });
-		const fileData = getApplicationFile(applicationId);
-		if (!fileData) {
-			logger.error('Файл заявки не найден', { applicationId });
-			throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
-		}
-
-		const mimeType = getMimeTypeFromFilename(fileData.filename);
 		try {
-			const ocrResult = await extractTextFromFileWithOperation(
-				applicationId,
-				fileData.buffer,
-				mimeType,
-				fileData.filename
-			);
+			const ocrResult = await extractTextFromFileWithOperation(applicationId, {
+				buffer: fileInfo.buffer,
+				mimeType: fileInfo.mimeType,
+				fileType: fileInfo.fileType,
+				pageCount: fileInfo.pageCount,
+				filename: fileInfo.filename
+			});
 
 			if (ocrResult.operationId) {
 				// Асинхронная операция - возвращаем ID операции
@@ -186,6 +162,12 @@ export async function detectProductType(applicationId: string): Promise<{
 			});
 			throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
 		}
+	}
+
+	// Проверяем, что текст был извлечен
+	if (!extractedText) {
+		logger.error('Не удалось извлечь текст из файла', { applicationId });
+		throw new ProcessingError('Не удалось извлечь текст из файла');
 	}
 
 	// Ограничиваем текст для LLM
@@ -276,45 +258,40 @@ ${limitedText}
 async function getOrExtractText(
 	applicationId: string
 ): Promise<{ text: string; ocrOperationId?: string }> {
-	let extractedText: string;
+	let extractedText: string | undefined;
 	let ocrOperationId: string | undefined;
 
-	// Проверяем существующую OCR операцию с синхронизацией
-	const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
-	if (
-		existingOCROperation &&
-		existingOCROperation.status === 'completed' &&
-		existingOCROperation.result
-	) {
-		const result = existingOCROperation.result as { text?: string };
-		if (result.text) {
-			extractedText = result.text;
-			ocrOperationId = existingOCROperation.id;
-			logger.info('Использован текст из существующей OCR операции', {
-				applicationId,
-				ocrOperationId,
-				textLength: extractedText.length
-			});
-			return { text: extractedText, ocrOperationId };
-		}
-	}
-
-	// Если текста нет, извлекаем через операцию
-	logger.info('Извлечение текста из файла для формирования аббревиатуры', { applicationId });
-	const fileData = getApplicationFile(applicationId);
-	if (!fileData) {
+	// Получаем информацию о файле (включая уже извлеченный текст, если есть)
+	logger.info('Получение информации о файле для формирования аббревиатуры', { applicationId });
+	const fileInfo = await getFileInfo(applicationId);
+	if (!fileInfo) {
 		logger.error('Файл заявки не найден', { applicationId });
 		throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
 	}
 
-	const mimeType = getMimeTypeFromFilename(fileData.filename);
-	try {
-		const ocrResult = await extractTextFromFileWithOperation(
+	// Если текст уже извлечен, используем его
+	if (fileInfo.extractedText) {
+		extractedText = fileInfo.extractedText;
+		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+		ocrOperationId = existingOCROperation?.id;
+		logger.info('Использован уже извлеченный текст для формирования аббревиатуры', {
 			applicationId,
-			fileData.buffer,
-			mimeType,
-			fileData.filename
-		);
+			ocrOperationId,
+			textLength: extractedText.length
+		});
+		return { text: extractedText, ocrOperationId };
+	}
+
+	// Если текста нет, извлекаем через операцию
+	logger.info('Извлечение текста из файла для формирования аббревиатуры', { applicationId });
+	try {
+		const ocrResult = await extractTextFromFileWithOperation(applicationId, {
+			buffer: fileInfo.buffer,
+			mimeType: fileInfo.mimeType,
+			fileType: fileInfo.fileType,
+			pageCount: fileInfo.pageCount,
+			filename: fileInfo.filename
+		});
 
 		if (ocrResult.operationId) {
 			// Асинхронная операция
@@ -465,7 +442,10 @@ function validateAndGenerateAbbreviation(
 	});
 
 	// Формируем аббревиатуру по шаблону
-	const abbreviation = generateAbbreviation(validatedParameters, technicalSpec.abbreviationTemplate);
+	const abbreviation = generateAbbreviationFromSchema(
+		validatedParameters,
+		technicalSpec.abbreviationTemplate
+	);
 
 	logger.info('Аббревиатура сформирована', {
 		abbreviation
@@ -640,6 +620,10 @@ export async function checkAndUpdateOperation(
 		operation.status === 'failed' ||
 		!operation.externalOperationId
 	) {
+		// Синхронизируем результат с заявкой, если операция завершена
+		if (operation.status === 'completed') {
+			syncOperationToApplication(operation);
+		}
 		return operation;
 	}
 
@@ -705,9 +689,5 @@ export async function checkAndUpdateOperation(
 		}
 	}
 
-	// Для других типов операций синхронизируем, если операция завершена
-	if (operation.status === 'completed') {
-		syncOperationToApplication(operation);
-	}
 	return operation;
 }

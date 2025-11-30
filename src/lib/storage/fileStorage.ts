@@ -11,6 +11,7 @@ import {
 } from 'fs';
 import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
+import { getOperationByApplicationAndTypeWithSync } from './operationsRepository.js';
 
 /**
  * Сохраняет файл заявки в хранилище
@@ -127,5 +128,125 @@ export function getApplicationFileInfo(guid: string): { size: number; modified: 
 	return {
 		size: stats.size,
 		modified: stats.mtime
+	};
+}
+
+/**
+ * Определяет MIME тип по расширению файла
+ */
+function getMimeTypeFromFilename(filename: string): string {
+	const extension = filename.split('.').pop()?.toLowerCase();
+
+	switch (extension) {
+		case 'pdf':
+			return 'application/pdf';
+		case 'docx':
+			return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+		case 'xlsx':
+			return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+		case 'png':
+			return 'image/png';
+		case 'jpg':
+		case 'jpeg':
+			return 'image/jpeg';
+		default:
+			return 'application/octet-stream';
+	}
+}
+
+/**
+ * Определяет тип файла по MIME типу
+ */
+function getFileType(mimeType: string): 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown' {
+	if (mimeType.startsWith('image/')) {
+		return 'image';
+	}
+	if (mimeType === 'application/pdf') {
+		return 'pdf';
+	}
+	if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+		return 'docx';
+	}
+	if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+		return 'xlsx';
+	}
+	return 'unknown';
+}
+
+/**
+ * Определяет количество страниц в PDF файле
+ */
+async function getPDFPageCount(buffer: Buffer): Promise<number> {
+	try {
+		const pdfParse = await import('pdf-parse');
+		const data = await pdfParse.default(buffer);
+		return data.numpages;
+	} catch (error) {
+		// Если не удалось определить, возвращаем 1 (предполагаем одностраничный)
+		return 1;
+	}
+}
+
+/**
+ * Получает полную информацию о файле заявки
+ *
+ * Возвращает все необходимые данные о файле в одном месте:
+ * - buffer, filename, mimeType, fileType, pageCount, size
+ * - extractedText (если есть завершенная OCR операция)
+ *
+ * @param applicationId - GUID заявки
+ * @returns Информация о файле или null, если файл не найден
+ */
+export async function getFileInfo(applicationId: string): Promise<{
+	buffer: Buffer;
+	filename: string;
+	mimeType: string;
+	fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
+	pageCount: number;
+	size: number;
+	extractedText?: string;
+} | null> {
+	const fileData = getApplicationFile(applicationId);
+	if (!fileData) {
+		return null;
+	}
+
+	const { buffer, filename } = fileData;
+	const mimeType = getMimeTypeFromFilename(filename);
+	const fileType = getFileType(mimeType);
+
+	// Получаем размер файла
+	const filePath = getApplicationFilePath(applicationId);
+	const stats = filePath ? statSync(filePath) : null;
+	const size = stats?.size || buffer.length;
+
+	// Определяем количество страниц
+	let pageCount = 1;
+	if (fileType === 'pdf') {
+		pageCount = await getPDFPageCount(buffer);
+	}
+
+	// Проверяем существующую OCR операцию для получения текста
+	let extractedText: string | undefined;
+	const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+	if (
+		ocrOperation &&
+		ocrOperation.status === 'completed' &&
+		ocrOperation.result
+	) {
+		const result = ocrOperation.result as { text?: string };
+		if (result.text) {
+			extractedText = result.text;
+		}
+	}
+
+	return {
+		buffer,
+		filename,
+		mimeType,
+		fileType,
+		pageCount,
+		size,
+		extractedText
 	};
 }
