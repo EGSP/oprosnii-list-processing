@@ -27,6 +27,15 @@
 	--color-status-new: #fef3c7;
 	--color-status-processed: #d1fae5;
 
+	--color-status-pending: #fef3c7;
+	--color-status-pending-text: #92400e;
+	--color-status-running: #dbeafe;
+	--color-status-running-text: #1e40af;
+	--color-status-completed: #d1fae5;
+	--color-status-completed-text: #065f46;
+	--color-status-failed: #fee2e2;
+	--color-status-failed-text: #991b1b;
+
 	/* Отступы */
 	--spacing-xs: 0.25rem;
 	--spacing-sm: 0.5rem;

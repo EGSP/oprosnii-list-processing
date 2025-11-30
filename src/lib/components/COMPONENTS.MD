@@ -12,6 +12,7 @@
 - **`FileUpload.svelte`** - Компонент загрузки файлов с drag-n-drop
 - **`ApplicationList.svelte`** - Левая панель со списком заявок
 - **`ApplicationDetails.svelte`** - Правое окно с деталями заявки
+- **`OperationStatusBadge.svelte`** - Плашка статуса операции обработки
 
 ### API клиент
 
@@ -182,6 +183,7 @@
    - Название файла
    - Дата загрузки
    - Статус обработки
+   - Статусы операций (OCR, LLM Тип продукта, LLM Аббревиатура) - плашки с возможностью просмотра результатов
    - Тип продукции (если определен)
 
 2. **Обработка:**
@@ -215,6 +217,54 @@
 - JSON данные в моноширинном шрифте с фоном
 - Выделение финального обозначения продукции зеленым цветом
 - Кнопка обработки с hover эффектами
+
+---
+
+### `OperationStatusBadge.svelte`
+
+Компонент для отображения статуса операции обработки с возможностью просмотра результатов.
+
+**Props:**
+
+- `operation: ProcessingOperation` - Объект операции обработки (обязательный)
+
+**Функциональность:**
+
+- Отображение типа операции (OCR, LLM Тип продукта, LLM Аббревиатура)
+- Отображение статуса операции (Ожидание, Выполняется, Завершено, Ошибка)
+- Цветовая индикация статуса:
+  - `pending` - желтый фон
+  - `running` - синий фон
+  - `completed` - зеленый фон
+  - `failed` - красный фон
+- Раскрывающийся блок с JSON результатом операции (result или error)
+- Кликабельный заголовок для раскрытия/сворачивания контента (только если есть результат)
+
+**Пример использования:**
+
+```svelte
+<script>
+	import OperationStatusBadge from '$lib/components/OperationStatusBadge.svelte';
+	import type { ProcessingOperation } from '$lib/storage/types.js';
+
+	let operation: ProcessingOperation = {
+		id: '...',
+		type: 'ocr',
+		status: 'completed',
+		result: { text: '...' },
+		// ... другие поля
+	};
+</script>
+
+<OperationStatusBadge {operation} />
+```
+
+**Стили:**
+
+- Левая цветная граница для визуальной индикации статуса
+- Плашка статуса с цветным фоном
+- Раскрывающийся блок с JSON в моноширинном шрифте
+- Плавные переходы и hover эффекты
 
 ---
 
@@ -345,6 +395,25 @@ await generateAbbreviation('some-uuid', 'example-tu');
 await processApplication('some-uuid', 'example-tu');
 ```
 
+#### `getOperations(id: string): Promise<ProcessingOperation[]>`
+
+Получает список операций обработки для заявки.
+
+**Параметры:**
+
+- `id: string` - UUID заявки
+
+**Возвращает:**
+
+- `Promise<ProcessingOperation[]>` - Массив операций обработки
+
+**Пример:**
+
+```typescript
+const operations = await getOperations('some-uuid');
+operations.forEach((op) => console.log(op.type, op.status));
+```
+
 ### Обработка ошибок
 
 Все функции API клиента автоматически обрабатывают ошибки HTTP и преобразуют их в исключения JavaScript с понятными сообщениями.
@@ -385,6 +454,14 @@ try {
 - `--color-success-bg` - Фон для успеха
 - `--color-status-new` - Фон статуса "Новая"
 - `--color-status-processed` - Фон статуса "Обработана"
+- `--color-status-pending` - Фон статуса операции "Ожидание"
+- `--color-status-pending-text` - Текст статуса "Ожидание"
+- `--color-status-running` - Фон статуса операции "Выполняется"
+- `--color-status-running-text` - Текст статуса "Выполняется"
+- `--color-status-completed` - Фон статуса операции "Завершено"
+- `--color-status-completed-text` - Текст статуса "Завершено"
+- `--color-status-failed` - Фон статуса операции "Ошибка"
+- `--color-status-failed-text` - Текст статуса "Ошибка"
 
 **Отступы:**
 

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { getApplication, getTechnicalSpecs, processApplication } from '$lib/api/client.js';
-	import type { Application, TechnicalSpec } from '$lib/storage/types.js';
+	import { onMount, onDestroy } from 'svelte';
+	import { getApplication, getTechnicalSpecs, processApplication, getOperations } from '$lib/api/client.js';
+	import type { Application, TechnicalSpec, ProcessingOperation } from '$lib/storage/types.js';
 	import EmptyState from './EmptyState.svelte';
+	import OperationStatusBadge from './OperationStatusBadge.svelte';
 
 	export let applicationId: string | null = null;
 
@@ -12,15 +13,27 @@
 	let isProcessing = false;
 	let isLoading = false;
 	let error: string | null = null;
+	let operations: ProcessingOperation[] = [];
+	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
 	$: if (applicationId) {
 		loadApplication();
 	} else {
 		application = null;
+		operations = [];
+		stopOperationsUpdate();
 	}
 
 	onMount(() => {
 		loadTechnicalSpecs();
+		// Если заявка уже выбрана при монтировании, загружаем её
+		if (applicationId) {
+			loadApplication();
+		}
+	});
+
+	onDestroy(() => {
+		stopOperationsUpdate();
 	});
 
 	async function loadTechnicalSpecs() {
@@ -41,11 +54,51 @@
 		error = null;
 		try {
 			application = await getApplication(applicationId);
+			// Загружаем операции для заявки
+			await loadOperations();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
 			application = null;
+			operations = [];
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	async function loadOperations() {
+		if (!applicationId) return;
+
+		try {
+			operations = await getOperations(applicationId);
+			// Запускаем периодическое обновление, если есть операции в статусе "running"
+			startOperationsUpdate();
+		} catch (err) {
+			// Игнорируем ошибки загрузки операций, чтобы не блокировать отображение заявки
+			console.warn('Не удалось загрузить операции:', err);
+			operations = [];
+		}
+	}
+
+	function startOperationsUpdate() {
+		stopOperationsUpdate();
+		
+		// Проверяем, есть ли операции в статусе "running"
+		const hasRunningOperations = operations.some((op) => op.status === 'running');
+		
+		if (hasRunningOperations) {
+			// Обновляем операции каждые 3 секунды, если есть выполняющиеся операции
+			operationsUpdateInterval = setInterval(async () => {
+				if (applicationId) {
+					await loadOperations();
+				}
+			}, 3000);
+		}
+	}
+
+	function stopOperationsUpdate() {
+		if (operationsUpdateInterval) {
+			clearInterval(operationsUpdateInterval);
+			operationsUpdateInterval = null;
 		}
 	}
 
@@ -59,8 +112,10 @@
 		error = null;
 		try {
 			await processApplication(applicationId, selectedTechnicalSpecId);
-			// Обновляем данные заявки после обработки
+			// Обновляем данные заявки и операции после обработки
 			await loadApplication();
+			// После обработки могут появиться новые операции в статусе "running"
+			await loadOperations();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
 		} finally {
@@ -95,6 +150,21 @@
 		const result = application.llmAbbreviationResult;
 		return (result as { abbreviation?: string })?.abbreviation || null;
 	}
+
+	// Получаем все операции, включая те, которых еще нет
+	function getAllOperations(): Array<ProcessingOperation | { type: ProcessingOperation['type']; status: 'not_started' }> {
+		const operationTypes: ProcessingOperation['type'][] = ['ocr', 'llm_product_type', 'llm_abbreviation'];
+		const operationsMap = new Map(operations.map((op) => [op.type, op]));
+		
+		return operationTypes.map((type) => {
+			const existing = operationsMap.get(type);
+			if (existing) {
+				return existing;
+			}
+			// Возвращаем "пустую" операцию для отображения
+			return { type, status: 'not_started' as const };
+		});
+	}
 </script>
 
 <div class="application-details">
@@ -116,6 +186,12 @@
 
 			<div class="section">
 				<h3>Основная информация</h3>
+				{#if application.productType}
+					<div class="field">
+						<label for="product-type-display">Тип продукции:</label>
+						<span id="product-type-display">{application.productType}</span>
+					</div>
+				{/if}
 				<div class="field">
 					<label for="filename-display">Название файла:</label>
 					<span id="filename-display">{application.originalFilename}</span>
@@ -130,12 +206,14 @@
 						{getStatus()}
 					</span>
 				</div>
-				{#if application.productType}
-					<div class="field">
-						<label for="product-type-display">Тип продукции:</label>
-						<span id="product-type-display">{application.productType}</span>
+				<div class="field operations-status">
+					<div class="field-label">Статусы операций:</div>
+					<div class="operations-list">
+						{#each getAllOperations() as operationOrPlaceholder}
+							<OperationStatusBadge operation={operationOrPlaceholder} />
+						{/each}
 					</div>
-				{/if}
+				</div>
 			</div>
 
 			<div class="section">
@@ -165,37 +243,14 @@
 				<div class="section">
 					<h3>Результаты обработки</h3>
 
-					{#if application.ocrResult}
-						<div class="field-group">
-							<label for="ocr-result">OCR результат:</label>
-							<pre id="ocr-result" class="result-data">{JSON.stringify(application.ocrResult, null, 2)}</pre>
-						</div>
-					{/if}
-
-					{#if application.llmProductTypeResult}
-						<div class="field-group">
-							<label for="product-type-result">Результат определения типа:</label>
-							<pre id="product-type-result" class="result-data">
-								{JSON.stringify(application.llmProductTypeResult, null, 2)}
-							</pre>
-						</div>
-					{/if}
-
-					{#if application.llmAbbreviationResult}
-						<div class="field-group">
-							<label for="abbreviation-result">Результат формирования аббревиатуры:</label>
-							<pre id="abbreviation-result" class="result-data">
-								{JSON.stringify(application.llmAbbreviationResult, null, 2)}
-							</pre>
-						</div>
-					{/if}
-
-					{#if getFinalAbbreviation()}
-						<div class="field-group final-abbreviation">
-							<label for="final-abbreviation">Финальное обозначение продукции:</label>
+					<div class="field-group final-abbreviation">
+						<label for="final-abbreviation">Финальное обозначение продукции:</label>
+						{#if getFinalAbbreviation()}
 							<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
-						</div>
-					{/if}
+						{:else}
+							<div id="final-abbreviation" class="abbreviation-empty">Аббревиатура не сформирована</div>
+						{/if}
+					</div>
 				</div>
 			{/if}
 		</div>
@@ -278,6 +333,21 @@
 		flex: 1;
 	}
 
+	.field.operations-status {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.field.operations-status .field-label {
+		font-weight: 500;
+		color: var(--color-text-secondary);
+		margin-bottom: 0.75rem;
+	}
+
+	.operations-list {
+		width: 100%;
+	}
+
 	.field select {
 		flex: 1;
 		padding: 0.5rem;
@@ -339,17 +409,6 @@
 		margin-bottom: 0.5rem;
 	}
 
-	.result-data {
-		background: var(--color-code-bg);
-		padding: 1rem;
-		border-radius: var(--border-radius);
-		font-size: 0.875rem;
-		overflow-x: auto;
-		color: var(--color-text);
-		margin: 0;
-		font-family: 'Courier New', monospace;
-	}
-
 	.final-abbreviation {
 		background: var(--color-success-bg);
 		padding: 1rem;
@@ -362,5 +421,12 @@
 		font-weight: 600;
 		color: var(--color-success);
 		margin-top: 0.5rem;
+	}
+
+	.abbreviation-empty {
+		font-size: 1rem;
+		color: var(--color-text-secondary);
+		margin-top: 0.5rem;
+		font-style: italic;
 	}
 </style>

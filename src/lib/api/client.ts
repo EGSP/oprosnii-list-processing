@@ -112,3 +112,11 @@ export async function processApplication(id: string, technicalSpecId: string): P
 	// Затем формируем аббревиатуру
 	await generateAbbreviation(id, technicalSpecId);
 }
+
+/**
+ * Получение списка операций для заявки
+ */
+export async function getOperations(id: string): Promise<import('$lib/storage/types.js').ProcessingOperation[]> {
+	const response = await fetch(`${API_BASE}/applications/${id}/operations`);
+	return handleResponse<import('$lib/storage/types.js').ProcessingOperation[]>(response);
+}
