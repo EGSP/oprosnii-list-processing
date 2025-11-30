@@ -1,7 +1,7 @@
-import { getDatabase, rowToApplication, applicationToRow } from './db.js';
-import { Application, ApplicationFilters, ApplicationUpdate, ApplicationSchema } from './types.js';
+import { getDatabase, rowToApplication, applicationToRow, type ApplicationRow } from './db.js';
+import { type Application, type ApplicationFilters, type ApplicationUpdate, ApplicationSchema } from './types.js';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageError, ApplicationNotFoundError, ValidationError } from './errors.js';
+import { StorageError, ValidationError } from './errors.js';
 
 /**
  * Создает новую заявку в БД
@@ -61,7 +61,7 @@ export function getApplication(guid: string): Application | null {
 	try {
 		const db = getDatabase();
 		const stmt = db.prepare('SELECT * FROM applications WHERE id = ?');
-		const row = stmt.get(guid) as any;
+		const row = stmt.get(guid) as ApplicationRow | undefined;
 
 		if (!row) {
 			return null;
@@ -125,7 +125,7 @@ export function listApplications(filters?: ApplicationFilters): Application[] {
 	const db = getDatabase();
 
 	let query = 'SELECT * FROM applications WHERE 1=1';
-	const params: any[] = [];
+	const params: (string | Date)[] = [];
 
 	if (filters?.startDate) {
 		query += ' AND arrival_date >= ?';
@@ -146,7 +146,7 @@ export function listApplications(filters?: ApplicationFilters): Application[] {
 
 	try {
 		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as any[];
+		const rows = stmt.all(...params) as ApplicationRow[];
 
 		return rows.map(rowToApplication);
 	} catch (error) {

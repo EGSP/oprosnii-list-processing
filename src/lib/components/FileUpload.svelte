@@ -8,7 +8,6 @@
 	}>();
 
 	let isDragging = false;
-	let isUploading = false;
 	let fileInput: HTMLInputElement;
 
 	const acceptedTypes = [

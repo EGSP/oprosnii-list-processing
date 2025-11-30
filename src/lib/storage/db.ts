@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { config } from '../config.js';
-import { Application, ProcessingOperation } from './types.js';
+import { type Application, type ProcessingOperation } from './types.js';
 import { mkdirSync } from 'fs';
 
 let dbInstance: Database.Database | null = null;
@@ -88,10 +88,10 @@ export function closeDatabase(): void {
 /**
  * Безопасный парсинг JSON с обработкой ошибок
  */
-function safeJsonParse(jsonString: string | null): any | null {
+function safeJsonParse(jsonString: string | null): Record<string, unknown> | null {
 	if (!jsonString) return null;
 	try {
-		return JSON.parse(jsonString);
+		return JSON.parse(jsonString) as Record<string, unknown>;
 	} catch (error) {
 		console.error('Error parsing JSON from database:', error);
 		return null;
@@ -99,9 +99,24 @@ function safeJsonParse(jsonString: string | null): any | null {
 }
 
 /**
+ * Интерфейс строки из БД для Application
+ */
+export interface ApplicationRow {
+	id: string;
+	original_filename: string;
+	product_type: string | null;
+	ocr_result: string | null;
+	llm_product_type_result: string | null;
+	llm_abbreviation_result: string | null;
+	arrival_date: string;
+	processing_start_date: string | null;
+	processing_end_date: string | null;
+}
+
+/**
  * Преобразует строку из БД в объект Application
  */
-export function rowToApplication(row: any): Application {
+export function rowToApplication(row: ApplicationRow): Application {
 	return {
 		id: row.id,
 		originalFilename: row.original_filename,
@@ -118,8 +133,8 @@ export function rowToApplication(row: any): Application {
 /**
  * Преобразует объект Application в формат для записи в БД
  */
-export function applicationToRow(application: Partial<Application>): any {
-	const row: any = {};
+export function applicationToRow(application: Partial<Application>): Partial<ApplicationRow> {
+	const row: Partial<ApplicationRow> = {};
 
 	if (application.id !== undefined) row.id = application.id;
 	if (application.originalFilename !== undefined)
@@ -145,9 +160,30 @@ export function applicationToRow(application: Partial<Application>): any {
 }
 
 /**
+ * Интерфейс строки из БД для ProcessingOperation
+ */
+export interface ProcessingOperationRow {
+	id: string;
+	application_id: string;
+	type: string;
+	provider: string;
+	status: string;
+	external_operation_id: string | null;
+	request_data: string;
+	result: string | null;
+	error: string | null;
+	created_at: string;
+	started_at: string | null;
+	completed_at: string | null;
+	progress: string | null;
+	retry_count: number;
+	max_retries: number;
+}
+
+/**
  * Преобразует строку из БД в объект ProcessingOperation
  */
-export function rowToProcessingOperation(row: any): ProcessingOperation {
+export function rowToProcessingOperation(row: ProcessingOperationRow): ProcessingOperation {
 	return {
 		id: row.id,
 		applicationId: row.application_id,
@@ -170,8 +206,8 @@ export function rowToProcessingOperation(row: any): ProcessingOperation {
 /**
  * Преобразует объект ProcessingOperation в формат для записи в БД
  */
-export function processingOperationToRow(operation: Partial<ProcessingOperation>): any {
-	const row: any = {};
+export function processingOperationToRow(operation: Partial<ProcessingOperation>): Partial<ProcessingOperationRow> {
+	const row: Partial<ProcessingOperationRow> = {};
 
 	if (operation.id !== undefined) row.id = operation.id;
 	if (operation.applicationId !== undefined) row.application_id = operation.applicationId;

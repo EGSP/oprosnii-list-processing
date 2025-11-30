@@ -1,4 +1,4 @@
-import { json, error as svelteError } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import {
 	StorageError,

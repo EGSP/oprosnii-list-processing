@@ -117,23 +117,23 @@
 			<div class="section">
 				<h3>Основная информация</h3>
 				<div class="field">
-					<label>Название файла:</label>
-					<span>{application.originalFilename}</span>
+					<label for="filename-display">Название файла:</label>
+					<span id="filename-display">{application.originalFilename}</span>
 				</div>
 				<div class="field">
-					<label>Дата загрузки:</label>
-					<span>{formatDate(application.arrivalDate)}</span>
+					<label for="arrival-date-display">Дата загрузки:</label>
+					<span id="arrival-date-display">{formatDate(application.arrivalDate)}</span>
 				</div>
 				<div class="field">
-					<label>Статус:</label>
-					<span class="status" class:processed={application.processingEndDate}>
+					<label for="status-display">Статус:</label>
+					<span id="status-display" class="status" class:processed={application.processingEndDate}>
 						{getStatus()}
 					</span>
 				</div>
 				{#if application.productType}
 					<div class="field">
-						<label>Тип продукции:</label>
-						<span>{application.productType}</span>
+						<label for="product-type-display">Тип продукции:</label>
+						<span id="product-type-display">{application.productType}</span>
 					</div>
 				{/if}
 			</div>
@@ -141,8 +141,9 @@
 			<div class="section">
 				<h3>Обработка</h3>
 				<div class="field">
-					<label>Технические условия:</label>
+					<label for="technical-spec-select">Технические условия:</label>
 					<select
+						id="technical-spec-select"
 						bind:value={selectedTechnicalSpecId}
 						disabled={isProcessing || !!application.processingEndDate}
 					>
@@ -166,15 +167,15 @@
 
 					{#if application.ocrResult}
 						<div class="field-group">
-							<label>OCR результат:</label>
-							<pre class="result-data">{JSON.stringify(application.ocrResult, null, 2)}</pre>
+							<label for="ocr-result">OCR результат:</label>
+							<pre id="ocr-result" class="result-data">{JSON.stringify(application.ocrResult, null, 2)}</pre>
 						</div>
 					{/if}
 
 					{#if application.llmProductTypeResult}
 						<div class="field-group">
-							<label>Результат определения типа:</label>
-							<pre class="result-data">
+							<label for="product-type-result">Результат определения типа:</label>
+							<pre id="product-type-result" class="result-data">
 								{JSON.stringify(application.llmProductTypeResult, null, 2)}
 							</pre>
 						</div>
@@ -182,8 +183,8 @@
 
 					{#if application.llmAbbreviationResult}
 						<div class="field-group">
-							<label>Результат формирования аббревиатуры:</label>
-							<pre class="result-data">
+							<label for="abbreviation-result">Результат формирования аббревиатуры:</label>
+							<pre id="abbreviation-result" class="result-data">
 								{JSON.stringify(application.llmAbbreviationResult, null, 2)}
 							</pre>
 						</div>
@@ -191,8 +192,8 @@
 
 					{#if getFinalAbbreviation()}
 						<div class="field-group final-abbreviation">
-							<label>Финальное обозначение продукции:</label>
-							<div class="abbreviation-value">{getFinalAbbreviation()}</div>
+							<label for="final-abbreviation">Финальное обозначение продукции:</label>
+							<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
 						</div>
 					{/if}
 				</div>

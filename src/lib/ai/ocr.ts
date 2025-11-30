@@ -10,10 +10,8 @@
 import { aiConfig } from './config.js';
 import {
 	createOrUpdateOperation,
-	updateOperationStatus,
-	getOperation
+	updateOperationStatus
 } from '../storage/operationsRepository.js';
-import type { ProcessingOperation } from '../storage/types.js';
 
 export class OCRError extends Error {
 	constructor(
@@ -343,7 +341,7 @@ export async function extractTextFromFileWithOperation(
 	applicationId: string,
 	fileBuffer: Buffer,
 	mimeType: string,
-	filename?: string
+	_filename?: string
 ): Promise<{ text?: string; operationId?: string }> {
 	const fileType = getFileType(mimeType);
 	const config = aiConfig.yandexOCR;
@@ -445,7 +443,7 @@ export async function extractTextFromFileWithOperation(
 export async function extractTextFromFile(
 	fileBuffer: Buffer,
 	mimeType: string,
-	filename?: string
+	_filename?: string
 ): Promise<string> {
 	const fileType = getFileType(mimeType);
 

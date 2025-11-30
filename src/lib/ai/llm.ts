@@ -79,23 +79,31 @@ export async function callYandexGPT(
 	});
 
 	// Формируем тело запроса
-	const requestBody: Record<string, unknown> = {
-		modelUri: config.folderId ? `gpt://${config.folderId}/${config.model}` : config.model,
-		completionOptions: {
-			stream: false,
-			temperature: options?.temperature ?? 0.6,
-			maxTokens: options?.maxTokens ?? '2000'
-		},
-		messages
+	const completionOptions: {
+		stream: boolean;
+		temperature: number;
+		maxTokens: string | number;
+		topP?: number;
+		topK?: number;
+	} = {
+		stream: false,
+		temperature: options?.temperature ?? 0.6,
+		maxTokens: options?.maxTokens ?? '2000'
 	};
 
 	// Добавляем дополнительные параметры, если указаны
 	if (options?.topP !== undefined) {
-		requestBody.completionOptions.topP = options.topP;
+		completionOptions.topP = options.topP;
 	}
 	if (options?.topK !== undefined) {
-		requestBody.completionOptions.topK = options.topK;
+		completionOptions.topK = options.topK;
 	}
+
+	const requestBody: Record<string, unknown> = {
+		modelUri: config.folderId ? `gpt://${config.folderId}/${config.model}` : config.model,
+		completionOptions,
+		messages
+	};
 
 	try {
 		const response = await fetch(config.endpoint!, {

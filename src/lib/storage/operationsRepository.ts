@@ -1,13 +1,13 @@
-import { getDatabase, rowToProcessingOperation, processingOperationToRow } from './db.js';
+import { getDatabase, rowToProcessingOperation, processingOperationToRow, type ProcessingOperationRow } from './db.js';
 import {
-	ProcessingOperation,
-	ProcessingOperationUpdate,
-	ProcessingOperationType,
-	ProcessingOperationStatus,
+	type ProcessingOperation,
+	type ProcessingOperationUpdate,
+	type ProcessingOperationType,
+	type ProcessingOperationStatus,
 	ProcessingOperationSchema
 } from './types.js';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageError, OperationNotFoundError, ValidationError } from './errors.js';
+import { StorageError, ValidationError } from './errors.js';
 
 /**
  * Создает новую операцию обработки или обновляет существующую
@@ -126,7 +126,7 @@ export function getOperation(id: string): ProcessingOperation | null {
 	try {
 		const db = getDatabase();
 		const stmt = db.prepare('SELECT * FROM processing_operations WHERE id = ?');
-		const row = stmt.get(id) as any;
+		const row = stmt.get(id) as ProcessingOperationRow | undefined;
 
 		if (!row) {
 			return null;
@@ -150,7 +150,7 @@ export function getOperationByApplicationAndType(
 		const stmt = db.prepare(
 			'SELECT * FROM processing_operations WHERE application_id = ? AND type = ?'
 		);
-		const row = stmt.get(applicationId, type) as any;
+		const row = stmt.get(applicationId, type) as ProcessingOperationRow | undefined;
 
 		if (!row) {
 			return null;
@@ -172,7 +172,7 @@ export function getOperationsByApplication(
 	try {
 		const db = getDatabase();
 		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
-		const params: any[] = [applicationId];
+		const params: (string | ProcessingOperationType)[] = [applicationId];
 
 		if (type) {
 			query += ' AND type = ?';
@@ -182,7 +182,7 @@ export function getOperationsByApplication(
 		query += ' ORDER BY created_at DESC';
 
 		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as any[];
+		const rows = stmt.all(...params) as ProcessingOperationRow[];
 
 		return rows.map(rowToProcessingOperation);
 	} catch (error) {

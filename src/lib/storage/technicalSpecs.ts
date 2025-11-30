@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { config } from '../config.js';
-import { TechnicalSpec, TechnicalSpecSchema } from './types.js';
-import { TechnicalSpecNotFoundError, ValidationError, StorageError } from './errors.js';
+import { type TechnicalSpec, TechnicalSpecSchema } from './types.js';
+import { ValidationError, StorageError } from './errors.js';
 
 /**
  * Получает список всех доступных технических условий
