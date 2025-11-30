@@ -16,6 +16,7 @@ import {
 	getOperationByApplicationAndType
 } from '../storage/operationsRepository.js';
 import type { ProcessingOperationType } from '../storage/types.js';
+import { logger } from '../utils/logger.js';
 
 export class LLMError extends Error {
 	constructor(
@@ -47,6 +48,13 @@ export async function callYandexGPT(
 ): Promise<string> {
 	const config = aiConfig.yandexGPT;
 
+	logger.debug('Вызов YandexGPT', {
+		applicationId: operationConfig?.applicationId,
+		operationType: operationConfig?.type,
+		promptLength: prompt.length,
+		hasSystemPrompt: !!systemPrompt
+	});
+
 	// Создаем операцию, если указана конфигурация
 	let operationId: string | undefined;
 	if (operationConfig) {
@@ -61,6 +69,11 @@ export async function callYandexGPT(
 			'running'
 		);
 		operationId = operation.id;
+		logger.debug('Создана операция LLM', {
+			operationId,
+			applicationId: operationConfig.applicationId,
+			type: operationConfig.type
+		});
 	}
 
 	// Формируем сообщения для API
@@ -106,6 +119,12 @@ export async function callYandexGPT(
 	};
 
 	try {
+		logger.debug('Отправка запроса в YandexGPT', {
+			operationId,
+			endpoint: config.endpoint,
+			model: config.model
+		});
+
 		const response = await fetch(config.endpoint!, {
 			method: 'POST',
 			headers: {
@@ -117,6 +136,12 @@ export async function callYandexGPT(
 
 		if (!response.ok) {
 			const errorText = await response.text();
+			logger.error('YandexGPT API вернул ошибку', {
+				operationId,
+				status: response.status,
+				statusText: response.statusText,
+				errorText
+			});
 			throw new LLMError(
 				`YandexGPT API вернул ошибку: ${response.status} ${response.statusText}. ${errorText}`
 			);
@@ -135,6 +160,10 @@ export async function callYandexGPT(
 
 		if (!text) {
 			const error = new LLMError('Не удалось извлечь текст из ответа YandexGPT');
+			logger.error('Не удалось извлечь текст из ответа YandexGPT', {
+				operationId,
+				responseStructure: JSON.stringify(result).substring(0, 200)
+			});
 			if (operationId) {
 				updateOperationStatus(operationId, 'failed', {
 					error: { message: error.message }
@@ -142,6 +171,11 @@ export async function callYandexGPT(
 			}
 			throw error;
 		}
+
+		logger.info('YandexGPT успешно вернул ответ', {
+			operationId,
+			textLength: text.length
+		});
 
 		// Сохраняем результат в операцию
 		if (operationId) {
@@ -152,6 +186,12 @@ export async function callYandexGPT(
 
 		return text;
 	} catch (error) {
+		logger.error('Ошибка при вызове YandexGPT', {
+			operationId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+
 		if (operationId) {
 			updateOperationStatus(operationId, 'failed', {
 				error: {
@@ -197,10 +237,21 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
+			logger.debug('Попытка получения structured output', {
+				attempt: attempt + 1,
+				maxRetries: maxRetries + 1,
+				applicationId: operationConfig?.applicationId,
+				operationType: operationConfig?.type
+			});
+
 			// Добавляем инструкцию о формате JSON в промпт (если это не первая попытка)
 			let enhancedPrompt = prompt;
 			if (attempt > 0) {
 				enhancedPrompt = `${prompt}\n\nВАЖНО: Верни ТОЛЬКО валидный JSON без дополнительного текста, комментариев или markdown разметки.`;
+				logger.debug('Повторная попытка с усиленным промптом', {
+					attempt: attempt + 1,
+					applicationId: operationConfig?.applicationId
+				});
 			}
 
 			const response = await callYandexGPT(enhancedPrompt, systemPrompt, options, operationConfig);
@@ -225,6 +276,12 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 			try {
 				parsed = JSON.parse(jsonText);
 			} catch (parseError) {
+				logger.warn('Ошибка парсинга JSON из ответа LLM', {
+					attempt: attempt + 1,
+					applicationId: operationConfig?.applicationId,
+					error: (parseError as Error).message,
+					jsonPreview: jsonText.substring(0, 200)
+				});
 				throw new LLMError(
 					`Не удалось распарсить JSON из ответа LLM: ${(parseError as Error).message}. Ответ: ${jsonText.substring(0, 200)}`
 				);
@@ -232,6 +289,12 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 
 			// Валидируем через Zod схему
 			const validated = schema.parse(parsed);
+
+			logger.info('Structured output успешно получен и валидирован', {
+				attempt: attempt + 1,
+				applicationId: operationConfig?.applicationId,
+				operationType: operationConfig?.type
+			});
 
 			// Обновляем операцию с результатом (если она была создана)
 			if (operationConfig) {
@@ -250,6 +313,13 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 		} catch (error) {
 			lastError = error as Error;
 
+			logger.warn('Ошибка при получении structured output', {
+				attempt: attempt + 1,
+				maxRetries: maxRetries + 1,
+				applicationId: operationConfig?.applicationId,
+				error: error instanceof Error ? error.message : String(error)
+			});
+
 			// Если это последняя попытка, выбрасываем ошибку
 			if (attempt === maxRetries) {
 				break;
@@ -261,6 +331,12 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 	}
 
 	// Если все попытки не удались, выбрасываем последнюю ошибку
+	logger.error('Не удалось получить валидный structured output после всех попыток', {
+		maxRetries: maxRetries + 1,
+		applicationId: operationConfig?.applicationId,
+		operationType: operationConfig?.type,
+		lastError: lastError?.message
+	});
 	throw new LLMError(
 		`Не удалось получить валидный structured output после ${maxRetries + 1} попыток`,
 		lastError || undefined

@@ -9,6 +9,7 @@ import {
 } from '$lib/storage/errors.js';
 import type { ApiError } from './types.js';
 import { config } from '$lib/config.js';
+import { logger } from '$lib/utils/logger.js';
 
 /**
  * Обрабатывает ошибки хранилища и возвращает соответствующий HTTP ответ
@@ -16,6 +17,10 @@ import { config } from '$lib/config.js';
 export function handleStorageError(err: unknown): Response {
 	if (err instanceof ValidationError) {
 		const validationErr = err as ValidationError;
+		logger.warn('Ошибка валидации', {
+			message: validationErr.message,
+			details: validationErr.details
+		});
 		return json(
 			{
 				error: validationErr.message,
@@ -27,6 +32,10 @@ export function handleStorageError(err: unknown): Response {
 
 	if (err instanceof ApplicationNotFoundError || err instanceof TechnicalSpecNotFoundError) {
 		const notFoundErr = err as ApplicationNotFoundError | TechnicalSpecNotFoundError;
+		logger.warn('Ресурс не найден', {
+			message: notFoundErr.message,
+			type: err.constructor.name
+		});
 		return json(
 			{
 				error: notFoundErr.message
@@ -37,6 +46,10 @@ export function handleStorageError(err: unknown): Response {
 
 	if (err instanceof FileStorageError) {
 		const fileErr = err as FileStorageError;
+		logger.error('Ошибка файлового хранилища', {
+			message: fileErr.message,
+			stack: fileErr.stack
+		});
 		return json(
 			{
 				error: fileErr.message
@@ -47,6 +60,10 @@ export function handleStorageError(err: unknown): Response {
 
 	if (err instanceof StorageError) {
 		const storageErr = err as StorageError;
+		logger.error('Ошибка хранилища данных', {
+			message: storageErr.message || 'Ошибка хранилища данных',
+			stack: storageErr.stack
+		});
 		return json(
 			{
 				error: storageErr.message || 'Ошибка хранилища данных'
@@ -56,7 +73,11 @@ export function handleStorageError(err: unknown): Response {
 	}
 
 	// Неизвестная ошибка
-	console.error('Unexpected error:', err);
+	logger.error('Неожиданная ошибка в handleStorageError', {
+		error: err instanceof Error ? err.message : String(err),
+		stack: err instanceof Error ? err.stack : undefined,
+		type: err?.constructor?.name || typeof err
+	});
 	return json(
 		{
 			error: 'Внутренняя ошибка сервера'

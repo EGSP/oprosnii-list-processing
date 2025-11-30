@@ -31,6 +31,7 @@ import {
 } from '../storage/index.js';
 import type { ProcessingOperation } from '../storage/types.js';
 import { config } from '../config.js';
+import { logger } from '../utils/logger.js';
 
 export class ProcessingError extends Error {
 	constructor(
@@ -92,9 +93,12 @@ export async function detectProductType(applicationId: string): Promise<{
 	ocrOperationId?: string;
 	llmOperationId?: string;
 }> {
+	logger.info('Начало определения типа изделия', { applicationId });
+
 	// Получаем заявку
 	const application = getApplication(applicationId);
 	if (!application) {
+		logger.error('Заявка не найдена при определении типа изделия', { applicationId });
 		throw new ProcessingError(`Заявка ${applicationId} не найдена`);
 	}
 
@@ -125,8 +129,10 @@ export async function detectProductType(applicationId: string): Promise<{
 
 	// Если текста нет, извлекаем через операцию
 	if (!extractedText) {
+		logger.info('Извлечение текста из файла', { applicationId });
 		const fileData = getApplicationFile(applicationId);
 		if (!fileData) {
+			logger.error('Файл заявки не найден', { applicationId });
 			throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
 		}
 
@@ -142,6 +148,7 @@ export async function detectProductType(applicationId: string): Promise<{
 			if (ocrResult.operationId) {
 				// Асинхронная операция - возвращаем ID операции
 				ocrOperationId = ocrResult.operationId;
+				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
 				throw new ProcessingError(
 					'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
 				);
@@ -150,7 +157,13 @@ export async function detectProductType(applicationId: string): Promise<{
 				extractedText = ocrResult.text;
 				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
 				ocrOperationId = ocrOperation?.id;
+				logger.info('Текст успешно извлечен из файла', {
+					applicationId,
+					ocrOperationId,
+					textLength: extractedText.length
+				});
 			} else {
+				logger.error('Не удалось извлечь текст из файла', { applicationId });
 				throw new ProcessingError('Не удалось извлечь текст из файла');
 			}
 		} catch (error) {
@@ -158,8 +171,18 @@ export async function detectProductType(applicationId: string): Promise<{
 				throw error;
 			}
 			if (error instanceof OCRError) {
+				logger.error('Ошибка OCR при извлечении текста', {
+					applicationId,
+					message: error.message,
+					stack: error.stack
+				});
 				throw new ProcessingError(`Ошибка OCR: ${error.message}`, error);
 			}
+			logger.error('Неожиданная ошибка при извлечении текста', {
+				applicationId,
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined
+			});
 			throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
 		}
 	}
@@ -184,6 +207,11 @@ ${limitedText}
 		'Ты эксперт по анализу технических заявок. Твоя задача - определить тип изделия на основе текста заявки.';
 
 	try {
+		logger.info('Вызов LLM для определения типа изделия', {
+			applicationId,
+			textLength: limitedText.length
+		});
+
 		// Вызываем LLM с structured output и созданием операции
 		const productTypeResult = await callYandexGPTStructured(
 			prompt,
@@ -201,6 +229,13 @@ ${limitedText}
 		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_product_type');
 		const llmOperationId = llmOperation?.id;
 
+		logger.info('Тип изделия определен LLM', {
+			applicationId,
+			productType: productTypeResult.type,
+			confidence: productTypeResult.confidence,
+			llmOperationId
+		});
+
 		// Сохраняем результат в БД заявки (для обратной совместимости)
 		updateApplication(applicationId, {
 			productType: productTypeResult.type,
@@ -214,8 +249,19 @@ ${limitedText}
 		};
 	} catch (error) {
 		if (error instanceof LLMError) {
+			logger.error('Ошибка LLM при определении типа изделия', {
+				applicationId,
+				message: error.message,
+				cause: error.cause?.message,
+				stack: error.stack
+			});
 			throw new ProcessingError(`Ошибка LLM: ${error.message}`, error);
 		}
+		logger.error('Неожиданная ошибка при определении типа изделия', {
+			applicationId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
 		throw new ProcessingError('Ошибка при определении типа изделия', error as Error);
 	}
 }
@@ -245,15 +291,19 @@ export async function generateAbbreviation(
 	ocrOperationId?: string;
 	llmOperationId?: string;
 }> {
+	logger.info('Начало формирования аббревиатуры', { applicationId, technicalSpecId });
+
 	// Получаем заявку
 	const application = getApplication(applicationId);
 	if (!application) {
+		logger.error('Заявка не найдена при формировании аббревиатуры', { applicationId });
 		throw new ProcessingError(`Заявка ${applicationId} не найдена`);
 	}
 
 	// Получаем техническое условие
 	const technicalSpec = getTechnicalSpec(technicalSpecId);
 	if (!technicalSpec) {
+		logger.error('Техническое условие не найдено', { applicationId, technicalSpecId });
 		throw new ProcessingError(`Техническое условие ${technicalSpecId} не найдено`);
 	}
 
@@ -276,8 +326,13 @@ export async function generateAbbreviation(
 
 	// Если текста нет, извлекаем через операцию
 	if (!extractedText) {
+		logger.info('Извлечение текста из файла для формирования аббревиатуры', {
+			applicationId,
+			technicalSpecId
+		});
 		const fileData = getApplicationFile(applicationId);
 		if (!fileData) {
+			logger.error('Файл заявки не найден', { applicationId });
 			throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
 		}
 
@@ -293,6 +348,7 @@ export async function generateAbbreviation(
 			if (ocrResult.operationId) {
 				// Асинхронная операция
 				ocrOperationId = ocrResult.operationId;
+				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
 				throw new ProcessingError(
 					'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
 				);
@@ -300,7 +356,13 @@ export async function generateAbbreviation(
 				extractedText = ocrResult.text;
 				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
 				ocrOperationId = ocrOperation?.id;
+				logger.info('Текст успешно извлечен для формирования аббревиатуры', {
+					applicationId,
+					ocrOperationId,
+					textLength: extractedText.length
+				});
 			} else {
+				logger.error('Не удалось извлечь текст из файла', { applicationId });
 				throw new ProcessingError('Не удалось извлечь текст из файла');
 			}
 		} catch (error) {
@@ -308,8 +370,18 @@ export async function generateAbbreviation(
 				throw error;
 			}
 			if (error instanceof OCRError) {
+				logger.error('Ошибка OCR при извлечении текста', {
+					applicationId,
+					message: error.message,
+					stack: error.stack
+				});
 				throw new ProcessingError(`Ошибка OCR: ${error.message}`, error);
 			}
+			logger.error('Неожиданная ошибка при извлечении текста', {
+				applicationId,
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined
+			});
 			throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
 		}
 	}
@@ -352,6 +424,13 @@ ${rulesDescription}
 		'Ты эксперт по анализу технических заявок. Твоя задача - извлечь параметры продукции из текста заявки с учетом технических условий.';
 
 	try {
+		logger.info('Вызов LLM для извлечения параметров аббревиатуры', {
+			applicationId,
+			technicalSpecId,
+			textLength: limitedText.length,
+			rulesCount: technicalSpec.rules.length
+		});
+
 		// Вызываем LLM с structured output и созданием операции
 		const parametersResult = await callYandexGPTStructured(
 			prompt,
@@ -369,17 +448,34 @@ ${rulesDescription}
 		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_abbreviation');
 		const llmOperationId = llmOperation?.id;
 
+		logger.info('Параметры извлечены LLM', {
+			applicationId,
+			parametersCount: parametersResult.parameters.length,
+			llmOperationId
+		});
+
 		// Валидируем параметры по правилам ТУ
 		const validatedParameters = validateParametersAgainstTU(
 			parametersResult.parameters,
 			technicalSpec
 		);
 
+		logger.info('Параметры валидированы по ТУ', {
+			applicationId,
+			validatedParametersCount: validatedParameters.length
+		});
+
 		// Формируем аббревиатуру по шаблону
 		const abbreviation = generateAbbreviation(
 			validatedParameters,
 			technicalSpec.abbreviationTemplate
 		);
+
+		logger.info('Аббревиатура сформирована', {
+			applicationId,
+			abbreviation,
+			technicalSpecId
+		});
 
 		// Сохраняем результат в БД заявки (для обратной совместимости)
 		const result = {
@@ -402,8 +498,21 @@ ${rulesDescription}
 		};
 	} catch (error) {
 		if (error instanceof LLMError) {
+			logger.error('Ошибка LLM при формировании аббревиатуры', {
+				applicationId,
+				technicalSpecId,
+				message: error.message,
+				cause: error.cause?.message,
+				stack: error.stack
+			});
 			throw new ProcessingError(`Ошибка LLM: ${error.message}`, error);
 		}
+		logger.error('Неожиданная ошибка при формировании аббревиатуры', {
+			applicationId,
+			technicalSpecId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
 		throw new ProcessingError('Ошибка при формировании аббревиатуры', error as Error);
 	}
 }
@@ -422,8 +531,11 @@ export function getOperationStatus(operationId: string): ProcessingOperation | n
 export async function checkAndUpdateOperation(
 	operationId: string
 ): Promise<ProcessingOperation | null> {
+	logger.debug('Проверка статуса операции', { operationId });
+
 	const operation = getOperation(operationId);
 	if (!operation) {
+		logger.warn('Операция не найдена', { operationId });
 		return null;
 	}
 
@@ -443,26 +555,46 @@ export async function checkAndUpdateOperation(
 		operation.externalOperationId
 	) {
 		try {
+			logger.debug('Проверка статуса YandexOCR операции', {
+				operationId,
+				externalOperationId: operation.externalOperationId
+			});
+
 			const checkResult = await checkYandexOCROperation(operation.externalOperationId);
 
 			if (checkResult.done) {
 				if (checkResult.text) {
 					// Операция завершена успешно
+					logger.info('YandexOCR операция завершена успешно', {
+						operationId,
+						textLength: checkResult.text.length
+					});
 					updateOperationStatus(operationId, 'completed', {
 						result: { text: checkResult.text }
 					});
 				} else if (checkResult.error) {
 					// Операция завершена с ошибкой
+					logger.error('YandexOCR операция завершена с ошибкой', {
+						operationId,
+						error: checkResult.error
+					});
 					updateOperationStatus(operationId, 'failed', {
 						error: { message: checkResult.error }
 					});
 				}
+			} else {
+				logger.debug('YandexOCR операция еще выполняется', { operationId });
 			}
 			// Если done === false, операция еще выполняется, статус не меняем
 
 			return getOperation(operationId);
 		} catch (error) {
 			// Ошибка при проверке статуса
+			logger.error('Ошибка при проверке статуса YandexOCR операции', {
+				operationId,
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined
+			});
 			updateOperationStatus(operationId, 'failed', {
 				error: {
 					message: error instanceof Error ? error.message : 'Unknown error',

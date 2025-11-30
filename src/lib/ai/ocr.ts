@@ -12,6 +12,7 @@ import {
 	createOrUpdateOperation,
 	updateOperationStatus
 } from '../storage/operationsRepository.js';
+import { logger } from '../utils/logger.js';
 
 export class OCRError extends Error {
 	constructor(
@@ -58,6 +59,11 @@ export interface YandexOCRResult {
 async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<YandexOCRResult> {
 	const config = aiConfig.yandexOCR;
 
+	logger.debug('Вызов YandexOCR', {
+		mimeType,
+		fileSize: fileBuffer.length
+	});
+
 	// Конвертируем Buffer в base64
 	const base64Content = fileBuffer.toString('base64');
 
@@ -91,6 +97,11 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 	};
 
 	try {
+		logger.debug('Отправка запроса в YandexOCR', {
+			endpoint: config.endpoint,
+			mimeType
+		});
+
 		const response = await fetch(config.endpoint!, {
 			method: 'POST',
 			headers: {
@@ -102,6 +113,11 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 
 		if (!response.ok) {
 			const errorText = await response.text();
+			logger.error('YandexOCR API вернул ошибку', {
+				status: response.status,
+				statusText: response.statusText,
+				errorText
+			});
 			throw new OCRError(
 				`YandexOCR API вернул ошибку: ${response.status} ${response.statusText}. ${errorText}`
 			);
@@ -112,6 +128,9 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 		// Проверяем, является ли операция асинхронной (многостраничный PDF)
 		// YandexOCR для асинхронных операций возвращает { done: false, id: "..." }
 		if (result.done === false && result.id) {
+			logger.info('YandexOCR операция асинхронная', {
+				externalOperationId: result.id
+			});
 			return {
 				operationId: result.id,
 				isAsync: true
@@ -144,6 +163,9 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 			}
 
 			if (text) {
+				logger.info('YandexOCR успешно извлек текст (асинхронная операция завершена)', {
+					textLength: text.length
+				});
 				return { text, isAsync: false };
 			}
 		}
@@ -151,6 +173,9 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 		// Синхронный ответ (одностраничные PDF, изображения)
 		// Структура ответа: { result: { textAnnotation: { fullText: string } } }
 		if (result.result?.textAnnotation?.fullText) {
+			logger.info('YandexOCR успешно извлек текст (синхронная операция)', {
+				textLength: result.result.textAnnotation.fullText.length
+			});
 			return {
 				text: result.result.textAnnotation.fullText,
 				isAsync: false
@@ -159,6 +184,9 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 
 		// Альтернативная структура ответа
 		if (result.textAnnotation?.fullText) {
+			logger.info('YandexOCR успешно извлек текст (альтернативная структура)', {
+				textLength: result.textAnnotation.fullText.length
+			});
 			return {
 				text: result.textAnnotation.fullText,
 				isAsync: false
@@ -178,17 +206,32 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 					}
 				}
 			}
+			const extractedText = textBlocks.join('\n');
+			logger.info('YandexOCR извлек текст из блоков', {
+				textLength: extractedText.length
+			});
 			return {
-				text: textBlocks.join('\n'),
+				text: extractedText,
 				isAsync: false
 			};
 		}
 
+		logger.error('Не удалось извлечь текст из ответа YandexOCR', {
+			responseStructure: JSON.stringify(result).substring(0, 200)
+		});
 		throw new OCRError('Не удалось извлечь текст из ответа YandexOCR');
 	} catch (error) {
 		if (error instanceof OCRError) {
+			logger.error('Ошибка OCRError', {
+				message: error.message,
+				stack: error.stack
+			});
 			throw error;
 		}
+		logger.error('Неожиданная ошибка при вызове YandexOCR', {
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
 		throw new OCRError('Ошибка при вызове YandexOCR API', error as Error);
 	}
 }
@@ -262,6 +305,10 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 	const config = aiConfig.yandexOCR;
 	const operationEndpoint = `https://operation.api.cloud.yandex.net/operations/${operationId}`;
 
+	logger.debug('Проверка статуса YandexOCR операции', {
+		externalOperationId: operationId
+	});
+
 	try {
 		const response = await fetch(operationEndpoint, {
 			method: 'GET',
@@ -272,6 +319,12 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 
 		if (!response.ok) {
 			const errorText = await response.text();
+			logger.error('YandexOCR Operation API вернул ошибку', {
+				externalOperationId: operationId,
+				status: response.status,
+				statusText: response.statusText,
+				errorText
+			});
 			throw new OCRError(
 				`YandexOCR Operation API вернул ошибку: ${response.status} ${response.statusText}. ${errorText}`
 			);
@@ -303,6 +356,13 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 				text = textBlocks.join('\n');
 			}
 
+			if (text) {
+				logger.info('YandexOCR операция завершена успешно', {
+					externalOperationId: operationId,
+					textLength: text.length
+				});
+			}
+
 			return {
 				done: true,
 				text: text || ''
@@ -310,6 +370,10 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 		}
 
 		if (result.error) {
+			logger.error('YandexOCR операция завершена с ошибкой', {
+				externalOperationId: operationId,
+				error: result.error.message || 'Unknown error'
+			});
 			return {
 				done: true,
 				error: result.error.message || 'Unknown error'
@@ -317,13 +381,26 @@ export async function checkYandexOCROperation(operationId: string): Promise<{
 		}
 
 		// Операция еще выполняется
+		logger.debug('YandexOCR операция еще выполняется', {
+			externalOperationId: operationId
+		});
 		return {
 			done: false
 		};
 	} catch (error) {
 		if (error instanceof OCRError) {
+			logger.error('Ошибка OCRError при проверке статуса', {
+				externalOperationId: operationId,
+				message: error.message,
+				stack: error.stack
+			});
 			throw error;
 		}
+		logger.error('Неожиданная ошибка при проверке статуса операции YandexOCR', {
+			externalOperationId: operationId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
 		throw new OCRError('Ошибка при проверке статуса операции YandexOCR', error as Error);
 	}
 }
@@ -348,6 +425,12 @@ export async function extractTextFromFileWithOperation(
 
 	// Для файлов, не требующих OCR, создаем синхронную операцию
 	if (fileType === 'docx' || fileType === 'xlsx') {
+		logger.info('Извлечение текста из файла (локальное)', {
+			applicationId,
+			fileType,
+			filename: _filename
+		});
+
 		const operation = createOrUpdateOperation(
 			applicationId,
 			'ocr',
@@ -367,12 +450,26 @@ export async function extractTextFromFileWithOperation(
 				text = await extractTextFromXLSX(fileBuffer);
 			}
 
+			logger.info('Текст успешно извлечен из файла (локальное)', {
+				applicationId,
+				operationId: operation.id,
+				fileType,
+				textLength: text.length
+			});
+
 			updateOperationStatus(operation.id, 'completed', {
 				result: { text }
 			});
 
 			return { text };
 		} catch (error) {
+			logger.error('Ошибка при локальном извлечении текста', {
+				applicationId,
+				operationId: operation.id,
+				fileType,
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined
+			});
 			updateOperationStatus(operation.id, 'failed', {
 				error: {
 					message: error instanceof Error ? error.message : 'Unknown error'
@@ -384,6 +481,12 @@ export async function extractTextFromFileWithOperation(
 
 	// Для изображений и PDF используем YandexOCR
 	if (fileType === 'image' || fileType === 'pdf') {
+		logger.info('Извлечение текста через YandexOCR', {
+			applicationId,
+			fileType,
+			filename: _filename
+		});
+
 		// Создаем операцию перед вызовом
 		const operation = createOrUpdateOperation(
 			applicationId,
@@ -401,6 +504,11 @@ export async function extractTextFromFileWithOperation(
 
 			if (ocrResult.isAsync && ocrResult.operationId) {
 				// Асинхронная операция
+				logger.info('YandexOCR операция асинхронная', {
+					applicationId,
+					operationId: operation.id,
+					externalOperationId: ocrResult.operationId
+				});
 				updateOperationStatus(operation.id, 'running', {
 					externalOperationId: ocrResult.operationId
 				});
@@ -408,15 +516,30 @@ export async function extractTextFromFileWithOperation(
 				return { operationId: operation.id };
 			} else if (ocrResult.text) {
 				// Синхронная операция завершена
+				logger.info('YandexOCR операция завершена синхронно', {
+					applicationId,
+					operationId: operation.id,
+					textLength: ocrResult.text.length
+				});
 				updateOperationStatus(operation.id, 'completed', {
 					result: { text: ocrResult.text }
 				});
 
 				return { text: ocrResult.text };
 			} else {
+				logger.error('Не удалось извлечь текст из ответа YandexOCR', {
+					applicationId,
+					operationId: operation.id
+				});
 				throw new OCRError('Не удалось извлечь текст из ответа YandexOCR');
 			}
 		} catch (error) {
+			logger.error('Ошибка при извлечении текста через YandexOCR', {
+				applicationId,
+				operationId: operation.id,
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined
+			});
 			updateOperationStatus(operation.id, 'failed', {
 				error: {
 					message: error instanceof Error ? error.message : 'Unknown error',
@@ -427,6 +550,11 @@ export async function extractTextFromFileWithOperation(
 		}
 	}
 
+	logger.error('Неподдерживаемый тип файла', {
+		applicationId,
+		mimeType,
+		filename: _filename
+	});
 	throw new OCRError(
 		`Неподдерживаемый тип файла: ${mimeType}. Поддерживаются: изображения (PNG, JPG), PDF, DOCX, XLSX.`
 	);
