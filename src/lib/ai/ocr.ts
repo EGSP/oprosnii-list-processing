@@ -52,18 +52,9 @@ export interface YandexOCRResult {
 	isAsync: boolean;
 }
 
-/**
- * Отправляет изображение или PDF в YandexOCR
- * Возвращает результат синхронно или Operation ID для асинхронных операций
- */
-async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<YandexOCRResult> {
+function createYandexOCRRequestBody(fileBuffer: Buffer, mimeType: string): Record<string, unknown> {
+	// https://yandex.cloud/ru/docs/vision/ocr/api-ref/TextRecognition/recognize
 	const config = aiConfig.yandexOCR;
-
-	logger.debug('Вызов YandexOCR', {
-		mimeType,
-		fileSize: fileBuffer.length
-	});
-
 	// Конвертируем Buffer в base64
 	const base64Content = fileBuffer.toString('base64');
 
@@ -77,24 +68,28 @@ async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<Yand
 		throw new OCRError(`Неподдерживаемый тип файла для OCR: ${mimeType}`);
 	}
 
+	return {
+		content: base64Content,
+		mime_type: contentType,
+		language_codes: ['ru', 'en'],
+		model: config.model
+	}
+}
+
+/**
+ * Отправляет изображение или PDF в YandexOCR
+ * Возвращает результат синхронно или Operation ID для асинхронных операций
+ */
+async function callYandexOCR(fileBuffer: Buffer, mimeType: string): Promise<YandexOCRResult> {
+	const config = aiConfig.yandexOCR;
+
+	logger.debug('Вызов YandexOCR', {
+		mimeType,
+		fileSize: fileBuffer.length
+	});
+
 	// Формируем запрос к YandexOCR API
-	const requestBody = {
-		folderId: config.folderId,
-		analyze_specs: [
-			{
-				features: [
-					{
-						type: 'TEXT_DETECTION',
-						text_detection_config: {
-							language_codes: ['ru', 'en'] // Поддержка русского и английского
-						}
-					}
-				],
-				mime_type: contentType
-			}
-		],
-		content: base64Content
-	};
+	const requestBody = createYandexOCRRequestBody(fileBuffer, mimeType);
 
 	try {
 		logger.debug('Отправка запроса в YandexOCR', {

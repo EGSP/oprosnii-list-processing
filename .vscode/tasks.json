@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "dev",
+			"problemMatcher": [],
+			"isBackground": true,
+			"label": "npm: dev",
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		}
+	]
+}
+

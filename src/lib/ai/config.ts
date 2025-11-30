@@ -3,8 +3,12 @@
  *
  * Явное определение используемых моделей и параметров для YandexOCR и YandexGPT.
  * Все настройки моделей находятся здесь для удобного изменения.
+ *
+ * Использует $env/dynamic/private для доступа к приватным переменным окружения в SvelteKit.
+ * Эти переменные доступны только на сервере и не попадают в клиентский код.
  */
 
+import { env } from '$env/dynamic/private';
 import type { AIConfig, YandexOCRConfig, YandexGPTConfig } from './types.js';
 
 /**
@@ -14,7 +18,7 @@ import type { AIConfig, YandexOCRConfig, YandexGPTConfig } from './types.js';
  * Endpoint по умолчанию: https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText
  */
 function getYandexOCRConfig(): YandexOCRConfig {
-	const apiKey = process.env.YANDEX_OCR_API_KEY;
+	const apiKey = env.YANDEX_OCR_API_KEY;
 	if (!apiKey) {
 		throw new Error(
 			'YANDEX_OCR_API_KEY не установлен. Установите переменную окружения YANDEX_OCR_API_KEY.'
@@ -23,10 +27,10 @@ function getYandexOCRConfig(): YandexOCRConfig {
 
 	return {
 		apiKey,
-		folderId: process.env.YANDEX_OCR_FOLDER_ID,
-		model: process.env.YANDEX_OCR_MODEL || 'latest', // По умолчанию используем latest версию
+		folderId: env.YANDEX_OCR_FOLDER_ID,
+		model: env.YANDEX_OCR_MODEL || 'page', // По умолчанию используем page версию
 		endpoint:
-			process.env.YANDEX_OCR_ENDPOINT || 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText'
+			env.YANDEX_OCR_ENDPOINT || 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText'
 	};
 }
 
@@ -37,24 +41,24 @@ function getYandexOCRConfig(): YandexOCRConfig {
  * Endpoint по умолчанию: https://llm.api.cloud.yandex.net/foundationModels/v1/completion
  */
 function getYandexGPTConfig(): YandexGPTConfig {
-	const apiKey = process.env.YANDEX_GPT_API_KEY;
+	const apiKey = env.YANDEX_GPT_API_KEY;
 	if (!apiKey) {
 		throw new Error(
 			'YANDEX_GPT_API_KEY не установлен. Установите переменную окружения YANDEX_GPT_API_KEY.'
 		);
 	}
 
-	const model = process.env.YANDEX_GPT_MODEL || 'yandexgpt';
+	const model = env.YANDEX_GPT_MODEL || 'yandexgpt';
 	if (!model) {
 		throw new Error('YANDEX_GPT_MODEL должен быть указан');
 	}
 
 	return {
 		apiKey,
-		folderId: process.env.YANDEX_GPT_FOLDER_ID,
+		folderId: env.YANDEX_GPT_FOLDER_ID,
 		model, // Явное определение модели: yandexgpt, yandexgpt-lite и т.д.
 		endpoint:
-			process.env.YANDEX_GPT_ENDPOINT ||
+			env.YANDEX_GPT_ENDPOINT ||
 			'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 	};
 }
