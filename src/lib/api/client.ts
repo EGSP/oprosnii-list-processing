@@ -120,3 +120,23 @@ export async function getOperations(id: string): Promise<import('$lib/storage/ty
 	const response = await fetch(`${API_BASE}/applications/${id}/operations`);
 	return handleResponse<import('$lib/storage/types.js').ProcessingOperation[]>(response);
 }
+
+/**
+ * Тип информации о файле (без buffer)
+ */
+export interface FileInfo {
+	filename: string;
+	mimeType: string;
+	fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
+	pageCount: number;
+	size: number;
+	extractedText?: string;
+}
+
+/**
+ * Получение информации о файле заявки
+ */
+export async function getFileInfo(id: string): Promise<FileInfo> {
+	const response = await fetch(`${API_BASE}/applications/${id}/file-info`);
+	return handleResponse<FileInfo>(response);
+}

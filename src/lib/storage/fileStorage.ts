@@ -13,7 +13,8 @@ import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
 import { getOperationByApplicationAndTypeWithSync } from './operationsRepository.js';
 import { logger } from '../utils/logger.js';
-import pdfjsLib from 'pdfjs-dist';
+import { PDFDocument } from 'pdf-lib';
+
 
 /**
  * Сохраняет файл заявки в хранилище
@@ -180,18 +181,15 @@ function getFileType(mimeType: string): 'image' | 'pdf' | 'docx' | 'xlsx' | 'unk
  */
 async function getPDFPageCount(buffer: Buffer): Promise<number> {
 	try {
-		// Конвертируем Buffer в Uint8Array для PDF.js
+		// Конвертируем Buffer в Uint8Array для PDF-LIB
 		const uint8Array = new Uint8Array(buffer);
 		
 		// Загружаем PDF документ
-		const loadingTask = pdfjsLib.getDocument({
-			data: uint8Array,
-			useSystemFonts: true,
-			verbosity: 0 // Уменьшаем вывод в консоль
-		});
+		const pdfDoc = await PDFDocument.load(uint8Array);
 		
-		const pdf = await loadingTask.promise;
-		return pdf.numPages;
+		// Получаем количество страниц
+		const pages = pdfDoc.getPages();
+		return pages.length;
 	} catch (error) {
 		// Если не удалось определить, возвращаем 1 (предполагаем одностраничный)
 		logger.warn('Не удалось определить количество страниц PDF', {

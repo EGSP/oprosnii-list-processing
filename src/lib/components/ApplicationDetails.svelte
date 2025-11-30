@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplication, getTechnicalSpecs, processApplication, getOperations } from '$lib/api/client.js';
+	import { getApplication, getTechnicalSpecs, processApplication, getOperations, getFileInfo, type FileInfo } from '$lib/api/client.js';
 	import type { Application, TechnicalSpec, ProcessingOperation } from '$lib/storage/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
@@ -15,6 +15,8 @@
 	let error: string | null = null;
 	let operations: ProcessingOperation[] = [];
 	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
+	let fileInfo: FileInfo | null = null;
+	let isLoadingFileInfo = false;
 
 	$: if (applicationId) {
 		loadApplication();
@@ -56,12 +58,30 @@
 			application = await getApplication(applicationId);
 			// Загружаем операции для заявки
 			await loadOperations();
+			// Загружаем информацию о файле
+			await loadFileInfo();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
 			application = null;
 			operations = [];
+			fileInfo = null;
 		} finally {
 			isLoading = false;
+		}
+	}
+
+	async function loadFileInfo() {
+		if (!applicationId) return;
+
+		isLoadingFileInfo = true;
+		try {
+			fileInfo = await getFileInfo(applicationId);
+		} catch (err) {
+			// Игнорируем ошибки загрузки информации о файле, чтобы не блокировать отображение заявки
+			console.warn('Не удалось загрузить информацию о файле:', err);
+			fileInfo = null;
+		} finally {
+			isLoadingFileInfo = false;
 		}
 	}
 
@@ -132,6 +152,14 @@
 			hour: '2-digit',
 			minute: '2-digit'
 		});
+	}
+
+	function formatFileSize(bytes: number): string {
+		if (bytes === 0) return '0 Б';
+		const k = 1024;
+		const sizes = ['Б', 'КБ', 'МБ', 'ГБ'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
 	function getStatus(): string {
@@ -214,6 +242,47 @@
 						{/each}
 					</div>
 				</div>
+			</div>
+
+			<div class="section">
+				<h3>Информация о файле</h3>
+				{#if isLoadingFileInfo}
+					<div class="loading">Загрузка информации о файле...</div>
+				{:else if fileInfo}
+					<div class="field">
+						<label>Имя файла:</label>
+						<span>{fileInfo.filename}</span>
+					</div>
+					<div class="field">
+						<label>Тип файла:</label>
+						<span>{fileInfo.fileType}</span>
+					</div>
+					<div class="field">
+						<label>MIME тип:</label>
+						<span>{fileInfo.mimeType}</span>
+					</div>
+					<div class="field">
+						<label>Размер:</label>
+						<span>{formatFileSize(fileInfo.size)}</span>
+					</div>
+					<div class="field">
+						<label>Количество страниц:</label>
+						<span>{fileInfo.pageCount}</span>
+					</div>
+					{#if fileInfo.extractedText}
+						<div class="field">
+							<label>Извлеченный текст:</label>
+							<div class="extracted-text-preview">
+								{fileInfo.extractedText.substring(0, 200)}
+								{#if fileInfo.extractedText.length > 200}
+									<span class="text-more">... (еще {fileInfo.extractedText.length - 200} символов)</span>
+								{/if}
+							</div>
+						</div>
+					{/if}
+				{:else}
+					<div class="field">Информация о файле недоступна</div>
+				{/if}
 			</div>
 
 			<div class="section">
@@ -428,5 +497,25 @@
 		color: var(--color-text-secondary);
 		margin-top: 0.5rem;
 		font-style: italic;
+	}
+
+	.extracted-text-preview {
+		background: var(--color-background-secondary);
+		padding: 0.75rem;
+		border-radius: var(--border-radius);
+		border: 1px solid var(--color-border);
+		color: var(--color-text);
+		font-size: 0.875rem;
+		line-height: 1.5;
+		max-height: 200px;
+		overflow-y: auto;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+	}
+
+	.text-more {
+		color: var(--color-text-secondary);
+		font-style: italic;
+		font-size: 0.8rem;
 	}
 </style>

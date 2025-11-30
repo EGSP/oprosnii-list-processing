@@ -170,7 +170,52 @@ curl -O http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-446655440
 
 ---
 
-### 5. Определение типа изделия
+### 5. Получение информации о файле заявки
+
+**GET** `/api/applications/:id/file-info`
+
+Получает информацию о файле заявки (без содержимого файла).
+
+**Параметры пути:**
+
+- `id` (string, UUID) - идентификатор заявки
+
+**Ответ 200 OK:**
+
+```json
+{
+	"filename": "document.pdf",
+	"mimeType": "application/pdf",
+	"fileType": "pdf",
+	"pageCount": 5,
+	"size": 1048576,
+	"extractedText": "Извлеченный текст из документа..."
+}
+```
+
+**Поля ответа:**
+
+- `filename` (string) - имя файла
+- `mimeType` (string) - MIME тип файла
+- `fileType` (string) - тип файла: `image`, `pdf`, `docx`, `xlsx`, `unknown`
+- `pageCount` (number) - количество страниц (для PDF), для остальных типов всегда 1
+- `size` (number) - размер файла в байтах
+- `extractedText` (string, опционально) - извлеченный текст из файла (если есть завершенная OCR операция)
+
+**Ошибки:**
+
+- `400 Bad Request` - неверный формат UUID
+- `404 Not Found` - заявка или файл не найдены
+
+**Пример запроса:**
+
+```bash
+curl http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-446655440000/file-info
+```
+
+---
+
+### 6. Определение типа изделия
 
 **POST** `/api/applications/:id/detect-product-type`
 
@@ -228,7 +273,7 @@ curl -O http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-446655440
 
 ---
 
-### 6. Формирование аббревиатуры
+### 7. Формирование аббревиатуры
 
 **POST** `/api/applications/:id/generate-abbreviation`
 
@@ -280,7 +325,7 @@ curl -O http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-446655440
 
 ## Технические условия (Technical Specifications)
 
-### 7. Список технических условий
+### 8. Список технических условий
 
 **GET** `/api/technical-specs`
 
@@ -314,7 +359,7 @@ curl http://localhost:5173/api/technical-specs
 
 ---
 
-### 8. Получение технического условия
+### 9. Получение технического условия
 
 **GET** `/api/technical-specs/:id`
 
@@ -361,7 +406,7 @@ curl http://localhost:5173/api/technical-specs/example-tu
 
 ## Операции обработки (Processing Operations)
 
-### 9. Список операций заявки
+### 10. Список операций заявки
 
 **GET** `/api/applications/:id/operations`
 
@@ -416,7 +461,7 @@ curl "http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-44665544000
 
 ---
 
-### 10. Получение операции
+### 11. Получение операции
 
 **GET** `/api/applications/:id/operations/:operationId`
 
@@ -469,7 +514,7 @@ curl http://localhost:5173/api/applications/550e8400-e29b-41d4-a716-446655440000
 
 ---
 
-### 11. Проверка статуса операции
+### 12. Проверка статуса операции
 
 **POST** `/api/applications/:id/operations/:operationId/check`
 
