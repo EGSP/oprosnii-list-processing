@@ -26,10 +26,11 @@ import {
 	getTechnicalSpec,
 	getOperation,
 	getOperationByApplicationAndType,
+	getOperationByApplicationAndTypeWithSync,
 	updateOperationStatus,
-	checkAndUpdateOperation
+	syncOperationToApplication
 } from '../storage/index.js';
-import type { ProcessingOperation } from '../storage/types.js';
+import type { ProcessingOperation, TechnicalSpec } from '../storage/types.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
@@ -112,8 +113,8 @@ export async function detectProductType(applicationId: string): Promise<{
 	let extractedText: string;
 	let ocrOperationId: string | undefined;
 
-	// Проверяем, есть ли уже завершенная OCR операция
-	const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
+	// Проверяем, есть ли уже завершенная OCR операция (с синхронизацией)
+	const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
 	if (
 		existingOCROperation &&
 		existingOCROperation.status === 'completed' &&
@@ -155,7 +156,7 @@ export async function detectProductType(applicationId: string): Promise<{
 			} else if (ocrResult.text) {
 				// Синхронная операция завершена
 				extractedText = ocrResult.text;
-				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
+				const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
 				ocrOperationId = ocrOperation?.id;
 				logger.info('Текст успешно извлечен из файла', {
 					applicationId,
@@ -225,8 +226,8 @@ ${limitedText}
 			}
 		);
 
-		// Получаем ID операции LLM
-		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_product_type');
+		// Получаем ID операции LLM (с синхронизацией)
+		const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_product_type');
 		const llmOperationId = llmOperation?.id;
 
 		logger.info('Тип изделия определен LLM', {
@@ -267,6 +268,248 @@ ${limitedText}
 }
 
 /**
+ * Получает текст из существующей OCR операции или извлекает новый
+ *
+ * @param applicationId - GUID заявки
+ * @returns Текст и ID OCR операции
+ */
+async function getOrExtractText(
+	applicationId: string
+): Promise<{ text: string; ocrOperationId?: string }> {
+	let extractedText: string;
+	let ocrOperationId: string | undefined;
+
+	// Проверяем существующую OCR операцию с синхронизацией
+	const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+	if (
+		existingOCROperation &&
+		existingOCROperation.status === 'completed' &&
+		existingOCROperation.result
+	) {
+		const result = existingOCROperation.result as { text?: string };
+		if (result.text) {
+			extractedText = result.text;
+			ocrOperationId = existingOCROperation.id;
+			logger.info('Использован текст из существующей OCR операции', {
+				applicationId,
+				ocrOperationId,
+				textLength: extractedText.length
+			});
+			return { text: extractedText, ocrOperationId };
+		}
+	}
+
+	// Если текста нет, извлекаем через операцию
+	logger.info('Извлечение текста из файла для формирования аббревиатуры', { applicationId });
+	const fileData = getApplicationFile(applicationId);
+	if (!fileData) {
+		logger.error('Файл заявки не найден', { applicationId });
+		throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
+	}
+
+	const mimeType = getMimeTypeFromFilename(fileData.filename);
+	try {
+		const ocrResult = await extractTextFromFileWithOperation(
+			applicationId,
+			fileData.buffer,
+			mimeType,
+			fileData.filename
+		);
+
+		if (ocrResult.operationId) {
+			// Асинхронная операция
+			ocrOperationId = ocrResult.operationId;
+			logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
+			throw new ProcessingError(
+				'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
+			);
+		} else if (ocrResult.text) {
+			// Синхронная операция завершена
+			extractedText = ocrResult.text;
+			const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+			ocrOperationId = ocrOperation?.id;
+			logger.info('Текст успешно извлечен для формирования аббревиатуры', {
+				applicationId,
+				ocrOperationId,
+				textLength: extractedText.length
+			});
+			return { text: extractedText, ocrOperationId };
+		} else {
+			logger.error('Не удалось извлечь текст из файла', { applicationId });
+			throw new ProcessingError('Не удалось извлечь текст из файла');
+		}
+	} catch (error) {
+		if (error instanceof ProcessingError) {
+			throw error;
+		}
+		if (error instanceof OCRError) {
+			logger.error('Ошибка OCR при извлечении текста', {
+				applicationId,
+				message: error.message,
+				stack: error.stack
+			});
+			throw new ProcessingError(`Ошибка OCR: ${error.message}`, error);
+		}
+		logger.error('Неожиданная ошибка при извлечении текста', {
+			applicationId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
+	}
+}
+
+/**
+ * Формирует промпт для LLM на основе текста и технических условий
+ *
+ * @param text - Текст заявки (уже ограниченный)
+ * @param technicalSpec - Техническое условие
+ * @returns Промпт для LLM
+ */
+function buildAbbreviationPrompt(text: string, technicalSpec: TechnicalSpec): string {
+	// Формируем описание правил ТУ для промпта
+	const rulesDescription = technicalSpec.rules
+		.map((rule) => `- ${rule.parameter}: код "${rule.code}" - ${rule.description}`)
+		.join('\n');
+
+	// Формируем промпт для извлечения параметров
+	return `Проанализируй следующий текст из технической заявки и извлеки параметры для формирования аббревиатуры продукции.
+
+Текст заявки:
+${text}
+
+Технические условия (ТУ):
+${technicalSpec.name}
+${technicalSpec.description || ''}
+
+Правила формирования аббревиатуры:
+${rulesDescription}
+
+Шаблон аббревиатуры: ${technicalSpec.abbreviationTemplate}
+
+Извлеки из текста значения для каждого параметра из правил ТУ. Для каждого параметра верни:
+- parameter: название параметра
+- value: значение, найденное в тексте
+- code: код из ТУ, если значение соответствует описанию правила
+- confidence: уровень уверенности (0-1)
+
+ВАЖНО: 
+- Не придумывай параметры, извлекай только то, что есть в тексте
+- Если значение не найдено в тексте, не включай параметр в результат
+- Сопоставляй найденные значения с описаниями правил ТУ для определения кодов`;
+}
+
+/**
+ * Вызывает LLM для извлечения параметров аббревиатуры
+ *
+ * @param applicationId - GUID заявки
+ * @param prompt - Промпт для LLM
+ * @param systemPrompt - Системный промпт
+ * @returns Параметры и ID операции LLM
+ */
+async function extractParametersWithLLM(
+	applicationId: string,
+	prompt: string,
+	systemPrompt: string
+): Promise<{ parameters: AbbreviationParameter[]; llmOperationId?: string }> {
+	logger.info('Вызов LLM для извлечения параметров аббревиатуры', {
+		applicationId,
+		textLength: prompt.length
+	});
+
+	// Вызываем LLM с structured output и созданием операции
+	const parametersResult = await callYandexGPTStructured(
+		prompt,
+		AbbreviationParametersSchema,
+		systemPrompt,
+		{ temperature: 0.3 },
+		2,
+		{
+			applicationId,
+			type: 'llm_abbreviation'
+		}
+	);
+
+	// Получаем ID операции LLM с синхронизацией
+	const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_abbreviation');
+	const llmOperationId = llmOperation?.id;
+
+	logger.info('Параметры извлечены LLM', {
+		applicationId,
+		parametersCount: parametersResult.parameters.length,
+		llmOperationId
+	});
+
+	return {
+		parameters: parametersResult.parameters,
+		llmOperationId
+	};
+}
+
+/**
+ * Валидирует параметры по правилам ТУ и формирует аббревиатуру
+ *
+ * @param parameters - Извлеченные параметры
+ * @param technicalSpec - Техническое условие
+ * @returns Валидированные параметры и сформированная аббревиатура
+ */
+function validateAndGenerateAbbreviation(
+	parameters: AbbreviationParameter[],
+	technicalSpec: TechnicalSpec
+): { parameters: AbbreviationParameter[]; abbreviation: string } {
+	// Валидируем параметры по правилам ТУ
+	const validatedParameters = validateParametersAgainstTU(parameters, technicalSpec);
+
+	logger.info('Параметры валидированы по ТУ', {
+		validatedParametersCount: validatedParameters.length
+	});
+
+	// Формируем аббревиатуру по шаблону
+	const abbreviation = generateAbbreviation(validatedParameters, technicalSpec.abbreviationTemplate);
+
+	logger.info('Аббревиатура сформирована', {
+		abbreviation
+	});
+
+	return {
+		parameters: validatedParameters,
+		abbreviation
+	};
+}
+
+/**
+ * Сохраняет результат формирования аббревиатуры в БД
+ *
+ * @param applicationId - GUID заявки
+ * @param result - Результат формирования аббревиатуры
+ */
+function saveAbbreviationResult(
+	applicationId: string,
+	result: {
+		parameters: AbbreviationParameter[];
+		abbreviation: string;
+		technicalSpecId: string;
+	}
+): void {
+	const dbResult = {
+		parameters: result.parameters,
+		abbreviation: result.abbreviation,
+		technicalSpecId: result.technicalSpecId,
+		generatedAt: new Date().toISOString()
+	};
+
+	updateApplication(applicationId, {
+		llmAbbreviationResult: dbResult,
+		processingEndDate: new Date().toISOString()
+	});
+
+	logger.info('Результат формирования аббревиатуры сохранен в БД', {
+		applicationId,
+		abbreviation: result.abbreviation
+	});
+}
+
+/**
  * Формирует аббревиатуру продукции на основе параметров из заявки и ТУ
  *
  * 1. Получает заявку и ТУ из storage
@@ -293,201 +536,50 @@ export async function generateAbbreviation(
 }> {
 	logger.info('Начало формирования аббревиатуры', { applicationId, technicalSpecId });
 
-	// Получаем заявку
+	// Валидация: проверяем существование заявки
 	const application = getApplication(applicationId);
 	if (!application) {
 		logger.error('Заявка не найдена при формировании аббревиатуры', { applicationId });
 		throw new ProcessingError(`Заявка ${applicationId} не найдена`);
 	}
 
-	// Получаем техническое условие
+	// Валидация: проверяем существование ТУ
 	const technicalSpec = getTechnicalSpec(technicalSpecId);
 	if (!technicalSpec) {
 		logger.error('Техническое условие не найдено', { applicationId, technicalSpecId });
 		throw new ProcessingError(`Техническое условие ${technicalSpecId} не найдено`);
 	}
 
-	// Получаем текст из OCR операции
-	let extractedText: string;
-	let ocrOperationId: string | undefined;
-
-	const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
-	if (
-		existingOCROperation &&
-		existingOCROperation.status === 'completed' &&
-		existingOCROperation.result
-	) {
-		const result = existingOCROperation.result as { text?: string };
-		if (result.text) {
-			extractedText = result.text;
-			ocrOperationId = existingOCROperation.id;
-		}
-	}
-
-	// Если текста нет, извлекаем через операцию
-	if (!extractedText) {
-		logger.info('Извлечение текста из файла для формирования аббревиатуры', {
-			applicationId,
-			technicalSpecId
-		});
-		const fileData = getApplicationFile(applicationId);
-		if (!fileData) {
-			logger.error('Файл заявки не найден', { applicationId });
-			throw new ProcessingError(`Файл заявки ${applicationId} не найден`);
-		}
-
-		const mimeType = getMimeTypeFromFilename(fileData.filename);
-		try {
-			const ocrResult = await extractTextFromFileWithOperation(
-				applicationId,
-				fileData.buffer,
-				mimeType,
-				fileData.filename
-			);
-
-			if (ocrResult.operationId) {
-				// Асинхронная операция
-				ocrOperationId = ocrResult.operationId;
-				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
-				throw new ProcessingError(
-					'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
-				);
-			} else if (ocrResult.text) {
-				extractedText = ocrResult.text;
-				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
-				ocrOperationId = ocrOperation?.id;
-				logger.info('Текст успешно извлечен для формирования аббревиатуры', {
-					applicationId,
-					ocrOperationId,
-					textLength: extractedText.length
-				});
-			} else {
-				logger.error('Не удалось извлечь текст из файла', { applicationId });
-				throw new ProcessingError('Не удалось извлечь текст из файла');
-			}
-		} catch (error) {
-			if (error instanceof ProcessingError) {
-				throw error;
-			}
-			if (error instanceof OCRError) {
-				logger.error('Ошибка OCR при извлечении текста', {
-					applicationId,
-					message: error.message,
-					stack: error.stack
-				});
-				throw new ProcessingError(`Ошибка OCR: ${error.message}`, error);
-			}
-			logger.error('Неожиданная ошибка при извлечении текста', {
-				applicationId,
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined
-			});
-			throw new ProcessingError('Ошибка при извлечении текста из файла', error as Error);
-		}
-	}
-
-	// Ограничиваем текст для LLM
-	const limitedText = truncateText(extractedText, config.maxTextLengthForLLM);
-
-	// Формируем описание правил ТУ для промпта
-	const rulesDescription = technicalSpec.rules
-		.map((rule) => `- ${rule.parameter}: код "${rule.code}" - ${rule.description}`)
-		.join('\n');
-
-	// Формируем промпт для извлечения параметров
-	const prompt = `Проанализируй следующий текст из технической заявки и извлеки параметры для формирования аббревиатуры продукции.
-
-Текст заявки:
-${limitedText}
-
-Технические условия (ТУ):
-${technicalSpec.name}
-${technicalSpec.description || ''}
-
-Правила формирования аббревиатуры:
-${rulesDescription}
-
-Шаблон аббревиатуры: ${technicalSpec.abbreviationTemplate}
-
-Извлеки из текста значения для каждого параметра из правил ТУ. Для каждого параметра верни:
-- parameter: название параметра
-- value: значение, найденное в тексте
-- code: код из ТУ, если значение соответствует описанию правила
-- confidence: уровень уверенности (0-1)
-
-ВАЖНО: 
-- Не придумывай параметры, извлекай только то, что есть в тексте
-- Если значение не найдено в тексте, не включай параметр в результат
-- Сопоставляй найденные значения с описаниями правил ТУ для определения кодов`;
-
-	const systemPrompt =
-		'Ты эксперт по анализу технических заявок. Твоя задача - извлечь параметры продукции из текста заявки с учетом технических условий.';
-
 	try {
-		logger.info('Вызов LLM для извлечения параметров аббревиатуры', {
-			applicationId,
-			technicalSpecId,
-			textLength: limitedText.length,
-			rulesCount: technicalSpec.rules.length
-		});
+		// 1. Получаем или извлекаем текст
+		const { text, ocrOperationId } = await getOrExtractText(applicationId);
 
-		// Вызываем LLM с structured output и созданием операции
-		const parametersResult = await callYandexGPTStructured(
+		// 2. Ограничиваем текст для LLM
+		const limitedText = truncateText(text, config.maxTextLengthForLLM);
+
+		// 3. Формируем промпт
+		const prompt = buildAbbreviationPrompt(limitedText, technicalSpec);
+		const systemPrompt =
+			'Ты эксперт по анализу технических заявок. Твоя задача - извлечь параметры продукции из текста заявки с учетом технических условий.';
+
+		// 4. Извлекаем параметры через LLM
+		const { parameters, llmOperationId } = await extractParametersWithLLM(
+			applicationId,
 			prompt,
-			AbbreviationParametersSchema,
-			systemPrompt,
-			{ temperature: 0.3 },
-			2,
-			{
-				applicationId,
-				type: 'llm_abbreviation'
-			}
+			systemPrompt
 		);
 
-		// Получаем ID операции LLM
-		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_abbreviation');
-		const llmOperationId = llmOperation?.id;
-
-		logger.info('Параметры извлечены LLM', {
-			applicationId,
-			parametersCount: parametersResult.parameters.length,
-			llmOperationId
-		});
-
-		// Валидируем параметры по правилам ТУ
-		const validatedParameters = validateParametersAgainstTU(
-			parametersResult.parameters,
+		// 5. Валидируем параметры и формируем аббревиатуру
+		const { parameters: validatedParameters, abbreviation } = validateAndGenerateAbbreviation(
+			parameters,
 			technicalSpec
 		);
 
-		logger.info('Параметры валидированы по ТУ', {
-			applicationId,
-			validatedParametersCount: validatedParameters.length
-		});
-
-		// Формируем аббревиатуру по шаблону
-		const abbreviation = generateAbbreviation(
-			validatedParameters,
-			technicalSpec.abbreviationTemplate
-		);
-
-		logger.info('Аббревиатура сформирована', {
-			applicationId,
-			abbreviation,
-			technicalSpecId
-		});
-
-		// Сохраняем результат в БД заявки (для обратной совместимости)
-		const result = {
+		// 6. Сохраняем результат
+		saveAbbreviationResult(applicationId, {
 			parameters: validatedParameters,
 			abbreviation,
-			technicalSpecId,
-			generatedAt: new Date().toISOString()
-		};
-
-		updateApplication(applicationId, {
-			llmAbbreviationResult: result,
-			processingEndDate: new Date().toISOString()
+			technicalSpecId
 		});
 
 		return {
@@ -497,6 +589,9 @@ ${rulesDescription}
 			llmOperationId
 		};
 	} catch (error) {
+		if (error instanceof ProcessingError) {
+			throw error;
+		}
 		if (error instanceof LLMError) {
 			logger.error('Ошибка LLM при формировании аббревиатуры', {
 				applicationId,
@@ -587,7 +682,12 @@ export async function checkAndUpdateOperation(
 			}
 			// Если done === false, операция еще выполняется, статус не меняем
 
-			return getOperation(operationId);
+			const updatedOperation = getOperation(operationId);
+			// Синхронизируем результат с заявкой, если операция завершена
+			if (updatedOperation) {
+				syncOperationToApplication(updatedOperation);
+			}
+			return updatedOperation;
 		} catch (error) {
 			// Ошибка при проверке статуса
 			logger.error('Ошибка при проверке статуса YandexOCR операции', {
@@ -605,6 +705,9 @@ export async function checkAndUpdateOperation(
 		}
 	}
 
-	// Для других типов операций просто возвращаем текущий статус
+	// Для других типов операций синхронизируем, если операция завершена
+	if (operation.status === 'completed') {
+		syncOperationToApplication(operation);
+	}
 	return operation;
 }

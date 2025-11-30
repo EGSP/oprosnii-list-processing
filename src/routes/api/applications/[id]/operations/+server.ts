@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplication, getOperationsByApplication } from '$lib/storage/index.js';
+import { getApplication, getOperationsByApplicationWithSync } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
 import type { ProcessingOperationType } from '$lib/storage/types.js';
 
@@ -8,6 +8,7 @@ import type { ProcessingOperationType } from '$lib/storage/types.js';
  * GET /api/applications/:id/operations - Список операций заявки
  *
  * Возвращает список всех операций для заявки с опциональной фильтрацией по типу.
+ * Автоматически синхронизирует результаты завершенных операций с заявкой.
  */
 export const GET: RequestHandler = async ({ params, url }) => {
 	try {
@@ -31,8 +32,8 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			? (typeParam as ProcessingOperationType)
 			: undefined;
 
-		// Получаем список операций
-		const operations = getOperationsByApplication(id, type);
+		// Получаем список операций с автоматической синхронизацией
+		const operations = getOperationsByApplicationWithSync(id, type);
 
 		// Возвращаем результат
 		return json(operations);

@@ -8,6 +8,8 @@ import {
 } from './types.js';
 import { v4 as uuidv4 } from 'uuid';
 import { StorageError, ValidationError } from './errors.js';
+import { updateApplication } from './repository.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Создает новую операцию обработки или обновляет существующую
@@ -282,4 +284,136 @@ export function updateOperationStatus(
 	}
 
 	return updateOperation(id, updates);
+}
+
+/**
+ * Синхронизирует результат завершенной операции с таблицей applications
+ * Обновляет соответствующее поле в заявке на основе типа операции
+ *
+ * @param operation - Операция обработки
+ * @returns true если синхронизация выполнена, false если операция не завершена или не требует синхронизации
+ */
+export function syncOperationToApplication(operation: ProcessingOperation): boolean {
+	// Синхронизируем только завершенные операции
+	if (operation.status !== 'completed' || !operation.result) {
+		return false;
+	}
+
+	try {
+		const applicationId = operation.applicationId;
+		const updates: Parameters<typeof updateApplication>[1] = {};
+
+		switch (operation.type) {
+			case 'ocr': {
+				// Обновляем ocrResult
+				const result = operation.result as { text?: string };
+				if (result.text) {
+					updates.ocrResult = { text: result.text };
+					logger.debug('Синхронизация OCR результата с заявкой', {
+						applicationId,
+						operationId: operation.id
+					});
+				}
+				break;
+			}
+
+			case 'llm_product_type': {
+				// Обновляем llmProductTypeResult и productType
+				const result = operation.result as { type?: string; confidence?: number; reasoning?: string };
+				if (result.type) {
+					updates.llmProductTypeResult = result;
+					updates.productType = result.type;
+					logger.debug('Синхронизация результата определения типа изделия с заявкой', {
+						applicationId,
+						operationId: operation.id,
+						productType: result.type
+					});
+				}
+				break;
+			}
+
+			case 'llm_abbreviation': {
+				// Обновляем llmAbbreviationResult и processingEndDate
+				const result = operation.result as {
+					parameters?: unknown[];
+					abbreviation?: string;
+					technicalSpecId?: string;
+					generatedAt?: string;
+				};
+				if (result.parameters || result.abbreviation) {
+					updates.llmAbbreviationResult = result;
+					updates.processingEndDate = result.generatedAt || operation.completedAt || new Date().toISOString();
+					logger.debug('Синхронизация результата формирования аббревиатуры с заявкой', {
+						applicationId,
+						operationId: operation.id,
+						abbreviation: result.abbreviation
+					});
+				}
+				break;
+			}
+
+			default:
+				// Неизвестный тип операции, не синхронизируем
+				return false;
+		}
+
+		// Обновляем заявку только если есть что обновлять
+		if (Object.keys(updates).length > 0) {
+			updateApplication(applicationId, updates);
+			return true;
+		}
+
+		return false;
+	} catch (error) {
+		logger.error('Ошибка при синхронизации операции с заявкой', {
+			operationId: operation.id,
+			applicationId: operation.applicationId,
+			error: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		// Не пробрасываем ошибку, чтобы не ломать основной поток
+		return false;
+	}
+}
+
+/**
+ * Получает операцию по ID с автоматической синхронизацией результата с заявкой
+ */
+export function getOperationWithSync(id: string): ProcessingOperation | null {
+	const operation = getOperation(id);
+	if (operation) {
+		syncOperationToApplication(operation);
+	}
+	return operation;
+}
+
+/**
+ * Получает операцию по applicationId и типу с автоматической синхронизацией результата с заявкой
+ */
+export function getOperationByApplicationAndTypeWithSync(
+	applicationId: string,
+	type: ProcessingOperationType
+): ProcessingOperation | null {
+	const operation = getOperationByApplicationAndType(applicationId, type);
+	if (operation) {
+		syncOperationToApplication(operation);
+	}
+	return operation;
+}
+
+/**
+ * Получает список операций для заявки с автоматической синхронизацией результатов с заявкой
+ */
+export function getOperationsByApplicationWithSync(
+	applicationId: string,
+	type?: ProcessingOperationType
+): ProcessingOperation[] {
+	const operations = getOperationsByApplication(applicationId, type);
+	// Синхронизируем каждую завершенную операцию
+	for (const operation of operations) {
+		if (operation.status === 'completed') {
+			syncOperationToApplication(operation);
+		}
+	}
+	return operations;
 }

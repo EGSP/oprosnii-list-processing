@@ -65,14 +65,13 @@
 
 **Процесс:**
 
-1. Получает заявку и ТУ из storage
-2. Получает текст (OCR результат из БД или повторное извлечение)
+1. Валидирует существование заявки и ТУ
+2. Получает текст (OCR результат из БД или повторное извлечение) через `getOrExtractText()`
 3. Ограничивает текст до 6000 символов (из конфига)
-4. Формирует промпт с учетом ТУ
-5. Вызывает LLM для извлечения параметров (structured output через Zod)
-6. Валидирует параметры по правилам ТУ
-7. Формирует аббревиатуру по шаблону из ТУ
-8. Сохраняет результаты в БД
+4. Формирует промпт с учетом ТУ через `buildAbbreviationPrompt()`
+5. Вызывает LLM для извлечения параметров через `extractParametersWithLLM()`
+6. Валидирует параметры и формирует аббревиатуру через `validateAndGenerateAbbreviation()`
+7. Сохраняет результаты в БД через `saveAbbreviationResult()`
 
 **Возвращает:**
 
@@ -89,6 +88,30 @@
 
 - `ProcessingError` - Ошибка при обработке заявки
 
+### Вспомогательные функции (внутренние)
+
+Функция `generateAbbreviation` разбита на атомарные функции для улучшения тестируемости и переиспользования:
+
+#### `getOrExtractText(applicationId: string): Promise<{text: string, ocrOperationId?: string}>`
+
+Получает текст из существующей OCR операции или извлекает новый. Проверяет статус операции перед использованием результата. Обрабатывает асинхронные операции.
+
+#### `buildAbbreviationPrompt(text: string, technicalSpec: TechnicalSpec): string`
+
+Формирует промпт для LLM на основе текста заявки и технических условий.
+
+#### `extractParametersWithLLM(applicationId: string, prompt: string, systemPrompt: string): Promise<{parameters: AbbreviationParameter[], llmOperationId?: string}>`
+
+Вызывает LLM для извлечения параметров аббревиатуры. Возвращает параметры и ID операции LLM.
+
+#### `validateAndGenerateAbbreviation(parameters: AbbreviationParameter[], technicalSpec: TechnicalSpec): {parameters: AbbreviationParameter[], abbreviation: string}`
+
+Валидирует параметры по правилам ТУ и формирует аббревиатуру по шаблону.
+
+#### `saveAbbreviationResult(applicationId: string, result: {parameters, abbreviation, technicalSpecId}): void`
+
+Сохраняет результат формирования аббревиатуры в БД заявки.
+
 #### `getOperationStatus(operationId: string): ProcessingOperation | null`
 
 Получает статус операции обработки по ID.
@@ -101,7 +124,7 @@
 
 #### `checkAndUpdateOperation(operationId: string): Promise<ProcessingOperation | null>`
 
-Проверяет и обновляет статус асинхронной операции у внешнего сервиса.
+Проверяет и обновляет статус асинхронной операции у внешнего сервиса. Автоматически синхронизирует результат завершенной операции с таблицей `applications`.
 
 **Параметры:**
 
@@ -109,7 +132,9 @@
 
 **Возвращает:** Обновленный объект операции или `null`, если операция не найдена
 
-**Примечание:** Для OCR операций от Yandex проверяет статус через API. Для других типов операций просто возвращает текущий статус.
+**Примечание:** 
+- Для OCR операций от Yandex проверяет статус через API. Для других типов операций просто возвращает текущий статус.
+- Если операция завершена, автоматически синхронизирует результат с заявкой через `syncOperationToApplication()`.
 
 ### Zod схемы для structured output
 

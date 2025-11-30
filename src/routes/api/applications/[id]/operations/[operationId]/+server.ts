@@ -1,12 +1,13 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplication, getOperation } from '$lib/storage/index.js';
+import { getApplication, getOperationWithSync } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
 
 /**
  * GET /api/applications/:id/operations/:operationId - Получение операции
  *
  * Возвращает детальную информацию об операции обработки.
+ * Автоматически синхронизирует результат завершенной операции с заявкой.
  */
 export const GET: RequestHandler = async ({ params }) => {
 	try {
@@ -29,8 +30,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			return json({ error: 'Заявка не найдена' }, { status: 404 });
 		}
 
-		// Получаем операцию
-		const operation = getOperation(operationId);
+		// Получаем операцию с автоматической синхронизацией
+		const operation = getOperationWithSync(operationId);
 		if (!operation) {
 			return json({ error: 'Операция не найдена' }, { status: 404 });
 		}

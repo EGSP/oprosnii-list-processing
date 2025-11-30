@@ -261,6 +261,52 @@ const allOperations = getOperationsByApplication('application-id');
 const ocrOperations = getOperationsByApplication('application-id', 'ocr');
 ```
 
+#### `syncOperationToApplication(operation: ProcessingOperation): boolean`
+
+Синхронизирует результат завершенной операции с таблицей `applications`. Обновляет соответствующее поле в заявке на основе типа операции:
+
+- `ocr` → обновляет `ocrResult`
+- `llm_product_type` → обновляет `llmProductTypeResult` и `productType`
+- `llm_abbreviation` → обновляет `llmAbbreviationResult` и `processingEndDate`
+
+**Важно:** Синхронизация происходит только для завершенных операций (`status === 'completed'`). Обновляется только заявка, связанная с данной операцией.
+
+```typescript
+const operation = getOperation('operation-id');
+if (operation && operation.status === 'completed') {
+	syncOperationToApplication(operation);
+}
+```
+
+#### `getOperationWithSync(id: string): ProcessingOperation | null`
+
+Получает операцию по ID с автоматической синхронизацией результата с заявкой. Если операция завершена, автоматически обновляет соответствующее поле в таблице `applications`.
+
+```typescript
+const operation = getOperationWithSync('operation-id');
+// Если операция завершена, результат уже синхронизирован с заявкой
+```
+
+#### `getOperationByApplicationAndTypeWithSync(applicationId: string, type: ProcessingOperationType): ProcessingOperation | null`
+
+Получает операцию по ID заявки и типу с автоматической синхронизацией результата с заявкой.
+
+```typescript
+const ocrOperation = getOperationByApplicationAndTypeWithSync('application-id', 'ocr');
+// Если операция завершена, результат уже синхронизирован с заявкой
+```
+
+#### `getOperationsByApplicationWithSync(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]`
+
+Получает список всех операций для заявки с автоматической синхронизацией результатов завершенных операций с заявкой.
+
+```typescript
+// Все операции заявки (завершенные автоматически синхронизируются)
+const allOperations = getOperationsByApplicationWithSync('application-id');
+```
+
+**Примечание:** Функции с синхронизацией (`*WithSync`) рекомендуется использовать в API эндпоинтах для автоматического обновления таблицы `applications` при получении операций.
+
 #### `updateOperation(id: string, updates: ProcessingOperationUpdate): ProcessingOperation | null`
 
 Обновляет операцию. Автоматически заполняет временные метки при изменении статуса.
@@ -446,7 +492,11 @@ import {
 	listTechnicalSpecs,
 	createOrUpdateOperation,
 	getOperation,
+	getOperationWithSync,
+	getOperationByApplicationAndTypeWithSync,
 	getOperationsByApplication,
+	getOperationsByApplicationWithSync,
+	syncOperationToApplication,
 	StorageError
 } from '$lib/storage';
 ```
