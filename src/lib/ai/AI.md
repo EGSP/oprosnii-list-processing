@@ -9,10 +9,12 @@
 ### Файлы
 
 - **`config.ts`** - Конфигурация AI сервисов (модели, API ключи, endpoints)
-- **`ocr.ts`** - Модуль OCR и извлечения текста из файлов
-- **`llm.ts`** - Модуль LLM для работы с YandexGPT
+- **`ocr.ts`** - Модуль OCR и извлечения текста из файлов (использует switch по провайдеру)
+- **`llm.ts`** - Модуль LLM для работы с различными провайдерами (использует switch по провайдеру)
 - **`types.ts`** - TypeScript типы для модуля AI
 - **`index.ts`** - Централизованный экспорт
+- **`yandex/ocr.ts`** - Модуль Yandex OCR (функции для работы с Yandex OCR API)
+- **`yandex/llm.ts`** - Модуль Yandex LLM (функции для работы с YandexGPT API)
 
 ## Конфигурация
 
@@ -102,23 +104,24 @@
 
 - `OCRError` - Ошибка при извлечении текста или вызове YandexOCR API
 
-#### `checkYandexOCROperation(operationId: string): Promise<{ done: boolean; text?: string; error?: string }>`
+#### `checkOCROperation(operationId: string): Promise<ProcessingOperation | null>`
 
-Проверяет статус асинхронной операции YandexOCR. Использует endpoint из конфигурации (`YANDEX_OCR_OPERATION_ENDPOINT` или значение по умолчанию).
+Проверяет статус асинхронной операции OCR. Использует switch по провайдеру для вызова соответствующей функции.
 
 **Параметры:**
 
-- `operationId` - ID операции у внешнего сервиса (Yandex)
+- `operationId` - ID операции в БД
 
 **Возвращает:**
 
-- `{ done: false }` - операция еще выполняется
-- `{ done: true, text: string }` - операция завершена успешно (текст получен через `GetRecognition` endpoint)
-- `{ done: true, error: string }` - операция завершена с ошибкой
+- `ProcessingOperation | null` - Обновленная операция или null, если не найдена
 
 **Особенности:**
 
-- После завершения операции (`done: true`) автоматически вызывается `GetRecognition` endpoint для получения полных результатов распознавания
+- Для провайдера 'yandex' проверяет статус через Yandex OCR API
+- Для провайдера 'local' возвращает операцию как есть (локальные операции всегда синхронные)
+- Автоматически обновляет статус операции в БД при завершении
+- После завершения операции автоматически вызывается `GetRecognition` endpoint для получения полных результатов распознавания
 - Используется `YANDEX_OCR_GET_RECOGNITION_ENDPOINT` из конфигурации или значение по умолчанию
 - Если `GetRecognition` не удался, используется fallback - извлечение текста из ответа `Operation.Get`
 
@@ -132,7 +135,7 @@
 import {
 	extractTextFromFile,
 	extractTextFromFileWithOperation,
-	checkYandexOCROperation
+	checkOCROperation
 } from '$lib/ai';
 
 // Старый способ (для обратной совместимости)
@@ -154,9 +157,10 @@ if (fileInfo) {
 
 if (result.operationId) {
 	// Асинхронная операция - проверяем статус
-	const status = await checkYandexOCROperation(result.operationId);
-	if (status.done && status.text) {
-		console.log(status.text);
+	const operation = await checkOCROperation(result.operationId);
+	if (operation && operation.status === 'completed' && operation.result) {
+		const text = (operation.result as { text: string }).text;
+		console.log(text);
 	}
 } else if (result.text) {
 	// Синхронная операция завершена
@@ -306,11 +310,32 @@ try {
 
 - **OCR операции**: Создаются автоматически при вызове `extractTextFromFileWithOperation()`
   - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу `status='completed'`
-  - Асинхронные операции (многостраничные PDF): `status='running'` с `externalOperationId`
+  - Асинхронные операции (многостраничные PDF): `status='running'` с `providerData.operationId`
+  - Провайдеры: 'yandex' (для изображений и PDF), 'local' (для DOCX и XLSX)
 - **LLM операции**: Создаются автоматически при вызове `callYandexGPT()` или `callYandexGPTStructured()` с `operationConfig`
   - Все LLM операции синхронные: сразу `status='completed'`
+  - Провайдеры: 'yandex' (для YandexGPT)
 
 Операции хранятся в БД и позволяют отслеживать статус обработки. Подробнее см. [`../storage/STORAGE.md`](../storage/STORAGE.md).
+
+## Модули провайдеров
+
+### Yandex OCR (`yandex/ocr.ts`)
+
+Модуль содержит функции для работы с Yandex OCR API:
+
+- `callYandexOCR()` - Отправка запроса в Yandex OCR API
+- `getYandexOCRRecognition()` - Получение результатов распознавания через GetRecognition endpoint
+- `checkYandexOCROperation()` - Проверка статуса асинхронной операции
+
+### Yandex LLM (`yandex/llm.ts`)
+
+Модуль содержит функции для работы с YandexGPT API:
+
+- `callYandexGPT()` - Вызов YandexGPT API с текстовым ответом
+- `callYandexGPTStructured()` - Вызов YandexGPT с structured output через Zod схему
+
+**Примечание:** Основные модули `ocr.ts` и `llm.ts` используют switch по провайдеру для вызова соответствующих функций из модулей провайдеров.
 
 ## Примечания
 

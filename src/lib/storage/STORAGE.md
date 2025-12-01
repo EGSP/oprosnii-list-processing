@@ -43,23 +43,17 @@
 
 ### Схема таблицы `processing_operations`
 
-| Поле                    | Тип              | Описание                                                    |
-| ----------------------- | ---------------- | ----------------------------------------------------------- |
-| `id`                    | TEXT PRIMARY KEY | UUID операции                                               |
-| `application_id`        | TEXT NOT NULL    | GUID заявки (FK)                                            |
-| `type`                  | TEXT NOT NULL    | Тип операции: 'ocr', 'llm_product_type', 'llm_abbreviation' |
-| `provider`              | TEXT NOT NULL    | Провайдер сервиса: 'yandex', 'local' и т.д.                 |
-| `status`                | TEXT NOT NULL    | Статус: 'pending', 'running', 'completed', 'failed'         |
-| `external_operation_id` | TEXT             | ID операции у внешнего сервиса (для асинхронных)            |
-| `request_data`          | TEXT (JSON)      | Минимальные данные запроса (endpoint, method)               |
-| `result`                | TEXT (JSON)      | Результат операции                                          |
-| `error`                 | TEXT (JSON)      | Информация об ошибке                                        |
-| `created_at`            | TEXT (DATETIME)  | Дата создания операции                                      |
-| `started_at`            | TEXT (DATETIME)  | Дата начала выполнения                                      |
-| `completed_at`          | TEXT (DATETIME)  | Дата завершения                                             |
-| `progress`              | TEXT (JSON)      | Прогресс выполнения (опционально)                           |
-| `retry_count`           | INTEGER          | Количество попыток                                          |
-| `max_retries`           | INTEGER          | Максимальное количество попыток                             |
+| Поле             | Тиp              | Описание                                                    |
+| ---------------- | ---------------- | ----------------------------------------------------------- |
+| `id`             | TEXT PRIMARY KEY | UUID операции                                               |
+| `application_id` | TEXT NOT NULL    | GUID заявки (FK)                                            |
+| `type`           | TEXT NOT NULL    | Тип операции: 'ocr', 'llm_product_type', 'llm_abbreviation' |
+| `provider`       | TEXT NOT NULL    | Провайдер сервиса: 'yandex', 'local' и т.д.                 |
+| `status`         | TEXT NOT NULL    | Статус: 'running', 'completed', 'failed'                    |
+| `provider_data`  | TEXT (JSON)      | Данные провайдера (например, operationId для Yandex)        |
+| `result`         | TEXT (JSON)      | Результат операции (включая ошибки при status='failed')     |
+| `created_at`     | TEXT (DATETIME)  | Дата создания операции                                      |
+| `completed_at`   | TEXT (DATETIME)  | Дата завершения (null если еще выполняется)                 |
 
 **Ограничения:**
 
@@ -246,7 +240,7 @@ const success = saveTechnicalSpec({
 
 ### Репозиторий операций обработки (`operationsRepository.ts`)
 
-#### `createOrUpdateOperation(applicationId: string, type: ProcessingOperationType, provider: string, requestData: ProcessingOperationRequestData, status?: ProcessingOperationStatus, externalOperationId?: string | null): ProcessingOperation`
+#### `createOrUpdateOperation(applicationId: string, type: ProcessingOperationType, provider: string, providerData?: Record<string, unknown>, status?: ProcessingOperationStatus): ProcessingOperation`
 
 Создает новую операцию обработки или обновляет существующую (если операция с таким типом уже есть для заявки).
 
@@ -255,11 +249,8 @@ const operation = createOrUpdateOperation(
 	'application-id',
 	'ocr',
 	'yandex',
-	{
-		endpoint: 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText',
-		method: 'POST'
-	},
-	'pending'
+	{ operationId: 'external-operation-id' }, // providerData
+	'running' // status
 );
 ```
 
@@ -363,7 +354,13 @@ updateOperationStatus('operation-id', 'completed', {
 updateOperationStatus('operation-id', 'failed', {
 	error: { message: 'Error message', code: 'ERROR_CODE' }
 });
+
+updateOperationStatus('operation-id', 'running', {
+	providerData: { operationId: 'external-operation-id' }
+});
 ```
+
+**Примечание:** При статусе 'failed' ошибка автоматически добавляется в поле `result` в формате `{ error: { message, code?, details? } }`.
 
 ### Утилиты БД (`db.ts`)
 
@@ -445,7 +442,19 @@ interface ProcessingOperation {
 	applicationId: string; // UUID заявки
 	type: 'ocr' | 'llm_product_type' | 'llm_abbreviation';
 	provider: string; // 'yandex', 'local' и т.д.
-	status: 'pending' | 'running' | 'completed' | 'failed';
+	status: 'running' | 'completed' | 'failed';
+	providerData: Record<string, unknown>; // Данные провайдера (например, { operationId: string } для Yandex)
+	result: Record<string, unknown> | null; // Результат операции (включая ошибки при status='failed')
+	createdAt: string; // ISO datetime string
+	completedAt: string | null; // ISO datetime string (null если еще выполняется)
+}
+```
+
+**Примечания:**
+- Если `status === 'running'`, операция асинхронная и еще выполняется
+- Если `status === 'completed' || status === 'failed'`, операция завершена
+- При `status === 'failed'` ошибка находится в `result.error`
+- `providerData` содержит специфичные для провайдера данные (например, `operationId` для Yandex OCR)
 	externalOperationId?: string | null; // ID операции у внешнего сервиса
 	requestData: {
 		endpoint: string;

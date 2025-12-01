@@ -7,7 +7,7 @@
 
 import {
 	extractTextFromFileWithOperation,
-	checkYandexOCROperation,
+	checkOCROperation,
 	OCRError
 } from '../ai/index.js';
 import { callYandexGPTStructured, LLMError } from '../ai/index.js';
@@ -177,8 +177,7 @@ export async function detectProductType(applicationId: string): Promise<{
 				reasoning: 'OCR операция выполняется асинхронно. Проверьте статус операции.'
 			},
 			ocrOperationId,
-			llmOperationId: undefined,
-			isAsync: true
+			llmOperationId: undefined
 		};
 	}
 
@@ -246,8 +245,7 @@ ${limitedText}
 		return {
 			result: productTypeResult,
 			ocrOperationId,
-			llmOperationId,
-			isAsync: false
+			llmOperationId
 		};
 	} catch (error) {
 		if (error instanceof LLMError) {
@@ -633,12 +631,8 @@ export async function checkAndUpdateOperation(
 		return null;
 	}
 
-	// Если операция уже завершена или не имеет externalOperationId, возвращаем как есть
-	if (
-		operation.status === 'completed' ||
-		operation.status === 'failed' ||
-		!operation.externalOperationId
-	) {
+	// Если операция уже завершена, возвращаем как есть
+	if (operation.status === 'completed' || operation.status === 'failed') {
 		// Синхронизируем результат с заявкой, если операция завершена
 		if (operation.status === 'completed') {
 			syncOperationToApplication(operation);
@@ -646,67 +640,16 @@ export async function checkAndUpdateOperation(
 		return operation;
 	}
 
-	// Проверяем статус только для OCR операций от Yandex
-	if (
-		operation.type === 'ocr' &&
-		operation.provider === 'yandex' &&
-		operation.externalOperationId
-	) {
-		try {
-			logger.debug('Проверка статуса YandexOCR операции', {
-				operationId,
-				externalOperationId: operation.externalOperationId
-			});
-
-			const checkResult = await checkYandexOCROperation(operation.externalOperationId);
-
-			if (checkResult.done) {
-				if (checkResult.text) {
-					// Операция завершена успешно
-					logger.info('YandexOCR операция завершена успешно', {
-						operationId,
-						textLength: checkResult.text.length
-					});
-					updateOperationStatus(operationId, 'completed', {
-						result: { text: checkResult.text }
-					});
-				} else if (checkResult.error) {
-					// Операция завершена с ошибкой
-					logger.error('YandexOCR операция завершена с ошибкой', {
-						operationId,
-						error: checkResult.error
-					});
-					updateOperationStatus(operationId, 'failed', {
-						error: { message: checkResult.error }
-					});
-				}
-			} else {
-				logger.debug('YandexOCR операция еще выполняется', { operationId });
-			}
-			// Если done === false, операция еще выполняется, статус не меняем
-
-			const updatedOperation = getOperation(operationId);
-			// Синхронизируем результат с заявкой, если операция завершена
-			if (updatedOperation) {
-				syncOperationToApplication(updatedOperation);
-			}
-			return updatedOperation;
-		} catch (error) {
-			// Ошибка при проверке статуса
-			logger.error('Ошибка при проверке статуса YandexOCR операции', {
-				operationId,
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined
-			});
-			updateOperationStatus(operationId, 'failed', {
-				error: {
-					message: error instanceof Error ? error.message : 'Unknown error',
-					details: error
-				}
-			});
-			return getOperation(operationId);
+	// Проверяем статус только для OCR операций
+	if (operation.type === 'ocr') {
+		const updatedOperation = await checkOCROperation(operationId);
+		// Синхронизируем результат с заявкой, если операция завершена
+		if (updatedOperation && updatedOperation.status === 'completed') {
+			syncOperationToApplication(updatedOperation);
 		}
+		return updatedOperation;
 	}
 
+	// Для других типов операций просто возвращаем текущий статус
 	return operation;
 }

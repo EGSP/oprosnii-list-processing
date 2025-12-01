@@ -19,9 +19,8 @@ export function createOrUpdateOperation(
 	applicationId: string,
 	type: ProcessingOperationType,
 	provider: string,
-	requestData: ProcessingOperation['requestData'],
-	status: ProcessingOperationStatus = 'pending',
-	externalOperationId?: string | null
+	providerData: Record<string, unknown> = {},
+	status: ProcessingOperationStatus = 'running'
 ): ProcessingOperation {
 	const db = getDatabase();
 
@@ -37,14 +36,10 @@ export function createOrUpdateOperation(
 			...existing,
 			provider,
 			status,
-			externalOperationId: externalOperationId ?? null,
-			requestData,
-			// Сбрасываем результат и ошибку при обновлении
+			providerData,
+			// Сбрасываем результат при обновлении
 			result: null,
-			error: null,
-			startedAt: status === 'running' || status === 'completed' ? now : null,
-			completedAt: status === 'completed' || status === 'failed' ? now : null,
-			retryCount: (existing.retryCount ?? 0) + 1
+			completedAt: status === 'completed' || status === 'failed' ? now : null
 		};
 	} else {
 		// Создаем новую операцию
@@ -55,16 +50,10 @@ export function createOrUpdateOperation(
 			type,
 			provider,
 			status,
-			externalOperationId: externalOperationId ?? null,
-			requestData,
+			providerData,
 			result: null,
-			error: null,
 			createdAt: now,
-			startedAt: status === 'running' || status === 'completed' ? now : null,
-			completedAt: status === 'completed' || status === 'failed' ? now : null,
-			progress: null,
-			retryCount: 0,
-			maxRetries: 3
+			completedAt: status === 'completed' || status === 'failed' ? now : null
 		};
 	}
 
@@ -78,44 +67,34 @@ export function createOrUpdateOperation(
 
 	const row = processingOperationToRow(validated);
 
-	try {
-		if (existing) {
-			// Обновляем существующую
-			const stmt = db.prepare(`
-				UPDATE processing_operations SET
-					provider = :provider,
-					status = :status,
-					external_operation_id = :external_operation_id,
-					request_data = :request_data,
-					result = :result,
-					error = :error,
-					started_at = :started_at,
-					completed_at = :completed_at,
-					progress = :progress,
-					retry_count = :retry_count,
-					max_retries = :max_retries
-				WHERE id = :id
-			`);
-			stmt.run({ ...row, id: existing.id });
-			return { ...validated, id: existing.id };
-		} else {
-			// Создаем новую
-			const stmt = db.prepare(`
-				INSERT INTO processing_operations (
-					id, application_id, type, provider, status,
-					external_operation_id, request_data, result, error,
-					created_at, started_at, completed_at, progress,
-					retry_count, max_retries
-				) VALUES (
-					:id, :application_id, :type, :provider, :status,
-					:external_operation_id, :request_data, :result, :error,
-					:created_at, :started_at, :completed_at, :progress,
-					:retry_count, :max_retries
-				)
-			`);
-			stmt.run(row);
-			return validated;
-		}
+		try {
+			if (existing) {
+				// Обновляем существующую
+				const stmt = db.prepare(`
+					UPDATE processing_operations SET
+						provider = :provider,
+						status = :status,
+						provider_data = :provider_data,
+						result = :result,
+						completed_at = :completed_at
+					WHERE id = :id
+				`);
+				stmt.run({ ...row, id: existing.id });
+				return { ...validated, id: existing.id };
+			} else {
+				// Создаем новую
+				const stmt = db.prepare(`
+					INSERT INTO processing_operations (
+						id, application_id, type, provider, status,
+						provider_data, result, created_at, completed_at
+					) VALUES (
+						:id, :application_id, :type, :provider, :status,
+						:provider_data, :result, :created_at, :completed_at
+					)
+				`);
+				stmt.run(row);
+				return validated;
+			}
 	} catch (error) {
 		throw new StorageError('Failed to create or update operation', error as Error);
 	}
@@ -213,9 +192,6 @@ export function updateOperation(
 	// Автоматически обновляем временные метки при изменении статуса
 	if (updates.status) {
 		const now = new Date().toISOString();
-		if (updates.status === 'running' && !updated.startedAt) {
-			updated.startedAt = now;
-		}
 		if ((updates.status === 'completed' || updates.status === 'failed') && !updated.completedAt) {
 			updated.completedAt = now;
 		}
@@ -235,14 +211,9 @@ export function updateOperation(
 		const stmt = db.prepare(`
 			UPDATE processing_operations SET
 				status = :status,
-				external_operation_id = :external_operation_id,
+				provider_data = :provider_data,
 				result = :result,
-				error = :error,
-				started_at = :started_at,
-				completed_at = :completed_at,
-				progress = :progress,
-				retry_count = :retry_count,
-				max_retries = :max_retries
+				completed_at = :completed_at
 			WHERE id = :id
 		`);
 		stmt.run({ ...row, id });
@@ -262,25 +233,28 @@ export function updateOperationStatus(
 	data?: {
 		result?: Record<string, unknown>;
 		error?: { message: string; code?: string; details?: unknown };
-		externalOperationId?: string | null;
-		progress?: { current: number; total: number; message?: string };
+		providerData?: Record<string, unknown>;
 	}
 ): ProcessingOperation | null {
 	const updates: ProcessingOperationUpdate = {
 		status
 	};
 
-	if (data?.result !== undefined) {
+	// Если есть ошибка, добавляем её в result
+	if (data?.error !== undefined) {
+		updates.result = {
+			error: {
+				message: data.error.message,
+				code: data.error.code,
+				details: data.error.details
+			}
+		};
+	} else if (data?.result !== undefined) {
 		updates.result = data.result;
 	}
-	if (data?.error !== undefined) {
-		updates.error = data.error;
-	}
-	if (data?.externalOperationId !== undefined) {
-		updates.externalOperationId = data.externalOperationId;
-	}
-	if (data?.progress !== undefined) {
-		updates.progress = data.progress;
+
+	if (data?.providerData !== undefined) {
+		updates.providerData = data.providerData;
 	}
 
 	return updateOperation(id, updates);
@@ -306,8 +280,13 @@ export function syncOperationToApplication(operation: ProcessingOperation): bool
 		switch (operation.type) {
 			case 'ocr': {
 				// Обновляем ocrResult
+				// Проверяем, есть ли ошибка в result
+				if (operation.result && 'error' in operation.result) {
+					// Операция завершена с ошибкой, не синхронизируем
+					return false;
+				}
 				const result = operation.result as { text?: string };
-				if (result.text) {
+				if (result?.text) {
 					updates.ocrResult = { text: result.text };
 					logger.debug('Синхронизация OCR результата с заявкой', {
 						applicationId,
@@ -319,8 +298,13 @@ export function syncOperationToApplication(operation: ProcessingOperation): bool
 
 			case 'llm_product_type': {
 				// Обновляем llmProductTypeResult и productType
+				// Проверяем, есть ли ошибка в result
+				if (operation.result && 'error' in operation.result) {
+					// Операция завершена с ошибкой, не синхронизируем
+					return false;
+				}
 				const result = operation.result as { type?: string; confidence?: number; reasoning?: string };
-				if (result.type) {
+				if (result?.type) {
 					updates.llmProductTypeResult = result;
 					updates.productType = result.type;
 					logger.debug('Синхронизация результата определения типа изделия с заявкой', {
@@ -334,13 +318,18 @@ export function syncOperationToApplication(operation: ProcessingOperation): bool
 
 			case 'llm_abbreviation': {
 				// Обновляем llmAbbreviationResult и processingEndDate
+				// Проверяем, есть ли ошибка в result
+				if (operation.result && 'error' in operation.result) {
+					// Операция завершена с ошибкой, не синхронизируем
+					return false;
+				}
 				const result = operation.result as {
 					parameters?: unknown[];
 					abbreviation?: string;
 					technicalSpecId?: string;
 					generatedAt?: string;
 				};
-				if (result.parameters || result.abbreviation) {
+				if (result?.parameters || result?.abbreviation) {
 					updates.llmAbbreviationResult = result;
 					updates.processingEndDate = result.generatedAt || operation.completedAt || new Date().toISOString();
 					logger.debug('Синхронизация результата формирования аббревиатуры с заявкой', {
