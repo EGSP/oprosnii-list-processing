@@ -6,7 +6,7 @@
  */
 
 import {
-	extractTextFromFileWithOperation,
+	extractText,
 	checkOCROperation,
 	OCRError
 } from '../ai/index.js';
@@ -26,7 +26,6 @@ import {
 	getTechnicalSpec,
 	getOperation,
 	getOperationByApplicationAndTypeWithSync,
-	updateOperationStatus,
 	syncOperationToApplication
 } from '../storage/index.js';
 import type { ProcessingOperation, TechnicalSpec } from '../storage/types.js';
@@ -114,7 +113,7 @@ export async function detectProductType(applicationId: string): Promise<{
 	if (!extractedText) {
 		logger.info('Извлечение текста из файла', { applicationId });
 		try {
-			const ocrResult = await extractTextFromFileWithOperation(applicationId, {
+			const ocrResult = await extractText(applicationId, {
 				buffer: fileInfo.buffer,
 				mimeType: fileInfo.mimeType,
 				fileType: fileInfo.fileType,
@@ -122,14 +121,7 @@ export async function detectProductType(applicationId: string): Promise<{
 				filename: fileInfo.filename
 			});
 
-			if (ocrResult.operationId) {
-				// Асинхронная операция - возвращаем ID операции
-				ocrOperationId = ocrResult.operationId;
-				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
-				// Возвращаем результат с operationId, не выбрасываем ошибку
-				// Функция вернет результат с ocrOperationId, но без extractedText
-				// API endpoint должен обработать это и вернуть HTTP 202
-			} else if (ocrResult.text) {
+			if (ocrResult.type === 'text') {
 				// Синхронная операция завершена
 				extractedText = ocrResult.text;
 				const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
@@ -139,9 +131,13 @@ export async function detectProductType(applicationId: string): Promise<{
 					ocrOperationId,
 					textLength: extractedText.length
 				});
-			} else {
-				logger.error('Не удалось извлечь текст из файла', { applicationId });
-				throw new ProcessingError('Не удалось извлечь текст из файла');
+			} else if (ocrResult.type === 'processing') {
+				// Асинхронная операция - возвращаем ID операции
+				ocrOperationId = ocrResult.operationId;
+				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
+				// Возвращаем результат с operationId, не выбрасываем ошибку
+				// Функция вернет результат с ocrOperationId, но без extractedText
+				// API endpoint должен обработать это и вернуть HTTP 202
 			}
 		} catch (error) {
 			if (error instanceof ProcessingError) {
@@ -302,7 +298,7 @@ async function getOrExtractText(
 	// Если текста нет, извлекаем через операцию
 	logger.info('Извлечение текста из файла для формирования аббревиатуры', { applicationId });
 	try {
-		const ocrResult = await extractTextFromFileWithOperation(applicationId, {
+		const ocrResult = await extractText(applicationId, {
 			buffer: fileInfo.buffer,
 			mimeType: fileInfo.mimeType,
 			fileType: fileInfo.fileType,
@@ -310,14 +306,14 @@ async function getOrExtractText(
 			filename: fileInfo.filename
 		});
 
-		if (ocrResult.operationId) {
+		if (ocrResult.type === 'processing') {
 			// Асинхронная операция
 			ocrOperationId = ocrResult.operationId;
 			logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
 			throw new ProcessingError(
 				'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
 			);
-		} else if (ocrResult.text) {
+		} else if (ocrResult.type === 'text') {
 			// Синхронная операция завершена
 			extractedText = ocrResult.text;
 			const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');

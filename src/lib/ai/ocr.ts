@@ -8,9 +8,8 @@
  */
 
 import {
-	createOrUpdateOperation,
-	updateOperationStatus,
-	getOperation
+	getOperation,
+	updateOperationStatus
 } from '../storage/operationsRepository.js';
 import { logger } from '../utils/logger.js';
 import { callYandexOCR, checkYandexOCROperation } from './yandex/ocr.js';
@@ -25,6 +24,13 @@ export class OCRError extends Error {
 		this.name = 'OCRError';
 	}
 }
+
+/**
+ * Результат извлечения текста из файла
+ */
+export type ExtractTextResult =
+	| { type: 'text'; text: string } // Текст извлечен синхронно
+	| { type: 'processing'; operationId: string }; // Текст обрабатывается асинхронно
 
 /**
  * Определяет тип файла по MIME типу
@@ -104,13 +110,14 @@ async function extractTextFromXLSX(fileBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Извлекает текст из файла с созданием операции обработки
+ * Извлекает текст из файла
+ * Возвращает явный тип результата: либо текст, либо флаг обработки
  *
  * @param applicationId - ID заявки
  * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
- * @returns Объект с текстом (если синхронно) или ID операции (если асинхронно)
+ * @returns Результат извлечения текста с явным типом
  */
-export async function extractTextFromFileWithOperation(
+export async function extractText(
 	applicationId: string,
 	fileInfo: {
 		buffer: Buffer;
@@ -119,23 +126,16 @@ export async function extractTextFromFileWithOperation(
 		pageCount: number;
 		filename?: string;
 	}
-): Promise<{ text?: string; operationId?: string }> {
+): Promise<ExtractTextResult> {
 	const { buffer, mimeType, fileType, pageCount, filename } = fileInfo;
 
-	// Для файлов, не требующих OCR, создаем синхронную операцию
+	// Для локальных файлов (DOCX, XLSX) - извлекаем текст напрямую, операции не создаем
 	if (fileType === 'docx' || fileType === 'xlsx') {
 		logger.info('Извлечение текста из файла (локальное)', {
 			applicationId,
 			fileType,
 			filename
 		});
-
-		const operation = createOrUpdateOperation(
-			applicationId,
-			'ocr',
-			'local',
-			{} // providerData пустой для локальных операций
-		);
 
 		try {
 			let text: string;
@@ -147,34 +147,23 @@ export async function extractTextFromFileWithOperation(
 
 			logger.info('Текст успешно извлечен из файла (локальное)', {
 				applicationId,
-				operationId: operation.id,
 				fileType,
 				textLength: text.length
 			});
 
-			updateOperationStatus(operation.id, 'completed', {
-				result: { text }
-			});
-
-			return { text };
+			return { type: 'text', text };
 		} catch (error) {
 			logger.error('Ошибка при локальном извлечении текста', {
 				applicationId,
-				operationId: operation.id,
 				fileType,
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined
-			});
-			updateOperationStatus(operation.id, 'failed', {
-				error: {
-					message: error instanceof Error ? error.message : 'Unknown error'
-				}
 			});
 			throw error;
 		}
 	}
 
-	// Для изображений и PDF используем YandexOCR
+	// Для изображений и PDF используем YandexOCR (операция создается внутри callYandexOCR)
 	if (fileType === 'image' || fileType === 'pdf') {
 		logger.info('Извлечение текста через YandexOCR', {
 			applicationId,
@@ -183,60 +172,15 @@ export async function extractTextFromFileWithOperation(
 			pageCount
 		});
 
-		// Создаем операцию перед вызовом
-		const operation = createOrUpdateOperation(
-			applicationId,
-			'ocr',
-			'yandex',
-			{} // providerData будет заполнено после вызова API
-		);
-
 		try {
-			const ocrResult = await callYandexOCR(buffer, mimeType, pageCount);
-
-			if (ocrResult.operationId) {
-				// Асинхронная операция
-				logger.info('YandexOCR операция асинхронная', {
-					applicationId,
-					operationId: operation.id,
-					externalOperationId: ocrResult.operationId
-				});
-				updateOperationStatus(operation.id, 'running', {
-					providerData: { operationId: ocrResult.operationId }
-				});
-
-				return { operationId: operation.id };
-			} else if (ocrResult.text) {
-				// Синхронная операция завершена
-				logger.info('YandexOCR операция завершена синхронно', {
-					applicationId,
-					operationId: operation.id,
-					textLength: ocrResult.text.length
-				});
-				updateOperationStatus(operation.id, 'completed', {
-					result: { text: ocrResult.text }
-				});
-
-				return { text: ocrResult.text };
-			} else {
-				logger.error('Не удалось извлечь текст из ответа YandexOCR', {
-					applicationId,
-					operationId: operation.id
-				});
-				throw new OCRError('Не удалось извлечь текст из ответа YandexOCR');
-			}
+			const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
+			// callYandexOCR возвращает ExtractTextResult и сам создает/обновляет операцию
+			return result;
 		} catch (error) {
 			logger.error('Ошибка при извлечении текста через YandexOCR', {
 				applicationId,
-				operationId: operation.id,
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined
-			});
-			updateOperationStatus(operation.id, 'failed', {
-				error: {
-					message: error instanceof Error ? error.message : 'Unknown error',
-					details: error
-				}
 			});
 			throw error;
 		}
@@ -336,49 +280,5 @@ export async function checkOCROperation(operationId: string): Promise<Processing
 				provider: operation.provider
 			});
 			return operation;
-	}
-}
-
-/**
- * Извлекает текст из файла (старая функция для обратной совместимости)
- *
- * @param fileBuffer - Buffer с содержимым файла
- * @param mimeType - MIME тип файла
- * @returns Извлеченный текст
- */
-export async function extractTextFromFile(
-	fileBuffer: Buffer,
-	mimeType: string
-): Promise<string> {
-	const fileType = getFileType(mimeType);
-
-	switch (fileType) {
-		case 'image':
-		case 'pdf': {
-			// Используем YandexOCR для изображений и PDF
-			const result = await callYandexOCR(fileBuffer, mimeType);
-			if (result.text) {
-				return result.text;
-			}
-			throw new OCRError(
-				'Операция OCR асинхронная. Используйте extractTextFromFileWithOperation для работы с операциями.'
-			);
-		}
-
-		case 'docx':
-			// Извлекаем текст из DOCX
-			return await extractTextFromDOCX(fileBuffer);
-
-		case 'xlsx':
-			// Извлекаем текст из XLSX
-			return await extractTextFromXLSX(fileBuffer);
-
-		case 'unknown':
-			throw new OCRError(
-				`Неподдерживаемый тип файла: ${mimeType}. Поддерживаются: изображения (PNG, JPG), PDF, DOCX, XLSX.`
-			);
-
-		default:
-			throw new OCRError(`Неизвестный тип файла: ${fileType}`);
 	}
 }

@@ -50,34 +50,25 @@
 
 ## OCR модуль
 
+### Тип результата
+
+#### `ExtractTextResult`
+
+Явный тип результата извлечения текста:
+
+```typescript
+type ExtractTextResult =
+  | { type: 'text'; text: string }                    // Текст извлечен синхронно
+  | { type: 'processing'; operationId: string };      // Текст обрабатывается асинхронно
+```
+
+Использование discriminated union позволяет явно понимать, что может быть возвращено из функции.
+
 ### Функции
 
-#### `extractTextFromFile(fileBuffer: Buffer, mimeType: string, filename?: string): Promise<string>`
+#### `extractText(applicationId: string, fileInfo: FileInfo): Promise<ExtractTextResult>`
 
-Извлекает текст из файла (старая функция для обратной совместимости). Поддерживает:
-
-- **Изображения (PNG, JPG, JPEG)**: Использует YandexOCR API
-- **PDF**: Использует YandexOCR API (синхронно для одностраничных, асинхронно для многостраничных)
-- **DOCX**: Извлечение текста через библиотеку `mammoth`
-- **XLSX**: Извлечение текста через библиотеку `xlsx`
-
-**Параметры:**
-
-- `fileBuffer` - Buffer с содержимым файла
-- `mimeType` - MIME тип файла
-- `filename` - Имя файла (опционально, для определения расширения)
-
-**Возвращает:** Извлеченный текст
-
-**Ошибки:**
-
-- `OCRError` - Ошибка при извлечении текста или вызове YandexOCR API
-
-**Примечание:** Для асинхронных операций (многостраничные PDF) используйте `extractTextFromFileWithOperation`.
-
-#### `extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise<{ text?: string; operationId?: string }>`
-
-Извлекает текст из файла с созданием операции обработки. Создает операцию типа 'ocr' в БД.
+Корневая функция извлечения текста из файла. Возвращает явный тип результата.
 
 **Параметры:**
 
@@ -91,18 +82,51 @@
 
 **Возвращает:**
 
-- `{ text: string }` - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
-- `{ operationId: string }` - для асинхронных операций (многостраничные PDF)
+- `{ type: 'text', text: string }` - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
+- `{ type: 'processing', operationId: string }` - для асинхронных операций (многостраничные PDF)
 
 **Особенности:**
 
-- Для многостраничных PDF (pageCount > 1) автоматически используется async endpoint из конфигурации (`YANDEX_OCR_ASYNC_ENDPOINT`)
-- Для одностраничных PDF и изображений используется синхронный endpoint
-- Рекомендуется использовать `getFileInfo()` из `$lib/storage` для получения полной информации о файле
+- Функция не управляет операциями напрямую - только извлекает текст
+- Для локальных файлов (DOCX, XLSX) операции не создаются - текст извлекается сразу
+- Для Yandex OCR операции создаются внутри `callYandexOCR` в `yandex/ocr.ts`
+- После возврата `processing` функция не отслеживает дальнейшую судьбу операции - клиент сам проверяет статус через `checkOCROperation`
+
+**Ошибки:**
+
+- `OCRError` - Ошибка при извлечении текста или вызове YandexOCR API (выбрасывается через throw)
+
+**Пример использования:**
+
+```typescript
+const result = await extractText(applicationId, fileInfo);
+
+if (result.type === 'text') {
+  // Используем result.text сразу
+  console.log(result.text);
+} else if (result.type === 'processing') {
+  // Текст обрабатывается асинхронно
+  // Клиент позже сам вызовет checkOCROperation(result.operationId)
+  console.log('Операция в процессе:', result.operationId);
+}
+```
+
+#### `extractTextFromFile(fileBuffer: Buffer, mimeType: string): Promise<string>`
+
+Извлекает текст из файла (старая функция для обратной совместимости). Не создает операции.
+
+**Параметры:**
+
+- `fileBuffer` - Buffer с содержимым файла
+- `mimeType` - MIME тип файла
+
+**Возвращает:** Извлеченный текст
 
 **Ошибки:**
 
 - `OCRError` - Ошибка при извлечении текста или вызове YandexOCR API
+
+**Примечание:** Для асинхронных операций (многостраничные PDF) выбрасывает ошибку. Используйте `extractText` с `applicationId` для работы с операциями.
 
 #### `checkOCROperation(operationId: string): Promise<ProcessingOperation | null>`
 
@@ -133,21 +157,17 @@
 
 ```typescript
 import {
+	extractText,
 	extractTextFromFile,
-	extractTextFromFileWithOperation,
 	checkOCROperation
 } from '$lib/ai';
 
-// Старый способ (для обратной совместимости)
-const fileBuffer = Buffer.from(/* ... */);
-const text = await extractTextFromFile(fileBuffer, 'application/pdf', 'document.pdf');
-
-// Новый способ с операциями (рекомендуется использовать getFileInfo)
+// Рекомендуемый способ с явным типом результата
 import { getFileInfo } from '$lib/storage';
 
 const fileInfo = await getFileInfo('application-id');
 if (fileInfo) {
-	const result = await extractTextFromFileWithOperation('application-id', {
+	const result = await extractText('application-id', {
 		buffer: fileInfo.buffer,
 		mimeType: fileInfo.mimeType,
 		fileType: fileInfo.fileType,
@@ -155,17 +175,23 @@ if (fileInfo) {
 		filename: fileInfo.filename
 	});
 
-if (result.operationId) {
-	// Асинхронная операция - проверяем статус
-	const operation = await checkOCROperation(result.operationId);
-	if (operation && operation.status === 'completed' && operation.result) {
-		const text = (operation.result as { text: string }).text;
-		console.log(text);
+	if (result.type === 'text') {
+		// Синхронная операция завершена - используем текст сразу
+		console.log(result.text);
+	} else if (result.type === 'processing') {
+		// Асинхронная операция - проверяем статус позже
+		// Клиент сам решает, когда проверять статус операции
+		const operation = await checkOCROperation(result.operationId);
+		if (operation && operation.status === 'completed' && operation.result) {
+			const text = (operation.result as { text: string }).text;
+			console.log(text);
+		}
 	}
-} else if (result.text) {
-	// Синхронная операция завершена
-	console.log(result.text);
 }
+
+// Старый способ (для обратной совместимости)
+const fileBuffer = Buffer.from(/* ... */);
+const text = await extractTextFromFile(fileBuffer, 'application/pdf');
 ```
 
 ## LLM модуль
@@ -308,13 +334,16 @@ try {
 
 Модуль AI интегрирован с системой операций обработки (`ProcessingOperation`):
 
-- **OCR операции**: Создаются автоматически при вызове `extractTextFromFileWithOperation()`
-  - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу `status='completed'`
+- **OCR операции**: Создаются автоматически внутри `callYandexOCR` в `yandex/ocr.ts` при вызове `extractText()`
+  - Синхронные операции (изображения, одностраничные PDF): сразу `status='completed'` с результатом
   - Асинхронные операции (многостраничные PDF): `status='running'` с `providerData.operationId`
-  - Провайдеры: 'yandex' (для изображений и PDF), 'local' (для DOCX и XLSX)
+  - Провайдер: 'yandex' (только для изображений и PDF)
+  - Локальные файлы (DOCX, XLSX): операции НЕ создаются, текст извлекается сразу
 - **LLM операции**: Создаются автоматически при вызове `callYandexGPT()` или `callYandexGPTStructured()` с `operationConfig`
   - Все LLM операции синхронные: сразу `status='completed'`
   - Провайдеры: 'yandex' (для YandexGPT)
+
+**Важно**: Функция `extractText` не отслеживает дальнейшую судьбу операции после возврата `processing`. Клиент сам отвечает за проверку статуса операции через `checkOCROperation` когда это необходимо.
 
 Операции хранятся в БД и позволяют отслеживать статус обработки. Подробнее см. [`../storage/STORAGE.md`](../storage/STORAGE.md).
 

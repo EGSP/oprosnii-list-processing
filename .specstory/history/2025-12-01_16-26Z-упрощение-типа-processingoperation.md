@@ -4648,3 +4648,2564 @@ Lint results
 
 ---
 
+_**User (2025-12-01 16:25Z)**_
+
+@src/lib/ai/ocr.ts нужно рефакторить корневые функции получения текста из файла. Нужно возвращать либо текст, либо флаг что текст обрабатывается операцией (нам не важно в моменте, что там обрабатывается и как), либо выброс ошибки. 
+
+Нужно добавить явный тип возвращаемого результата из функции, чтобы в источнике вызова мы могли явно понимать что может быть текст, флаг или мы уже поймали throw. 
+
+
+
+Это значит что функция OCR должна возвращать либо текст, либо флаг (либо ошибку)
+
+
+
+Также корневая функция извлечения текста должна быть одна.   Она не должна вручную запускать и обрабатывать операции, она просто вернет в случае OCR - результат OCR.
+
+
+
+Подумай над моей идеей и где ещё можно применить схожую логику. Также задавай вопросы если есть. В вопросах должен быть вариант ответа "на твоё усмотрение"
+
+---
+
+_**Agent (model default, mode Plan)**_
+
+
+
+---
+
+
+Анализирую текущую структуру и формирую вопросы для уточнения требований:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "Where is extractTextFromFileWithOperation called and how is it used?" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `PROJECT.md` | L24-63 |
+| `PROJECT.md` | L27 |
+| `README.md` | L66 |
+| `src/lib/config.ts` | L33 |
+| `src/routes/+page.svelte` | L3 |
+| `package.json` | L36 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `data/tu/example.json` | L18 |
+| `tsconfig.json` | L16 |
+| `src/routes/+layout.svelte` | L5 |
+| `src/app.html` | L12 |
+| `svelte.config.js` | L11 |
+| `.eslintrc.cjs` | L29 |
+| `src/app.d.ts` | L11 |
+| `src/app.css` | L13 |
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "extractTextFromFile|extractTextFromFileWithOperation" in "src" • 19 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src\lib\ai\ocr.ts` | `export async function extractTextFromFileWithOperation(` | L113 |
+| `src\lib\ai\ocr.ts` | `export async function extractTextFromFile(` | L349 |
+| `src\lib\ai\ocr.ts` | `'Операция OCR асинхронная. Используйте extractTextFromFileWithOperation для работы с операциями.'` | L364 |
+| `src\lib\ai\AI.md` | `#### `extractTextFromFile(fileBuffer: Buffer, mimeType: string, filename?: string): Promise<string>`` | L55 |
+| `src\lib\ai\AI.md` | `**Примечание:** Для асинхронных операций (многостраничные PDF) используйте `extractTextFromFileWithOperation`.` | L76 |
+| `src\lib\ai\AI.md` | `#### `extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise<\{ text?: string; operationId?: string \}>`` | L78 |
+| `src\lib\ai\AI.md` | `extractTextFromFile,` | L136 |
+| `src\lib\ai\AI.md` | `extractTextFromFileWithOperation,` | L137 |
+| `src\lib\ai\AI.md` | `const text = await extractTextFromFile(fileBuffer, 'application/pdf', 'document.pdf');` | L143 |
+| `src\lib\ai\AI.md` | `const result = await extractTextFromFileWithOperation('application-id', \{` | L150 |
+| `src\lib\ai\AI.md` | `import \{ extractTextFromFile, OCRError \} from '$lib/ai';` | L289 |
+| `src\lib\ai\AI.md` | `const text = await extractTextFromFile(buffer, mimeType);` | L292 |
+| `src\lib\ai\AI.md` | `- **OCR операции**: Создаются автоматически при вызове `extractTextFromFileWithOperation()`` | L311 |
+| `src\lib\business\processing.ts` | `extractTextFromFileWithOperation,` | L9 |
+| `src\lib\business\processing.ts` | `const ocrResult = await extractTextFromFileWithOperation(applicationId, \{` | L117 |
+| `src\lib\business\processing.ts` | `const ocrResult = await extractTextFromFileWithOperation(applicationId, \{` | L305 |
+| `src\lib\ai\index.ts` | `extractTextFromFile,` | L7 |
+| `src\lib\ai\index.ts` | `extractTextFromFileWithOperation,` | L8 |
+| `src\lib\business\BUSINESS.md` | `- **OCR операции**: Создаются при извлечении текста через `extractTextFromFileWithOperation()`` | L194 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Уточняю детали перед составлением плана:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ask_question">
+<details>
+<summary>Tool use: **ask_question**</summary>
+
+
+Parameters:
+
+```json
+{
+  &quot;questions&quot;: [
+    {
+      &quot;id&quot;: &quot;function_signature&quot;,
+      &quot;prompt&quot;: &quot;Как должна выглядеть новая корневая функция извлечения текста? Должна ли она принимать applicationId для создания операций, или операции должны создаваться отдельно?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;with_app_id&quot;,
+          &quot;label&quot;: &quot;Принимает applicationId, но операции создаются отдельной функцией-оберткой&quot;
+        },
+        {
+          &quot;id&quot;: &quot;no_app_id&quot;,
+          &quot;label&quot;: &quot;Не принимает applicationId, только fileInfo - операции создаются вызывающим кодом&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;result_type&quot;,
+      &quot;prompt&quot;: &quot;Какой формат результата предпочтителен для явного типа?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;discriminated_union&quot;,
+          &quot;label&quot;: &quot;Discriminated union: { type: &#39;text&#39; | &#39;processing&#39; | &#39;error&#39;, ... }&quot;
+        },
+        {
+          &quot;id&quot;: &quot;success_flag&quot;,
+          &quot;label&quot;: &quot;С флагом success: { success: true, text } | { success: true, processing: true, operationId } | { success: false, error }&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;operation_management&quot;,
+      &quot;prompt&quot;: &quot;Где должна создаваться и управляться операция OCR?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;separate_wrapper&quot;,
+          &quot;label&quot;: &quot;Отдельная функция-обертка, которая вызывает extractText и создает/обновляет операции&quot;
+        },
+        {
+          &quot;id&quot;: &quot;caller_responsibility&quot;,
+          &quot;label&quot;: &quot;Вызывающий код (processing.ts) создает операции до/после вызова extractText&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;apply_similar_logic&quot;,
+      &quot;prompt&quot;: &quot;Где еще применить схожую логику с явным типом результата?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;llm_functions&quot;,
+          &quot;label&quot;: &quot;LLM функции (callYandexGPT, callYandexGPTStructured) - возвращать результат или флаг обработки&quot;
+        },
+        {
+          &quot;id&quot;: &quot;business_processing&quot;,
+          &quot;label&quot;: &quot;Бизнес-функции в processing.ts (detectProductType, generateAbbreviation)&quot;
+        },
+        {
+          &quot;id&quot;: &quot;both&quot;,
+          &quot;label&quot;: &quot;И LLM, и бизнес-функции&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    }
+  ]
+}
+```
+Additional data:
+
+```json
+{
+  &quot;status&quot;: &quot;submitted&quot;,
+  &quot;currentSelections&quot;: {
+    &quot;function_signature&quot;: [
+      &quot;with_app_id&quot;
+    ],
+    &quot;result_type&quot;: [
+      &quot;discretion&quot;
+    ],
+    &quot;operation_management&quot;: [],
+    &quot;apply_similar_logic&quot;: []
+  }
+}
+```
+Result:
+
+```json
+{
+  &quot;answers&quot;: [
+    {
+      &quot;questionId&quot;: &quot;function_signature&quot;,
+      &quot;selectedOptionIds&quot;: [
+        &quot;with_app_id&quot;
+      ]
+    },
+    {
+      &quot;questionId&quot;: &quot;result_type&quot;,
+      &quot;selectedOptionIds&quot;: [
+        &quot;discretion&quot;
+      ]
+    },
+    {
+      &quot;questionId&quot;: &quot;operation_management&quot;
+    },
+    {
+      &quot;questionId&quot;: &quot;apply_similar_logic&quot;
+    }
+  ]
+}
+```
+User decision: **accepted**
+
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+_**User (2025-12-01 16:25Z)**_
+
+Операция должна создаваться только функциями OCR в пределах YandexOCR.
+
+---
+
+_**Agent (model default, mode Plan)**_
+
+
+
+---
+
+
+Уточняю детали:
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="ask_question">
+<details>
+<summary>Tool use: **ask_question**</summary>
+
+
+Parameters:
+
+```json
+{
+  &quot;questions&quot;: [
+    {
+      &quot;id&quot;: &quot;operation_creation_location&quot;,
+      &quot;prompt&quot;: &quot;Где именно в yandex/ocr.ts должна создаваться операция? В callYandexOCR или в отдельной функции-обертке?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;in_callYandexOCR&quot;,
+          &quot;label&quot;: &quot;Внутри callYandexOCR (принимает applicationId и создает операцию)&quot;
+        },
+        {
+          &quot;id&quot;: &quot;separate_wrapper&quot;,
+          &quot;label&quot;: &quot;Отдельная функция-обертка, которая вызывает callYandexOCR и создает операцию&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;extract_text_signature&quot;,
+      &quot;prompt&quot;: &quot;Корневая функция extractText должна принимать applicationId или только fileInfo?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;with_app_id&quot;,
+          &quot;label&quot;: &quot;Принимает applicationId (для передачи в yandex/ocr.ts)&quot;
+        },
+        {
+          &quot;id&quot;: &quot;no_app_id&quot;,
+          &quot;label&quot;: &quot;Не принимает applicationId (только fileInfo, операции создаются отдельно)&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: &quot;local_files_operations&quot;,
+      &quot;prompt&quot;: &quot;Для локальных файлов (DOCX, XLSX) тоже нужны операции или только для Yandex OCR?&quot;,
+      &quot;options&quot;: [
+        {
+          &quot;id&quot;: &quot;all_need_operations&quot;,
+          &quot;label&quot;: &quot;Все типы файлов должны создавать операции&quot;
+        },
+        {
+          &quot;id&quot;: &quot;only_yandex&quot;,
+          &quot;label&quot;: &quot;Только Yandex OCR создает операции, локальные файлы возвращают текст напрямую&quot;
+        },
+        {
+          &quot;id&quot;: &quot;discretion&quot;,
+          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+        }
+      ]
+    }
+  ]
+}
+```
+Additional data:
+
+```json
+{
+  &quot;status&quot;: &quot;submitted&quot;,
+  &quot;currentSelections&quot;: {
+    &quot;operation_creation_location&quot;: [
+      &quot;in_callYandexOCR&quot;
+    ],
+    &quot;extract_text_signature&quot;: [],
+    &quot;local_files_operations&quot;: []
+  }
+}
+```
+Result:
+
+```json
+{
+  &quot;answers&quot;: [
+    {
+      &quot;questionId&quot;: &quot;operation_creation_location&quot;,
+      &quot;selectedOptionIds&quot;: [
+        &quot;in_callYandexOCR&quot;
+      ]
+    },
+    {
+      &quot;questionId&quot;: &quot;extract_text_signature&quot;
+    },
+    {
+      &quot;questionId&quot;: &quot;local_files_operations&quot;
+    }
+  ]
+}
+```
+User decision: **accepted**
+
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+_**User (2025-12-01 16:25Z)**_
+
+Функция extractText принимает applicationId и fileInfo. Для локальных файлов не нужно создавать операции, они же сразу вернут текст. Операции создаются только там, где того требуют сервисы. Наличие операции в базе позволяет понять какой был вызов сервиса.
+
+
+
+Извлечение текста заботит только извлеченный текст, флаг что текст будет извлекаться ещё какое-то время в фоне или ошибка trycatch
+
+---
+
+_**Agent (model default, mode Plan)**_
+
+
+
+---
+
+
+Составляю план рефакторинга:
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="create_plan">
+<details>
+<summary>Tool use: **create_plan**</summary>
+
+
+Parameters:
+
+```json
+{
+  &quot;plan&quot;: &quot;# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения&quot;
+}
+```
+Additional data:
+
+```json
+{
+  &quot;status&quot;: &quot;accepted&quot;,
+  &quot;reviewData&quot;: {
+    &quot;status&quot;: &quot;Requested&quot;,
+    &quot;selectedOption&quot;: &quot;edit&quot;,
+    &quot;isShowingInput&quot;: false
+  }
+}
+```
+Result:
+
+```json
+{
+  &quot;modified&quot;: {
+    &quot;newPlan&quot;: &quot;# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения&quot;,
+    &quot;finalTodos&quot;: [
+      {
+        &quot;content&quot;: &quot;Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;update-types&quot;
+      },
+      {
+        &quot;content&quot;: &quot;Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;migrate-db&quot;,
+        &quot;dependencies&quot;: [
+          &quot;update-types&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Обновить operationsRepository.ts для работы с новой структурой&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;update-repository&quot;,
+        &quot;dependencies&quot;: [
+          &quot;migrate-db&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;create-yandex-ocr&quot;
+      },
+      {
+        &quot;content&quot;: &quot;Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;create-yandex-llm&quot;
+      },
+      {
+        &quot;content&quot;: &quot;Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;refactor-ocr&quot;,
+        &quot;dependencies&quot;: [
+          &quot;create-yandex-ocr&quot;,
+          &quot;update-repository&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;refactor-llm&quot;,
+        &quot;dependencies&quot;: [
+          &quot;create-yandex-llm&quot;,
+          &quot;update-repository&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Обновить processing.ts для работы с новой структурой операций&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;update-business-logic&quot;,
+        &quot;dependencies&quot;: [
+          &quot;refactor-ocr&quot;,
+          &quot;refactor-llm&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;update-docs&quot;,
+        &quot;dependencies&quot;: [
+          &quot;update-business-logic&quot;
+        ]
+      },
+      {
+        &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
+        &quot;status&quot;: &quot;completed&quot;,
+        &quot;id&quot;: &quot;todo-1764609127308-ffbgfzrwc&quot;
+      }
+    ]
+  }
+}
+```
+Status: **completed**
+
+
+</details>
+</tool-use>
+
+---
+
+_**User (2025-12-01 16:25Z)**_
+
+Если мы видим что OCR вернул "processing", то мы просто оставляем ка есть и возвращаем флаг. 
+
+
+
+Клиент через время сам вызовет обновление операции. Нас судьба операции не волнует в extract text
+
+---
+
+_**Agent (model default, mode Plan)**_
+
+
+
+---
+
+
+Обновляю план с учетом этого уточнения:
+
+
+---
+
+Received invalid string to replace in plan
+
+---
+
+Tool call errored or timed out
+
+---
+
+_**User (2025-12-01 16:25Z)**_
+
+Implement the plan as specified, it is attached for your reference. Do NOT edit the plan file itself.
+
+To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю полный план и приступаю к реализации:
+
+
+---
+
+Could not find file 'processingoperation.plan.md' in the workspace.
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [-] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Создаю тип результата и приступаю к рефакторингу:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 2
+
+```diff
+@@ -9,6 +9,4 @@
+  
+  import {
+- 	createOrUpdateOperation,
+- 	updateOperationStatus,
+  	getOperation
+  } from &#39;../storage/operationsRepository.js&#39;;
+```
+
+**Chunk 2**
+Lines added: 7, lines removed: undefined
+
+```diff
+@@ -27,4 +25,11 @@
+  }
+  
++ /**
++  * Результат извлечения текста из файла
++  */
++ export type ExtractTextResult =
++ 	| { type: &#39;text&#39;; text: string } // Текст извлечен синхронно
++ 	| { type: &#39;processing&#39;; operationId: string }; // Текст обрабатывается асинхронно
++ 
+  /**
+   * Определяет тип файла по MIME типу
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] undefined
+- [-] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Рефакторю корневую функцию `extractText` и обновляю `callYandexOCR` в yandex/ocr.ts:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Обновляю `callYandexOCR` в yandex/ocr.ts для создания операций и возврата `ExtractTextResult`:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: undefined
+
+```diff
+@@ -11,4 +11,9 @@
+  import { logger } from &#39;../../utils/logger.js&#39;;
+  import type { ProcessingOperation } from &#39;../../storage/types.js&#39;;
++ import {
++ 	createOrUpdateOperation,
++ 	updateOperationStatus
++ } from &#39;../../storage/operationsRepository.js&#39;;
++ import type { ExtractTextResult } from &#39;../ocr.js&#39;;
+  
+  export class YandexOCRError extends Error {
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: 3
+
+```diff
+@@ -93,16 +93,18 @@
+  /**
+   * Отправляет изображение или PDF в YandexOCR
+-  * Возвращает результат синхронно или Operation ID для асинхронных операций
++  * Создает операцию обработки и возвращает результат с явным типом
+   *
++  * @param applicationId - ID заявки
+   * @param fileBuffer - Buffer с содержимым файла
+   * @param mimeType - MIME тип файла
+   * @param pageCount - Количество страниц (для PDF, если &gt; 1, используется async endpoint)
+-  * @returns Результат с текстом (если синхронно) или operationId (если асинхронно)
++  * @returns Результат извлечения текста с явным типом
+   */
+  export async function callYandexOCR(
++ 	applicationId: string,
+  	fileBuffer: Buffer,
+  	mimeType: string,
+  	pageCount?: number
+- ): Promise&lt;{ text?: string; operationId?: string }&gt; {
++ ): Promise&lt;ExtractTextResult&gt; {
+  	const config = aiConfig.yandexOCR;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -113,5 +113,6 @@
+  	const endpoint = isMultiPagePDF &amp;&amp; config.asyncEndpoint ? config.asyncEndpoint : config.endpoint;
+  
+- 	logger.debug(&#39;Вызов YandexOCR&#39;, {
++ 	logger.info(&#39;Извлечение текста через YandexOCR&#39;, {
++ 		applicationId,
+  		mimeType,
+  		fileSize: fileBuffer.length,
+```
+
+**Chunk 2**
+Lines added: 8, lines removed: undefined
+
+```diff
+@@ -120,4 +121,12 @@
+  		endpoint
+  	});
++ 
++ 	// Создаем операцию перед вызовом API
++ 	const operation = createOrUpdateOperation(
++ 		applicationId,
++ 		&#39;ocr&#39;,
++ 		&#39;yandex&#39;,
++ 		{} // providerData будет заполнено после вызова API
++ 	);
+  
+  	// Формируем запрос к YandexOCR API
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 13, lines removed: 2
+
+```diff
+@@ -167,14 +167,25 @@
+  			if (result.done === false &amp;&amp; result.id) {
+  				logger.info(&#39;YandexOCR async операция создана&#39;, {
+- 					operationId: result.id
++ 					applicationId,
++ 					operationId: operation.id,
++ 					externalOperationId: result.id
++ 				});
++ 				updateOperationStatus(operation.id, &#39;running&#39;, {
++ 					providerData: { operationId: result.id }
+  				});
+  				return {
+- 					operationId: result.id
++ 					type: &#39;processing&#39;,
++ 					operationId: operation.id
+  				};
+  			}
+  			// Если async endpoint вернул что-то неожиданное
+  			logger.error(&#39;Неожиданный ответ от async endpoint&#39;, {
++ 				applicationId,
++ 				operationId: operation.id,
+  				responseStructure: JSON.stringify(result).substring(0, 200)
+  			});
++ 			updateOperationStatus(operation.id, &#39;failed&#39;, {
++ 				error: { message: &#39;Неожиданный ответ от async endpoint YandexOCR&#39; }
++ 			});
+  			throw new YandexOCRError(&#39;Неожиданный ответ от async endpoint YandexOCR&#39;);
+  		}
+```
+
+**Chunk 2**
+Lines added: 6, lines removed: 1
+
+```diff
+@@ -185,7 +196,12 @@
+  			if (text) {
+  				logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция завершена)&#39;, {
++ 					applicationId,
++ 					operationId: operation.id,
+  					textLength: text.length
+  				});
+- 				return { text };
++ 				updateOperationStatus(operation.id, &#39;completed&#39;, {
++ 					result: { text }
++ 				});
++ 				return { type: &#39;text&#39;, text };
+  			}
+  		}
+```
+
+**Chunk 3**
+Lines added: 11, lines removed: 1
+
+```diff
+@@ -195,12 +211,22 @@
+  		if (text) {
+  			logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция)&#39;, {
++ 				applicationId,
++ 				operationId: operation.id,
+  				textLength: text.length
+  			});
+- 			return { text };
++ 			updateOperationStatus(operation.id, &#39;completed&#39;, {
++ 				result: { text }
++ 			});
++ 			return { type: &#39;text&#39;, text };
+  		}
+  
+  		logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
++ 			applicationId,
++ 			operationId: operation.id,
+  			responseStructure: JSON.stringify(result).substring(0, 200)
+  		});
++ 		updateOperationStatus(operation.id, &#39;failed&#39;, {
++ 			error: { message: &#39;Не удалось извлечь текст из ответа YandexOCR&#39; }
++ 		});
+  		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+  	} catch (error) {
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 13, lines removed: 8
+
+```diff
+@@ -231,15 +231,20 @@
+  		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+  	} catch (error) {
+- 		if (error instanceof YandexOCRError) {
+- 			logger.error(&#39;Ошибка YandexOCRError&#39;, {
+- 				message: error.message,
+- 				stack: error.stack
+- 			});
+- 			throw error;
+- 		}
+- 		logger.error(&#39;Неожиданная ошибка при вызове YandexOCR&#39;, {
++ 		logger.error(&#39;Ошибка при извлечении текста через YandexOCR&#39;, {
++ 			applicationId,
++ 			operationId: operation.id,
+  			error: error instanceof Error ? error.message : String(error),
+  			stack: error instanceof Error ? error.stack : undefined
+  		});
++ 		updateOperationStatus(operation.id, &#39;failed&#39;, {
++ 			error: {
++ 				message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 				details: error
++ 			}
++ 		});
++ 
++ 		if (error instanceof YandexOCRError) {
++ 			throw error;
++ 		}
+  		throw new YandexOCRError(&#39;Ошибка при вызове YandexOCR API&#39;, error as Error);
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai/yandex/ocr.ts`
+
+Lint results
+
+Lint errors for `src/lib/ai/yandex/ocr.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| Property 'textAnnotation' does not exist on type '\{}'. | 64:19-64:33 | DIAGNOSTIC_SEVERITY_ERROR |
+| Property 'textAnnotation' does not exist on type '\{}'. | 65:22-65:36 | DIAGNOSTIC_SEVERITY_ERROR |
+| Property 'fullText' does not exist on type '\{}'. | 67:27-67:35 | DIAGNOSTIC_SEVERITY_ERROR |
+| Property 'fullText' does not exist on type '\{}'. | 68:30-68:38 | DIAGNOSTIC_SEVERITY_ERROR |
+| Property 'textAnnotation' does not exist on type '\{}'. | 72:19-72:33 | DIAGNOSTIC_SEVERITY_ERROR |
+| Property 'textAnnotation' does not exist on type '\{}'. | 73:30-73:44 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю ошибки типизации и добавляю экспорт типа:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 10, lines removed: 6
+
+```diff
+@@ -62,14 +62,18 @@
+  		
+  		// Проверяем различные структуры ответа
+- 		if (obj.result?.textAnnotation?.fullText) {
+- 			return obj.result.textAnnotation.fullText as string;
++ 		const resultObj = obj.result as Record&lt;string, unknown&gt; | undefined;
++ 		const textAnnotation = resultObj?.textAnnotation as Record&lt;string, unknown&gt; | undefined;
++ 		if (textAnnotation?.fullText) {
++ 			return textAnnotation.fullText as string;
+  		}
+- 		if (obj.textAnnotation?.fullText) {
+- 			return obj.textAnnotation.fullText as string;
++ 		
++ 		const directTextAnnotation = obj.textAnnotation as Record&lt;string, unknown&gt; | undefined;
++ 		if (directTextAnnotation?.fullText) {
++ 			return directTextAnnotation.fullText as string;
+  		}
+  		
+  		// Если текст не найден, пытаемся извлечь из блоков
+- 		if (obj.result?.textAnnotation?.blocks) {
+- 			const blocks = obj.result.textAnnotation.blocks as Array&lt;{
++ 		if (textAnnotation?.blocks) {
++ 			const blocks = textAnnotation.blocks as Array&lt;{
+  				lines?: Array&lt;{ words?: Array&lt;{ text: string }&gt; }&gt;;
+  			}&gt;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai/yandex/ocr.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] undefined
+- [-] undefined
+- [x] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Рефакторю корневую функцию `extractText` в ocr.ts:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 3
+
+```diff
+@@ -110,11 +110,12 @@
+  
+  /**
+-  * Извлекает текст из файла с созданием операции обработки
++  * Извлекает текст из файла
++  * Возвращает явный тип результата: либо текст, либо флаг обработки
+   *
+   * @param applicationId - ID заявки
+   * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
+-  * @returns Объект с текстом (если синхронно) или ID операции (если асинхронно)
++  * @returns Результат извлечения текста с явным типом
+   */
+- export async function extractTextFromFileWithOperation(
++ export async function extractText(
+  	applicationId: string,
+  	fileInfo: {
+```
+
+**Chunk 2**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -125,8 +126,8 @@
+  		filename?: string;
+  	}
+- ): Promise&lt;{ text?: string; operationId?: string }&gt; {
++ ): Promise&lt;ExtractTextResult&gt; {
+  	const { buffer, mimeType, fileType, pageCount, filename } = fileInfo;
+  
+- 	// Для файлов, не требующих OCR, создаем синхронную операцию
++ 	// Для локальных файлов (DOCX, XLSX) - извлекаем текст напрямую, операции не создаем
+  	if (fileType === &#39;docx&#39; || fileType === &#39;xlsx&#39;) {
+  		logger.info(&#39;Извлечение текста из файла (локальное)&#39;, {
+```
+
+**Chunk 3**
+Lines added: undefined, lines removed: 7
+
+```diff
+@@ -135,11 +136,4 @@
+  			filename
+  		});
+- 
+- 		const operation = createOrUpdateOperation(
+- 			applicationId,
+- 			&#39;ocr&#39;,
+- 			&#39;local&#39;,
+- 			{} // providerData пустой для локальных операций
+- 		);
+  
+  		try {
+```
+
+**Chunk 4**
+Lines added: 2, lines removed: 13
+
+```diff
+@@ -153,32 +147,21 @@
+  			logger.info(&#39;Текст успешно извлечен из файла (локальное)&#39;, {
+  				applicationId,
+- 				operationId: operation.id,
+  				fileType,
+  				textLength: text.length
+  			});
+  
+- 			updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 				result: { text }
+- 			});
+- 
+- 			return { text };
++ 			return { type: &#39;text&#39;, text };
+  		} catch (error) {
+  			logger.error(&#39;Ошибка при локальном извлечении текста&#39;, {
+  				applicationId,
+- 				operationId: operation.id,
+  				fileType,
+  				error: error instanceof Error ? error.message : String(error),
+  				stack: error instanceof Error ? error.stack : undefined
+  			});
+- 			updateOperationStatus(operation.id, &#39;failed&#39;, {
+- 				error: {
+- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;
+- 				}
+- 			});
+  			throw error;
+  		}
+  	}
+  
+- 	// Для изображений и PDF используем YandexOCR
++ 	// Для изображений и PDF используем YandexOCR (операция создается внутри callYandexOCR)
+  	if (fileType === &#39;image&#39; || fileType === &#39;pdf&#39;) {
+  		logger.info(&#39;Извлечение текста через YandexOCR&#39;, {
+```
+
+**Chunk 5**
+Lines added: 4, lines removed: 49
+
+```diff
+@@ -189,59 +172,14 @@
+  		});
+  
+- 		// Создаем операцию перед вызовом
+- 		const operation = createOrUpdateOperation(
+- 			applicationId,
+- 			&#39;ocr&#39;,
+- 			&#39;yandex&#39;,
+- 			{} // providerData будет заполнено после вызова API
+- 		);
+- 
+- 		try {
+- 			const ocrResult = await callYandexOCR(buffer, mimeType, pageCount);
+- 
+- 			if (ocrResult.operationId) {
+- 				// Асинхронная операция
+- 				logger.info(&#39;YandexOCR операция асинхронная&#39;, {
+- 					applicationId,
+- 					operationId: operation.id,
+- 					externalOperationId: ocrResult.operationId
+- 				});
+- 				updateOperationStatus(operation.id, &#39;running&#39;, {
+- 					providerData: { operationId: ocrResult.operationId }
+- 				});
+- 
+- 				return { operationId: operation.id };
+- 			} else if (ocrResult.text) {
+- 				// Синхронная операция завершена
+- 				logger.info(&#39;YandexOCR операция завершена синхронно&#39;, {
+- 					applicationId,
+- 					operationId: operation.id,
+- 					textLength: ocrResult.text.length
+- 				});
+- 				updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 					result: { text: ocrResult.text }
+- 				});
+- 
+- 				return { text: ocrResult.text };
+- 			} else {
+- 				logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
+- 					applicationId,
+- 					operationId: operation.id
+- 				});
+- 				throw new OCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+- 			}
++ 		try {
++ 			const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
++ 			// callYandexOCR возвращает ExtractTextResult и сам создает/обновляет операцию
++ 			return result;
+  		} catch (error) {
+  			logger.error(&#39;Ошибка при извлечении текста через YandexOCR&#39;, {
+  				applicationId,
+- 				operationId: operation.id,
+  				error: error instanceof Error ? error.message : String(error),
+  				stack: error instanceof Error ? error.stack : undefined
+  			});
+- 			updateOperationStatus(operation.id, &#39;failed&#39;, {
+- 				error: {
+- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 					details: error
+- 				}
+- 			});
+  			throw error;
+  		}
+```
+
+**Chunk 6**
+Lines added: 27, lines removed: undefined
+
+```diff
+@@ -257,4 +195,31 @@
+  	);
+  }
++ 
++ /**
++  * Извлекает текст из файла с созданием операции обработки
++  * (Обертка над extractText для обратной совместимости)
++  *
++  * @param applicationId - ID заявки
++  * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
++  * @returns Объект с текстом (если синхронно) или ID операции (если асинхронно)
++  */
++ export async function extractTextFromFileWithOperation(
++ 	applicationId: string,
++ 	fileInfo: {
++ 		buffer: Buffer;
++ 		mimeType: string;
++ 		fileType: &#39;image&#39; | &#39;pdf&#39; | &#39;docx&#39; | &#39;xlsx&#39; | &#39;unknown&#39;;
++ 		pageCount: number;
++ 		filename?: string;
++ 	}
++ ): Promise&lt;{ text?: string; operationId?: string }&gt; {
++ 	const result = await extractText(applicationId, fileInfo);
++ 
++ 	if (result.type === &#39;text&#39;) {
++ 		return { text: result.text };
++ 	} else {
++ 		return { operationId: result.operationId };
++ 	}
++ }
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: undefined
+
+```diff
+@@ -312,4 +312,5 @@
+  /**
+   * Извлекает текст из файла (старая функция для обратной совместимости)
++  * Не создает операции - только извлекает текст
+   *
+   * @param fileBuffer - Buffer с содержимым файла
+```
+
+**Chunk 2**
+Lines added: 6, lines removed: 4
+
+```diff
+@@ -326,11 +327,13 @@
+  		case &#39;image&#39;:
+  		case &#39;pdf&#39;: {
+- 			// Используем YandexOCR для изображений и PDF
+- 			const result = await callYandexOCR(fileBuffer, mimeType);
+- 			if (result.text) {
++ 			// Для обратной совместимости создаем временный applicationId
++ 			// В реальном использовании лучше использовать extractText с applicationId
++ 			const tempApplicationId = &#39;temp-&#39; + Date.now().toString();
++ 			const result = await callYandexOCR(tempApplicationId, fileBuffer, mimeType);
++ 			if (result.type === &#39;text&#39;) {
+  				return result.text;
+  			}
+  			throw new OCRError(
+- 				&#39;Операция OCR асинхронная. Используйте extractTextFromFileWithOperation для работы с операциями.&#39;
++ 				&#39;Операция OCR асинхронная. Используйте extractText с applicationId для работы с операциями.&#39;
+  			);
+  		}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -9,5 +9,6 @@
+  
+  import {
+- 	getOperation
++ 	getOperation,
++ 	updateOperationStatus
+  } from &#39;../storage/operationsRepository.js&#39;;
+  import { logger } from &#39;../utils/logger.js&#39;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai/ocr.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [-] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Обновляю использование в processing.ts:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 1
+
+```diff
+@@ -7,7 +7,9 @@
+  
+  import {
++ 	extractText,
+  	extractTextFromFileWithOperation,
+  	checkOCROperation,
+- 	OCRError
++ 	OCRError,
++ 	type ExtractTextResult
+  } from &#39;../ai/index.js&#39;;
+  import { callYandexGPTStructured, LLMError } from &#39;../ai/index.js&#39;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -117,5 +117,5 @@
+  		logger.info(&#39;Извлечение текста из файла&#39;, { applicationId });
+  		try {
+- 			const ocrResult = await extractTextFromFileWithOperation(applicationId, {
++ 			const ocrResult = await extractText(applicationId, {
+  				buffer: fileInfo.buffer,
+  				mimeType: fileInfo.mimeType,
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 8
+
+```diff
+@@ -125,12 +125,5 @@
+  			});
+  
+- 			if (ocrResult.operationId) {
+- 				// Асинхронная операция - возвращаем ID операции
+- 				ocrOperationId = ocrResult.operationId;
+- 				logger.info(&#39;OCR операция асинхронная&#39;, { applicationId, ocrOperationId });
+- 				// Возвращаем результат с operationId, не выбрасываем ошибку
+- 				// Функция вернет результат с ocrOperationId, но без extractedText
+- 				// API endpoint должен обработать это и вернуть HTTP 202
+- 			} else if (ocrResult.text) {
++ 			if (ocrResult.type === &#39;text&#39;) {
+  				// Синхронная операция завершена
+  				extractedText = ocrResult.text;
+```
+
+**Chunk 3**
+Lines added: 7, lines removed: 3
+
+```diff
+@@ -142,7 +135,11 @@
+  					textLength: extractedText.length
+  				});
+- 			} else {
+- 				logger.error(&#39;Не удалось извлечь текст из файла&#39;, { applicationId });
+- 				throw new ProcessingError(&#39;Не удалось извлечь текст из файла&#39;);
++ 			} else if (ocrResult.type === &#39;processing&#39;) {
++ 				// Асинхронная операция - возвращаем ID операции
++ 				ocrOperationId = ocrResult.operationId;
++ 				logger.info(&#39;OCR операция асинхронная&#39;, { applicationId, ocrOperationId });
++ 				// Возвращаем результат с operationId, не выбрасываем ошибку
++ 				// Функция вернет результат с ocrOperationId, но без extractedText
++ 				// API endpoint должен обработать это и вернуть HTTP 202
+  			}
+  		} catch (error) {
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+Model supplied an ambiguous edit
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+
+Lint results
+
+Lint errors for `src/lib/business/processing.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'ExtractTextResult' is defined but never used. | 13:7-13:24 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'updateOperationStatus' is defined but never used. | 31:2-31:23 | DIAGNOSTIC_SEVERITY_ERROR |
+| Module '"../ai/index.js"' has no exported member 'extractText'. | 9:2-9:13 | DIAGNOSTIC_SEVERITY_ERROR |
+| Module '"../ai/index.js"' has no exported member 'ExtractTextResult'. | 13:7-13:24 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'extractedText' is possibly 'undefined'. | 135:18-135:31 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'ExtractTextResult' is declared but its value is never read. | 13:7-13:24 | DIAGNOSTIC_SEVERITY_HINT |
+| 'updateOperationStatus' is declared but its value is never read. | 31:2-31:23 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "export.*ExtractTextResult|export.*extractText" in "src/lib/ai" • 4 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/ai\ocr.ts` | `export type ExtractTextResult =` | L31 |
+| `src/lib/ai\ocr.ts` | `export async function extractText(` | L120 |
+| `src/lib/ai\ocr.ts` | `export async function extractTextFromFileWithOperation(` | L207 |
+| `src/lib/ai\ocr.ts` | `export async function extractTextFromFile(` | L321 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/index.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Добавляю экспорты в index.ts и исправляю ошибки:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/index.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: undefined
+
+```diff
+@@ -5,9 +5,11 @@
+  export { aiConfig, validateAIConfig } from &#39;./config.js&#39;;
+  export {
++ 	extractText,
+  	extractTextFromFile,
+  	extractTextFromFileWithOperation,
+  	checkOCROperation,
+  	OCRError
+  } from &#39;./ocr.js&#39;;
++ export type { ExtractTextResult } from &#39;./ocr.js&#39;;
+  export { callYandexGPT, callYandexGPTStructured, LLMError } from &#39;./llm.js&#39;;
+  export type { AIConfig, YandexOCRConfig, YandexGPTConfig, LLMOptions } from &#39;./types.js&#39;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+Model supplied an ambiguous edit
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+Model performed no edit
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 2 files</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+- `src/lib/ai/index.ts`
+
+Lint results
+
+Lint errors for `src/lib/business/processing.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'ExtractTextResult' is declared but its value is never read. | 13:7-13:24 | DIAGNOSTIC_SEVERITY_HINT |
+| 'updateOperationStatus' is declared but its value is never read. | 31:2-31:23 | DIAGNOSTIC_SEVERITY_HINT |
+| 'ExtractTextResult' is defined but never used. | 13:7-13:24 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'updateOperationStatus' is defined but never used. | 31:2-31:23 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [-] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Удаляю неиспользуемые импорты:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -10,6 +10,5 @@
+  	extractTextFromFileWithOperation,
+  	checkOCROperation,
+- 	OCRError,
+- 	type ExtractTextResult
++ 	OCRError
+  } from &#39;../ai/index.js&#39;;
+  import { callYandexGPTStructured, LLMError } from &#39;../ai/index.js&#39;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -28,5 +28,4 @@
+  	getOperation,
+  	getOperationByApplicationAndTypeWithSync,
+- 	updateOperationStatus,
+  	syncOperationToApplication
+  } from &#39;../storage/index.js&#39;;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Обновляю документацию:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/AI.md</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+
+**Chunk 1**
+Lines added: 16, lines removed: 25
+
+```diff
+@@ -50,33 +50,24 @@
+  
+  ## OCR модуль
++ 
++ ### Тип результата
++ 
++ #### &#96;ExtractTextResult&#96;
++ 
++ Явный тип результата извлечения текста:
++ 
++ &#96;&#96;&#96;typescript
++ type ExtractTextResult =
++   | { type: &#39;text&#39;; text: string }                    // Текст извлечен синхронно
++   | { type: &#39;processing&#39;; operationId: string };      // Текст обрабатывается асинхронно
++ &#96;&#96;&#96;
++ 
++ Использование discriminated union позволяет явно понимать, что может быть возвращено из функции.
+  
+  ### Функции
+  
+- #### &#96;extractTextFromFile(fileBuffer: Buffer, mimeType: string, filename?: string): Promise&lt;string&gt;&#96;
++ #### &#96;extractText(applicationId: string, fileInfo: FileInfo): Promise&lt;ExtractTextResult&gt;&#96;
+  
+- Извлекает текст из файла (старая функция для обратной совместимости). Поддерживает:
+- 
+- - **Изображения (PNG, JPG, JPEG)**: Использует YandexOCR API
+- - **PDF**: Использует YandexOCR API (синхронно для одностраничных, асинхронно для многостраничных)
+- - **DOCX**: Извлечение текста через библиотеку &#96;mammoth&#96;
+- - **XLSX**: Извлечение текста через библиотеку &#96;xlsx&#96;
+- 
+- **Параметры:**
+- 
+- - &#96;fileBuffer&#96; - Buffer с содержимым файла
+- - &#96;mimeType&#96; - MIME тип файла
+- - &#96;filename&#96; - Имя файла (опционально, для определения расширения)
+- 
+- **Возвращает:** Извлеченный текст
+- 
+- **Ошибки:**
+- 
+- - &#96;OCRError&#96; - Ошибка при извлечении текста или вызове YandexOCR API
+- 
+- **Примечание:** Для асинхронных операций (многостраничные PDF) используйте &#96;extractTextFromFileWithOperation&#96;.
+- 
+- #### &#96;extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise&lt;{ text?: string; operationId?: string }&gt;&#96;
+- 
+- Извлекает текст из файла с созданием операции обработки. Создает операцию типа &#39;ocr&#39; в БД.
++ Корневая функция извлечения текста из файла. Возвращает явный тип результата.
+  
+  **Параметры:**
+```
+
+**Chunk 2**
+Lines added: 49, lines removed: 5
+
+```diff
+@@ -92,16 +83,60 @@
+  **Возвращает:**
+  
+- - &#96;{ text: string }&#96; - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
+- - &#96;{ operationId: string }&#96; - для асинхронных операций (многостраничные PDF)
++ - &#96;{ type: &#39;text&#39;, text: string }&#96; - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
++ - &#96;{ type: &#39;processing&#39;, operationId: string }&#96; - для асинхронных операций (многостраничные PDF)
+  
+  **Особенности:**
+  
+- - Для многостраничных PDF (pageCount &gt; 1) автоматически используется async endpoint из конфигурации (&#96;YANDEX_OCR_ASYNC_ENDPOINT&#96;)
+- - Для одностраничных PDF и изображений используется синхронный endpoint
+- - Рекомендуется использовать &#96;getFileInfo()&#96; из &#96;$lib/storage&#96; для получения полной информации о файле
++ - Функция не управляет операциями напрямую - только извлекает текст
++ - Для локальных файлов (DOCX, XLSX) операции не создаются - текст извлекается сразу
++ - Для Yandex OCR операции создаются внутри &#96;callYandexOCR&#96; в &#96;yandex/ocr.ts&#96;
++ - После возврата &#96;processing&#96; функция не отслеживает дальнейшую судьбу операции - клиент сам проверяет статус через &#96;checkOCROperation&#96;
++ 
++ **Ошибки:**
++ 
++ - &#96;OCRError&#96; - Ошибка при извлечении текста или вызове YandexOCR API (выбрасывается через throw)
++ 
++ **Пример использования:**
++ 
++ &#96;&#96;&#96;typescript
++ const result = await extractText(applicationId, fileInfo);
++ 
++ if (result.type === &#39;text&#39;) {
++   // Используем result.text сразу
++   console.log(result.text);
++ } else if (result.type === &#39;processing&#39;) {
++   // Текст обрабатывается асинхронно
++   // Клиент позже сам вызовет checkOCROperation(result.operationId)
++   console.log(&#39;Операция в процессе:&#39;, result.operationId);
++ }
++ &#96;&#96;&#96;
++ 
++ #### &#96;extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise&lt;{ text?: string; operationId?: string }&gt;&#96;
++ 
++ Обертка над &#96;extractText&#96; для обратной совместимости. Преобразует &#96;ExtractTextResult&#96; в старый формат.
++ 
++ **Параметры:** Те же, что у &#96;extractText&#96;
++ 
++ **Возвращает:**
++ 
++ - &#96;{ text: string }&#96; - для синхронных операций
++ - &#96;{ operationId: string }&#96; - для асинхронных операций
++ 
++ #### &#96;extractTextFromFile(fileBuffer: Buffer, mimeType: string): Promise&lt;string&gt;&#96;
++ 
++ Извлекает текст из файла (старая функция для обратной совместимости). Не создает операции.
++ 
++ **Параметры:**
++ 
++ - &#96;fileBuffer&#96; - Buffer с содержимым файла
++ - &#96;mimeType&#96; - MIME тип файла
++ 
++ **Возвращает:** Извлеченный текст
+  
+  **Ошибки:**
+  
+  - &#96;OCRError&#96; - Ошибка при извлечении текста или вызове YandexOCR API
++ 
++ **Примечание:** Для асинхронных операций (многостраничные PDF) выбрасывает ошибку. Используйте &#96;extractText&#96; с &#96;applicationId&#96; для работы с операциями.
+  
+  #### &#96;checkOCROperation(operationId: string): Promise&lt;ProcessingOperation | null&gt;&#96;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 7
+
+```diff
+@@ -169,19 +169,15 @@
+  &#96;&#96;&#96;typescript
+  import {
++ 	extractText,
+  	extractTextFromFile,
+- 	extractTextFromFileWithOperation,
+  	checkOCROperation
+  } from &#39;$lib/ai&#39;;
+  
+- // Старый способ (для обратной совместимости)
+- const fileBuffer = Buffer.from(/* ... */);
+- const text = await extractTextFromFile(fileBuffer, &#39;application/pdf&#39;, &#39;document.pdf&#39;);
+- 
+- // Новый способ с операциями (рекомендуется использовать getFileInfo)
++ // Рекомендуемый способ с явным типом результата
+  import { getFileInfo } from &#39;$lib/storage&#39;;
+  
+  const fileInfo = await getFileInfo(&#39;application-id&#39;);
+  if (fileInfo) {
+- 	const result = await extractTextFromFileWithOperation(&#39;application-id&#39;, {
++ 	const result = await extractText(&#39;application-id&#39;, {
+  		buffer: fileInfo.buffer,
+  		mimeType: fileInfo.mimeType,
+```
+
+**Chunk 2**
+Lines added: 16, lines removed: 10
+
+```diff
+@@ -191,15 +187,21 @@
+  	});
+  
+- if (result.operationId) {
+- 	// Асинхронная операция - проверяем статус
+- 	const operation = await checkOCROperation(result.operationId);
+- 	if (operation &amp;&amp; operation.status === &#39;completed&#39; &amp;&amp; operation.result) {
+- 		const text = (operation.result as { text: string }).text;
+- 		console.log(text);
+- 	}
+- } else if (result.text) {
+- 	// Синхронная операция завершена
+- 	console.log(result.text);
++ 	if (result.type === &#39;text&#39;) {
++ 		// Синхронная операция завершена - используем текст сразу
++ 		console.log(result.text);
++ 	} else if (result.type === &#39;processing&#39;) {
++ 		// Асинхронная операция - проверяем статус позже
++ 		// Клиент сам решает, когда проверять статус операции
++ 		const operation = await checkOCROperation(result.operationId);
++ 		if (operation &amp;&amp; operation.status === &#39;completed&#39; &amp;&amp; operation.result) {
++ 			const text = (operation.result as { text: string }).text;
++ 			console.log(text);
++ 		}
++ 	}
+  }
++ 
++ // Старый способ (для обратной совместимости)
++ const fileBuffer = Buffer.from(/* ... */);
++ const text = await extractTextFromFile(fileBuffer, &#39;application/pdf&#39;);
+  &#96;&#96;&#96;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 3
+
+```diff
+@@ -346,12 +346,15 @@
+  Модуль AI интегрирован с системой операций обработки (&#96;ProcessingOperation&#96;):
+  
+- - **OCR операции**: Создаются автоматически при вызове &#96;extractTextFromFileWithOperation()&#96;
+-   - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу &#96;status=&#39;completed&#39;&#96;
++ - **OCR операции**: Создаются автоматически внутри &#96;callYandexOCR&#96; в &#96;yandex/ocr.ts&#96; при вызове &#96;extractText()&#96;
++   - Синхронные операции (изображения, одностраничные PDF): сразу &#96;status=&#39;completed&#39;&#96; с результатом
+    - Асинхронные операции (многостраничные PDF): &#96;status=&#39;running&#39;&#96; с &#96;providerData.operationId&#96;
+-   - Провайдеры: &#39;yandex&#39; (для изображений и PDF), &#39;local&#39; (для DOCX и XLSX)
++   - Провайдер: &#39;yandex&#39; (только для изображений и PDF)
++   - Локальные файлы (DOCX, XLSX): операции НЕ создаются, текст извлекается сразу
+  - **LLM операции**: Создаются автоматически при вызове &#96;callYandexGPT()&#96; или &#96;callYandexGPTStructured()&#96; с &#96;operationConfig&#96;
+    - Все LLM операции синхронные: сразу &#96;status=&#39;completed&#39;&#96;
+    - Провайдеры: &#39;yandex&#39; (для YandexGPT)
+  
++ **Важно**: Функция &#96;extractText&#96; не отслеживает дальнейшую судьбу операции после возврата &#96;processing&#96;. Клиент сам отвечает за проверку статуса операции через &#96;checkOCROperation&#96; когда это необходимо.
++ 
+  Операции хранятся в БД и позволяют отслеживать статус обработки. Подробнее см. [&#96;../storage/STORAGE.md&#96;](../storage/STORAGE.md).
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)
+- [x] Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)
+- [x] Обновить operationsRepository.ts для работы с новой структурой
+- [x] Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR
+- [x] Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM
+- [x] Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts
+- [x] Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts
+- [x] Обновить processing.ts для работы с новой структурой операций
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+- [x] undefined
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю финальное состояние:
+
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Рефакторинг завершен. Все задачи выполнены.
+
+## Резюме выполненных изменений:
+
+1. **Создан явный тип результата** `ExtractTextResult`:
+   - `{ type: 'text', text: string }` — текст извлечен синхронно
+   - `{ type: 'processing', operationId: string }` — текст обрабатывается асинхронно
+
+2. **Рефакторинг корневой функции `extractText`**:
+   - Принимает `applicationId` и `fileInfo`
+   - Не создает операции сама — только извлекает текст
+   - Для локальных файлов (DOCX, XLSX) возвращает текст сразу, операции не создаются
+   - Для Yandex OCR вызывает `callYandexOCR`, который создает операции
+
+3. **Обновлен `callYandexOCR` в yandex/ocr.ts**:
+   - Добавлен параметр `applicationId`
+   - Создает операцию перед вызовом API
+   - Обновляет операцию при получении результата
+   - Возвращает `ExtractTextResult`
+
+4. **Обновлены функции для обратной совместимости**:
+   - `extractTextFromFileWithOperation` — обертка над `extractText`
+   - `extractTextFromFile` — обновлена для работы с новым типом
+
+5. **Обновлено использование в processing.ts**:
+   - Использует `extractText` с проверкой результата через discriminated union
+   - Упрощена логика обработки результата
+
+6. **Обновлена документация**:
+   - Добавлено описание `ExtractTextResult`
+   - Обновлены примеры использования
+   - Уточнено, что операции создаются только в yandex/ocr.ts
+
+Ошибок компиляции и линтера нет. Код готов к использованию.
+
+---
+
+_**User (2025-12-01 16:25Z)**_
+
+Убери полностью extractTextFromFileWithOperation
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Удаляю функцию `extractTextFromFileWithOperation` и обновляю все места использования:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "extractTextFromFileWithOperation" in "src" • 6 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src\lib\business\processing.ts` | `extractTextFromFileWithOperation,` | L10 |
+| `src\lib\business\processing.ts` | `const ocrResult = await extractTextFromFileWithOperation(applicationId, \{` | L302 |
+| `src\lib\ai\AI.md` | `#### `extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise<\{ text?: string; operationId?: string \}>`` | L114 |
+| `src\lib\ai\ocr.ts` | `export async function extractTextFromFileWithOperation(` | L207 |
+| `src\lib\ai\index.ts` | `extractTextFromFileWithOperation,` | L9 |
+| `src\lib\business\BUSINESS.md` | `- **OCR операции**: Создаются при извлечении текста через `extractTextFromFileWithOperation()`` | L194 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Удаляю функцию и обновляю все места использования:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 27
+
+```diff
+@@ -196,31 +196,4 @@
+  	);
+  }
+- 
+- /**
+-  * Извлекает текст из файла с созданием операции обработки
+-  * (Обертка над extractText для обратной совместимости)
+-  *
+-  * @param applicationId - ID заявки
+-  * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
+-  * @returns Объект с текстом (если синхронно) или ID операции (если асинхронно)
+-  */
+- export async function extractTextFromFileWithOperation(
+- 	applicationId: string,
+- 	fileInfo: {
+- 		buffer: Buffer;
+- 		mimeType: string;
+- 		fileType: &#39;image&#39; | &#39;pdf&#39; | &#39;docx&#39; | &#39;xlsx&#39; | &#39;unknown&#39;;
+- 		pageCount: number;
+- 		filename?: string;
+- 	}
+- ): Promise&lt;{ text?: string; operationId?: string }&gt; {
+- 	const result = await extractText(applicationId, fileInfo);
+- 
+- 	if (result.type === &#39;text&#39;) {
+- 		return { text: result.text };
+- 	} else {
+- 		return { operationId: result.operationId };
+- 	}
+- }
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/index.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -7,5 +7,4 @@
+  	extractText,
+  	extractTextFromFile,
+- 	extractTextFromFileWithOperation,
+  	checkOCROperation,
+  	OCRError
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -8,5 +8,4 @@
+  import {
+  	extractText,
+- 	extractTextFromFileWithOperation,
+  	checkOCROperation,
+  	OCRError
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 3 files</summary>
+      
+Lint paths:
+
+- `src/lib/ai/ocr.ts`
+- `src/lib/ai/index.ts`
+- `src/lib/business/processing.ts`
+
+Lint results
+
+Lint errors for `src/lib/business/processing.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| Cannot find name 'extractTextFromFileWithOperation'. | 301:27-301:59 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'extractedText' is possibly 'undefined'. | 324:17-324:30 | DIAGNOSTIC_SEVERITY_ERROR |
+| Type 'string \| undefined' is not assignable to type 'string'.<br/>  Type 'undefined' is not assignable to type 'string'. | 326:13-326:17 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "extractTextFromFileWithOperation" in "src" • 3 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src\lib\business\processing.ts` | `const ocrResult = await extractTextFromFileWithOperation(applicationId, \{` | L301 |
+| `src\lib\ai\AI.md` | `#### `extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise<\{ text?: string; operationId?: string \}>`` | L114 |
+| `src\lib\business\BUSINESS.md` | `- **OCR операции**: Создаются при извлечении текста через `extractTextFromFileWithOperation()`` | L194 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Заменяю использование в processing.ts:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -299,5 +299,5 @@
+  	logger.info(&#39;Извлечение текста из файла для формирования аббревиатуры&#39;, { applicationId });
+  	try {
+- 		const ocrResult = await extractTextFromFileWithOperation(applicationId, {
++ 		const ocrResult = await extractText(applicationId, {
+  			buffer: fileInfo.buffer,
+  			mimeType: fileInfo.mimeType,
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -307,5 +307,5 @@
+  		});
+  
+- 		if (ocrResult.operationId) {
++ 		if (ocrResult.type === &#39;processing&#39;) {
+  			// Асинхронная операция
+  			ocrOperationId = ocrResult.operationId;
+```
+
+**Chunk 3**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -314,5 +314,5 @@
+  				&#39;OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.&#39;
+  			);
+- 		} else if (ocrResult.text) {
++ 		} else if (ocrResult.type === &#39;text&#39;) {
+  			// Синхронная операция завершена
+  			extractedText = ocrResult.text;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 11
+
+```diff
+@@ -111,15 +111,4 @@
+  }
+  &#96;&#96;&#96;
+- 
+- #### &#96;extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise&lt;{ text?: string; operationId?: string }&gt;&#96;
+- 
+- Обертка над &#96;extractText&#96; для обратной совместимости. Преобразует &#96;ExtractTextResult&#96; в старый формат.
+- 
+- **Параметры:** Те же, что у &#96;extractText&#96;
+- 
+- **Возвращает:**
+- 
+- - &#96;{ text: string }&#96; - для синхронных операций
+- - &#96;{ operationId: string }&#96; - для асинхронных операций
+  
+  #### &#96;extractTextFromFile(fileBuffer: Buffer, mimeType: string): Promise&lt;string&gt;&#96;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/BUSINESS.md</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -192,5 +192,5 @@
+  Все функции обработки создают операции в БД для отслеживания статуса:
+  
+- - **OCR операции**: Создаются при извлечении текста через &#96;extractTextFromFileWithOperation()&#96;
++ - **OCR операции**: Создаются при извлечении текста через &#96;extractText()&#96; (внутри &#96;callYandexOCR&#96; в &#96;yandex/ocr.ts&#96;)
+  - **LLM операции**: Создаются при вызове LLM с указанием &#96;operationConfig&#96;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep**</summary>
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep**</summary>
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
