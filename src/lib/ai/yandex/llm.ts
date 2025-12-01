@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { aiConfig } from '../config.js';
 import type { LLMOptions } from '../types.js';
 import { logger } from '../../utils/logger.js';
+import { fetchStable } from '../../utils/fetchStable.js';
 
 export class YandexLLMError extends Error {
 	constructor(
@@ -90,14 +91,19 @@ export async function callYandexGPT(
 			model: config.model
 		});
 
-		const response = await fetch(config.endpoint!, {
-			method: 'POST',
-			headers: {
-				Authorization: `Api-Key ${config.apiKey}`,
-				'Content-Type': 'application/json'
+		const response = await fetchStable(
+			config.endpoint!,
+			{
+				method: 'POST',
+				headers: {
+					Authorization: `Api-Key ${config.apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(requestBody)
 			},
-			body: JSON.stringify(requestBody)
-		});
+			60000, // timeout: 60 секунд для LLM запросов
+			2 // maxRetries: 2 попытки при сетевых ошибках
+		);
 
 		if (!response.ok) {
 			const errorText = await response.text();

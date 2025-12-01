@@ -32,24 +32,7 @@ export type ExtractTextResult =
 	| { type: 'text'; text: string } // Текст извлечен синхронно
 	| { type: 'processing'; operationId: string }; // Текст обрабатывается асинхронно
 
-/**
- * Определяет тип файла по MIME типу
- */
-function getFileType(mimeType: string): 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown' {
-	if (mimeType.startsWith('image/')) {
-		return 'image';
-	}
-	if (mimeType === 'application/pdf') {
-		return 'pdf';
-	}
-	if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-		return 'docx';
-	}
-	if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-		return 'xlsx';
-	}
-	return 'unknown';
-}
+
 
 /**
  * Извлекает текст из DOCX файла

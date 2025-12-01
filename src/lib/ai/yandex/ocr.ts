@@ -15,6 +15,7 @@ import {
 	updateOperationStatus
 } from '../../storage/operationsRepository.js';
 import type { ExtractTextResult } from '../ocr.js';
+import { fetchStable } from '../../utils/fetchStable.js';
 
 export class YandexOCRError extends Error {
 	constructor(
@@ -143,14 +144,19 @@ export async function callYandexOCR(
 			pageCount
 		});
 
-		const response = await fetch(endpoint!, {
-			method: 'POST',
-			headers: {
-				Authorization: `Api-Key ${config.apiKey}`,
-				'Content-Type': 'application/json'
+		const response = await fetchStable(
+			endpoint!,
+			{
+				method: 'POST',
+				headers: {
+					Authorization: `Api-Key ${config.apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(requestBody)
 			},
-			body: JSON.stringify(requestBody)
-		});
+			60000, // timeout: 60 секунд для OCR запросов
+			2 // maxRetries: 2 попытки при сетевых ошибках
+		);
 
 		if (!response.ok) {
 			const errorText = await response.text();
@@ -272,13 +278,18 @@ export async function getYandexOCRRecognition(operationId: string): Promise<stri
 	});
 
 	try {
-		const response = await fetch(`${endpoint}?operationId=${operationId}`, {
-			method: 'GET',
-			headers: {
-				Authorization: `Api-Key ${config.apiKey}`,
-				'Content-Type': 'application/json'
-			}
-		});
+		const response = await fetchStable(
+			`${endpoint}?operationId=${operationId}`,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Api-Key ${config.apiKey}`,
+					'Content-Type': 'application/json'
+				}
+			},
+			30000, // timeout: 30 секунд для получения результатов
+			2 // maxRetries: 2 попытки при сетевых ошибках
+		);
 
 		if (!response.ok) {
 			const errorText = await response.text();
@@ -356,12 +367,17 @@ export async function checkYandexOCROperation(operation: ProcessingOperation): P
 	});
 
 	try {
-		const response = await fetch(operationEndpoint, {
-			method: 'GET',
-			headers: {
-				Authorization: `Api-Key ${config.apiKey}`
-			}
-		});
+		const response = await fetchStable(
+			operationEndpoint,
+			{
+				method: 'GET',
+				headers: {
+					Authorization: `Api-Key ${config.apiKey}`
+				}
+			},
+			30000, // timeout: 30 секунд для проверки статуса операции
+			2 // maxRetries: 2 попытки при сетевых ошибках
+		);
 
 		if (!response.ok) {
 			const errorText = await response.text();
