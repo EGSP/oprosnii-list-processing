@@ -11,7 +11,7 @@ import {
 } from 'fs';
 import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
-import { getOperationByApplicationAndTypeWithSync } from './operationsRepository.js';
+import { getOperationByApplicationAndType } from './operationsRepository.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 
@@ -240,7 +240,7 @@ export async function getFileInfo(applicationId: string): Promise<{
 
 	// Проверяем существующую OCR операцию для получения текста
 	let extractedText: string | undefined;
-	const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+	const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
 	if (
 		ocrOperation &&
 		ocrOperation.status === 'completed' &&

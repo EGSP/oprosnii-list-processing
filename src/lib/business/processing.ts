@@ -25,8 +25,7 @@ import {
 	getFileInfo,
 	getTechnicalSpec,
 	getOperation,
-	getOperationByApplicationAndTypeWithSync,
-	syncOperationToApplication
+	getOperationByApplicationAndType
 } from '../storage/index.js';
 import type { ProcessingOperation, TechnicalSpec } from '../storage/types.js';
 import { config } from '../config.js';
@@ -100,7 +99,7 @@ export async function detectProductType(applicationId: string): Promise<{
 	// Если текст уже извлечен, используем его
 	if (fileInfo.extractedText) {
 		extractedText = fileInfo.extractedText;
-		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+		const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
 		ocrOperationId = existingOCROperation?.id;
 		logger.info('Использован уже извлеченный текст', {
 			applicationId,
@@ -124,7 +123,8 @@ export async function detectProductType(applicationId: string): Promise<{
 			if (ocrResult.type === 'text') {
 				// Синхронная операция завершена
 				extractedText = ocrResult.text;
-				const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
+
 				ocrOperationId = ocrOperation?.id;
 				logger.info('Текст успешно извлечен из файла', {
 					applicationId,
@@ -222,7 +222,8 @@ ${limitedText}
 		);
 
 		// Получаем ID операции LLM (с синхронизацией)
-		const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_product_type');
+		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_product_type');
+
 		const llmOperationId = llmOperation?.id;
 
 		logger.info('Тип изделия определен LLM', {
@@ -285,7 +286,8 @@ async function getOrExtractText(
 	// Если текст уже извлечен, используем его
 	if (fileInfo.extractedText) {
 		extractedText = fileInfo.extractedText;
-		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+		const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
+
 		ocrOperationId = existingOCROperation?.id;
 		logger.info('Использован уже извлеченный текст для формирования аббревиатуры', {
 			applicationId,
@@ -316,7 +318,8 @@ async function getOrExtractText(
 		} else if (ocrResult.type === 'text') {
 			// Синхронная операция завершена
 			extractedText = ocrResult.text;
-			const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
+			const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
+
 			ocrOperationId = ocrOperation?.id;
 			logger.info('Текст успешно извлечен для формирования аббревиатуры', {
 				applicationId,
@@ -421,7 +424,8 @@ async function extractParametersWithLLM(
 	);
 
 	// Получаем ID операции LLM с синхронизацией
-	const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_abbreviation');
+	const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_abbreviation');
+
 	const llmOperationId = llmOperation?.id;
 
 	logger.info('Параметры извлечены LLM', {
@@ -629,22 +633,17 @@ export async function checkAndUpdateOperation(
 
 	// Если операция уже завершена, возвращаем как есть
 	if (operation.status === 'completed' || operation.status === 'failed') {
-		// Синхронизируем результат с заявкой, если операция завершена
-		if (operation.status === 'completed') {
-			syncOperationToApplication(operation);
-		}
 		return operation;
 	}
 
-	// Проверяем статус только для OCR операций
-	if (operation.type === 'ocr') {
-		const updatedOperation = await checkOCROperation(operationId);
-		// Синхронизируем результат с заявкой, если операция завершена
-		if (updatedOperation && updatedOperation.status === 'completed') {
-			syncOperationToApplication(updatedOperation);
+	if (operation.status === 'running') {
+		if (operation.type === 'ocr') {
+			const updatedOperation = await checkOCROperation(operationId);
+			return updatedOperation;
 		}
-		return updatedOperation;
 	}
+
+
 
 	// Для других типов операций просто возвращаем текущий статус
 	return operation;

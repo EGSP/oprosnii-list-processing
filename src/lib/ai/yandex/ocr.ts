@@ -11,9 +11,12 @@ import { aiConfig } from '../config.js';
 import { logger } from '../../utils/logger.js';
 import type { ProcessingOperation } from '../../storage/types.js';
 import {
-	createOrUpdateOperation,
-	updateOperationStatus
+	createOperation,
+	updateOperation,
+	getOperation,
+	getOperationByApplicationAndType
 } from '../../storage/operationsRepository.js';
+import { OperationAlreadyExistsError } from '../../storage/errors.js';
 import type { ExtractTextResult } from '../ocr.js';
 import { fetchStable } from '../../utils/fetchStable.js';
 
@@ -127,12 +130,26 @@ export async function callYandexOCR(
 	});
 
 	// Создаем операцию перед вызовом API
-	const operation = createOrUpdateOperation(
-		applicationId,
-		'ocr',
-		'yandex',
-		{} // providerData будет заполнено после вызова API
-	);
+	let operation: ProcessingOperation;
+	try {
+		operation = createOperation(
+			applicationId,
+			'ocr',
+			'yandex',
+			{} // providerData будет заполнено после вызова API
+		);
+	} catch (error) {
+		if (error instanceof OperationAlreadyExistsError) {
+			// Если операция уже существует, получаем её
+			const existing = getOperationByApplicationAndType(applicationId, 'ocr');
+			if (!existing) {
+				throw new YandexOCRError('Операция уже существует, но не найдена');
+			}
+			operation = existing;
+		} else {
+			throw error;
+		}
+	}
 
 	// Формируем запрос к YandexOCR API
 	const requestBody = createYandexOCRRequestBody(fileBuffer, mimeType);
@@ -180,9 +197,14 @@ export async function callYandexOCR(
 					operationId: operation.id,
 					externalOperationId: result.id
 				});
-				updateOperationStatus(operation.id, 'running', {
-					providerData: { operationId: result.id }
-				});
+				const current = getOperation(operation.id);
+				if (current) {
+					updateOperation(operation.id, {
+						...current,
+						status: 'running',
+						providerData: { operationId: result.id }
+					});
+				}
 				return {
 					type: 'processing',
 					operationId: operation.id
@@ -194,9 +216,15 @@ export async function callYandexOCR(
 				operationId: operation.id,
 				responseStructure: JSON.stringify(result).substring(0, 200)
 			});
-			updateOperationStatus(operation.id, 'failed', {
-				error: { message: 'Неожиданный ответ от async endpoint YandexOCR' }
-			});
+			const current = getOperation(operation.id);
+			if (current) {
+				updateOperation(operation.id, {
+					...current,
+					status: 'failed',
+					result: { error: { message: 'Неожиданный ответ от async endpoint YandexOCR' } },
+					completedAt: new Date().toISOString()
+				});
+			}
 			throw new YandexOCRError('Неожиданный ответ от async endpoint YandexOCR');
 		}
 
@@ -209,9 +237,15 @@ export async function callYandexOCR(
 					operationId: operation.id,
 					textLength: text.length
 				});
-				updateOperationStatus(operation.id, 'completed', {
-					result: { text }
-				});
+				const current = getOperation(operation.id);
+				if (current) {
+					updateOperation(operation.id, {
+						...current,
+						status: 'completed',
+						result: { text },
+						completedAt: new Date().toISOString()
+					});
+				}
 				return { type: 'text', text };
 			}
 		}
@@ -224,9 +258,15 @@ export async function callYandexOCR(
 				operationId: operation.id,
 				textLength: text.length
 			});
-			updateOperationStatus(operation.id, 'completed', {
-				result: { text }
-			});
+			const current = getOperation(operation.id);
+			if (current) {
+				updateOperation(operation.id, {
+					...current,
+					status: 'completed',
+					result: { text },
+					completedAt: new Date().toISOString()
+				});
+			}
 			return { type: 'text', text };
 		}
 
@@ -235,9 +275,15 @@ export async function callYandexOCR(
 			operationId: operation.id,
 			responseStructure: JSON.stringify(result).substring(0, 200)
 		});
-		updateOperationStatus(operation.id, 'failed', {
-			error: { message: 'Не удалось извлечь текст из ответа YandexOCR' }
-		});
+		const current = getOperation(operation.id);
+		if (current) {
+			updateOperation(operation.id, {
+				...current,
+				status: 'failed',
+				result: { error: { message: 'Не удалось извлечь текст из ответа YandexOCR' } },
+				completedAt: new Date().toISOString()
+			});
+		}
 		throw new YandexOCRError('Не удалось извлечь текст из ответа YandexOCR');
 	} catch (error) {
 		logger.error('Ошибка при извлечении текста через YandexOCR', {
@@ -246,12 +292,20 @@ export async function callYandexOCR(
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined
 		});
-		updateOperationStatus(operation.id, 'failed', {
-			error: {
-				message: error instanceof Error ? error.message : 'Unknown error',
-				details: error
-			}
-		});
+		const current = getOperation(operation.id);
+		if (current) {
+			updateOperation(operation.id, {
+				...current,
+				status: 'failed',
+				result: {
+					error: {
+						message: error instanceof Error ? error.message : 'Unknown error',
+						details: error
+					}
+				},
+				completedAt: new Date().toISOString()
+			});
+		}
 
 		if (error instanceof YandexOCRError) {
 			throw error;

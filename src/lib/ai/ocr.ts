@@ -9,7 +9,7 @@
 
 import {
 	getOperation,
-	updateOperationStatus
+	updateOperation
 } from '../storage/operationsRepository.js';
 import { logger } from '../utils/logger.js';
 import { callYandexOCR, checkYandexOCROperation } from './yandex/ocr.js';
@@ -212,24 +212,33 @@ export async function checkOCROperation(operationId: string): Promise<Processing
 				const checkResult = await checkYandexOCROperation(operation);
 
 				if (checkResult.done) {
-					if (checkResult.text) {
-						// Операция завершена успешно
-						logger.info('YandexOCR операция завершена успешно', {
-							operationId,
-							textLength: checkResult.text.length
-						});
-						updateOperationStatus(operationId, 'completed', {
-							result: { text: checkResult.text }
-						});
-					} else if (checkResult.error) {
-						// Операция завершена с ошибкой
-						logger.error('YandexOCR операция завершена с ошибкой', {
-							operationId,
-							error: checkResult.error
-						});
-						updateOperationStatus(operationId, 'failed', {
-							error: { message: checkResult.error }
-						});
+					const current = getOperation(operationId);
+					if (current) {
+						if (checkResult.text) {
+							// Операция завершена успешно
+							logger.info('YandexOCR операция завершена успешно', {
+								operationId,
+								textLength: checkResult.text.length
+							});
+							updateOperation(operationId, {
+								...current,
+								status: 'completed',
+								result: { text: checkResult.text },
+								completedAt: new Date().toISOString()
+							});
+						} else if (checkResult.error) {
+							// Операция завершена с ошибкой
+							logger.error('YandexOCR операция завершена с ошибкой', {
+								operationId,
+								error: checkResult.error
+							});
+							updateOperation(operationId, {
+								...current,
+								status: 'failed',
+								result: { error: { message: checkResult.error } },
+								completedAt: new Date().toISOString()
+							});
+						}
 					}
 				}
 				// Если done === false, операция еще выполняется, статус не меняем
@@ -242,12 +251,20 @@ export async function checkOCROperation(operationId: string): Promise<Processing
 					error: error instanceof Error ? error.message : String(error),
 					stack: error instanceof Error ? error.stack : undefined
 				});
-				updateOperationStatus(operationId, 'failed', {
-					error: {
-						message: error instanceof Error ? error.message : 'Unknown error',
-						details: error
-					}
-				});
+				const current = getOperation(operationId);
+				if (current) {
+					updateOperation(operationId, {
+						...current,
+						status: 'failed',
+						result: {
+							error: {
+								message: error instanceof Error ? error.message : 'Unknown error',
+								details: error
+							}
+						},
+						completedAt: new Date().toISOString()
+					});
+				}
 				return getOperation(operationId);
 			}
 		}

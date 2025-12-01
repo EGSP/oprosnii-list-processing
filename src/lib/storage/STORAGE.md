@@ -240,18 +240,24 @@ const success = saveTechnicalSpec({
 
 ### Репозиторий операций обработки (`operationsRepository.ts`)
 
-#### `createOrUpdateOperation(applicationId: string, type: ProcessingOperationType, provider: string, providerData?: Record<string, unknown>, status?: ProcessingOperationStatus): ProcessingOperation`
+#### `createOperation(applicationId: string, type: ProcessingOperationType, provider: string, providerData?: Record<string, unknown>, status?: ProcessingOperationStatus): ProcessingOperation`
 
-Создает новую операцию обработки или обновляет существующую (если операция с таким типом уже есть для заявки).
+Создает новую операцию обработки. Если операция с таким (applicationId, type) уже существует, выбрасывает ошибку `OperationAlreadyExistsError`. Автоматически синхронизирует результат с заявкой, если статус `completed` или `failed`.
 
 ```typescript
-const operation = createOrUpdateOperation(
-	'application-id',
-	'ocr',
-	'yandex',
-	{ operationId: 'external-operation-id' }, // providerData
-	'running' // status
-);
+try {
+	const operation = createOperation(
+		'application-id',
+		'ocr',
+		'yandex',
+		{ operationId: 'external-operation-id' }, // providerData
+		'running' // status
+	);
+} catch (error) {
+	if (error instanceof OperationAlreadyExistsError) {
+		// Операция уже существует
+	}
+}
 ```
 
 #### `getOperation(id: string): ProcessingOperation | null`
@@ -273,16 +279,19 @@ if (operation) {
 const ocrOperation = getOperationByApplicationAndType('application-id', 'ocr');
 ```
 
-#### `getOperationsByApplication(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]`
+#### `getOperationsByApplication(applicationId: string, type?: ProcessingOperationType): string[]`
 
-Получает список всех операций для заявки с опциональной фильтрацией по типу.
+Получает список id операций для заявки с опциональной фильтрацией по типу. Возвращает массив id операций.
 
 ```typescript
-// Все операции заявки
-const allOperations = getOperationsByApplication('application-id');
+// Все id операций заявки
+const operationIds = getOperationsByApplication('application-id');
 
-// Только OCR операции
-const ocrOperations = getOperationsByApplication('application-id', 'ocr');
+// Только id OCR операций
+const ocrOperationIds = getOperationsByApplication('application-id', 'ocr');
+
+// Для получения полных объектов используйте getOperation для каждого id
+const operations = operationIds.map(id => getOperation(id)).filter(op => op !== null);
 ```
 
 #### `syncOperationToApplication(operation: ProcessingOperation): boolean`
@@ -302,65 +311,21 @@ if (operation && operation.status === 'completed') {
 }
 ```
 
-#### `getOperationWithSync(id: string): ProcessingOperation | null`
+#### `updateOperation(id: string, operation: ProcessingOperation): ProcessingOperation | null`
 
-Получает операцию по ID с автоматической синхронизацией результата с заявкой. Если операция завершена, автоматически обновляет соответствующее поле в таблице `applications`.
-
-```typescript
-const operation = getOperationWithSync('operation-id');
-// Если операция завершена, результат уже синхронизирован с заявкой
-```
-
-#### `getOperationByApplicationAndTypeWithSync(applicationId: string, type: ProcessingOperationType): ProcessingOperation | null`
-
-Получает операцию по ID заявки и типу с автоматической синхронизацией результата с заявкой.
+Обновляет операцию (полная перезапись). Сохраняет `createdAt` и `applicationId` из существующей операции. Автоматически синхронизирует результат с заявкой, если статус `completed` или `failed`.
 
 ```typescript
-const ocrOperation = getOperationByApplicationAndTypeWithSync('application-id', 'ocr');
-// Если операция завершена, результат уже синхронизирован с заявкой
+const current = getOperation('operation-id');
+if (current) {
+	const updated = updateOperation('operation-id', {
+		...current,
+		status: 'completed',
+		result: { text: 'Extracted text...' },
+		completedAt: new Date().toISOString()
+	});
+}
 ```
-
-#### `getOperationsByApplicationWithSync(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]`
-
-Получает список всех операций для заявки с автоматической синхронизацией результатов завершенных операций с заявкой.
-
-```typescript
-// Все операции заявки (завершенные автоматически синхронизируются)
-const allOperations = getOperationsByApplicationWithSync('application-id');
-```
-
-**Примечание:** Функции с синхронизацией (`*WithSync`) рекомендуется использовать в API эндпоинтах для автоматического обновления таблицы `applications` при получении операций.
-
-#### `updateOperation(id: string, updates: ProcessingOperationUpdate): ProcessingOperation | null`
-
-Обновляет операцию. Автоматически заполняет временные метки при изменении статуса.
-
-```typescript
-const updated = updateOperation('operation-id', {
-	status: 'completed',
-	result: { text: 'Extracted text...' }
-});
-```
-
-#### `updateOperationStatus(id: string, status: ProcessingOperationStatus, data?: {...}): ProcessingOperation | null`
-
-Обновляет статус операции с автоматическим заполнением временных меток и дополнительных данных.
-
-```typescript
-updateOperationStatus('operation-id', 'completed', {
-	result: { text: 'Extracted text...' }
-});
-
-updateOperationStatus('operation-id', 'failed', {
-	error: { message: 'Error message', code: 'ERROR_CODE' }
-});
-
-updateOperationStatus('operation-id', 'running', {
-	providerData: { operationId: 'external-operation-id' }
-});
-```
-
-**Примечание:** При статусе 'failed' ошибка автоматически добавляется в поле `result` в формате `{ error: { message, code?, details? } }`.
 
 ### Утилиты БД (`db.ts`)
 
@@ -532,14 +497,14 @@ import {
 	getApplication,
 	saveApplicationFile,
 	listTechnicalSpecs,
-	createOrUpdateOperation,
+	createOperation,
 	getOperation,
-	getOperationWithSync,
-	getOperationByApplicationAndTypeWithSync,
+	getOperationByApplicationAndType,
 	getOperationsByApplication,
-	getOperationsByApplicationWithSync,
 	syncOperationToApplication,
-	StorageError
+	updateOperation,
+	StorageError,
+	OperationAlreadyExistsError
 } from '$lib/storage';
 ```
 
@@ -556,5 +521,6 @@ import {
 - Все даты хранятся в формате ISO 8601 (строки)
 - При ошибках парсинга JSON из БД возвращается `null` для соответствующего поля
 - Операции обработки: одна операция каждого типа на заявку (уникальный индекс)
-- При создании операции с существующим типом - обновление, а не создание новой
+- При создании операции с существующим типом выбрасывается ошибка `OperationAlreadyExistsError`
 - Завершенные операции не удаляются (хранится история)
+- Функции `createOperation` и `updateOperation` автоматически синхронизируют результаты завершенных операций с заявкой

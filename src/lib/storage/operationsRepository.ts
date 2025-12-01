@@ -1,21 +1,20 @@
 import { getDatabase, rowToProcessingOperation, processingOperationToRow, type ProcessingOperationRow } from './db.js';
 import {
 	type ProcessingOperation,
-	type ProcessingOperationUpdate,
 	type ProcessingOperationType,
 	type ProcessingOperationStatus,
 	ProcessingOperationSchema
 } from './types.js';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageError, ValidationError } from './errors.js';
+import { StorageError, ValidationError, OperationAlreadyExistsError } from './errors.js';
 import { updateApplication } from './repository.js';
 import { logger } from '../utils/logger.js';
 
 /**
- * Создает новую операцию обработки или обновляет существующую
- * Если операция с таким (applicationId, type) уже существует - обновляет её
+ * Создает новую операцию обработки
+ * Если операция с таким (applicationId, type) уже существует - выбрасывает ошибку
  */
-export function createOrUpdateOperation(
+export function createOperation(
 	applicationId: string,
 	type: ProcessingOperationType,
 	provider: string,
@@ -26,36 +25,23 @@ export function createOrUpdateOperation(
 
 	// Проверяем, существует ли операция с таким типом для заявки
 	const existing = getOperationByApplicationAndType(applicationId, type);
-
-	let operation: ProcessingOperation;
-
 	if (existing) {
-		// Обновляем существующую операцию
-		const now = new Date().toISOString();
-		operation = {
-			...existing,
-			provider,
-			status,
-			providerData,
-			// Сбрасываем результат при обновлении
-			result: null,
-			completedAt: status === 'completed' || status === 'failed' ? now : null
-		};
-	} else {
-		// Создаем новую операцию
-		const now = new Date().toISOString();
-		operation = {
-			id: uuidv4(),
-			applicationId,
-			type,
-			provider,
-			status,
-			providerData,
-			result: null,
-			createdAt: now,
-			completedAt: status === 'completed' || status === 'failed' ? now : null
-		};
+		throw new OperationAlreadyExistsError(applicationId, type);
 	}
+
+	// Создаем новую операцию
+	const now = new Date().toISOString();
+	const operation: ProcessingOperation = {
+		id: uuidv4(),
+		applicationId,
+		type,
+		provider,
+		status,
+		providerData,
+		result: null,
+		createdAt: now,
+		completedAt: status === 'completed' || status === 'failed' ? now : null
+	};
 
 	// Валидация через Zod
 	let validated: ProcessingOperation;
@@ -67,36 +53,26 @@ export function createOrUpdateOperation(
 
 	const row = processingOperationToRow(validated);
 
-		try {
-			if (existing) {
-				// Обновляем существующую
-				const stmt = db.prepare(`
-					UPDATE processing_operations SET
-						provider = :provider,
-						status = :status,
-						provider_data = :provider_data,
-						result = :result,
-						completed_at = :completed_at
-					WHERE id = :id
-				`);
-				stmt.run({ ...row, id: existing.id });
-				return { ...validated, id: existing.id };
-			} else {
-				// Создаем новую
-				const stmt = db.prepare(`
-					INSERT INTO processing_operations (
-						id, application_id, type, provider, status,
-						provider_data, result, created_at, completed_at
-					) VALUES (
-						:id, :application_id, :type, :provider, :status,
-						:provider_data, :result, :created_at, :completed_at
-					)
-				`);
-				stmt.run(row);
-				return validated;
-			}
+	try {
+		const stmt = db.prepare(`
+			INSERT INTO processing_operations (
+				id, application_id, type, provider, status,
+				provider_data, result, created_at, completed_at
+			) VALUES (
+				:id, :application_id, :type, :provider, :status,
+				:provider_data, :result, :created_at, :completed_at
+			)
+		`);
+		stmt.run(row);
+
+		// Синхронизируем с заявкой, если операция завершена
+		if (validated.status === 'completed' || validated.status === 'failed') {
+			syncOperationToApplication(validated);
+		}
+
+		return validated;
 	} catch (error) {
-		throw new StorageError('Failed to create or update operation', error as Error);
+		throw new StorageError('Failed to create operation', error as Error);
 	}
 }
 
@@ -144,15 +120,15 @@ export function getOperationByApplicationAndType(
 }
 
 /**
- * Получает список операций для заявки
+ * Получает список id операций для заявки
  */
 export function getOperationsByApplication(
 	applicationId: string,
 	type?: ProcessingOperationType
-): ProcessingOperation[] {
+): string[] {
 	try {
 		const db = getDatabase();
-		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
+		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
 		const params: (string | ProcessingOperationType)[] = [applicationId];
 
 		if (type) {
@@ -163,20 +139,21 @@ export function getOperationsByApplication(
 		query += ' ORDER BY created_at DESC';
 
 		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as ProcessingOperationRow[];
+		const rows = stmt.all(...params) as { id: string }[];
 
-		return rows.map(rowToProcessingOperation);
+		return rows.map((row) => row.id);
 	} catch (error) {
 		throw new StorageError('Failed to list operations', error as Error);
 	}
 }
 
 /**
- * Обновляет операцию
+ * Обновляет операцию (полная перезапись)
+ * Сохраняет createdAt и applicationId из существующей операции
  */
 export function updateOperation(
 	id: string,
-	updates: ProcessingOperationUpdate
+	operation: ProcessingOperation
 ): ProcessingOperation | null {
 	const db = getDatabase();
 
@@ -186,23 +163,20 @@ export function updateOperation(
 		return null;
 	}
 
-	// Объединяем обновления с текущими данными
-	const updated = { ...current, ...updates };
-
-	// Автоматически обновляем временные метки при изменении статуса
-	if (updates.status) {
-		const now = new Date().toISOString();
-		if ((updates.status === 'completed' || updates.status === 'failed') && !updated.completedAt) {
-			updated.completedAt = now;
-		}
-	}
+	// Сохраняем createdAt и applicationId из существующей операции
+	const updated: ProcessingOperation = {
+		...operation,
+		id,
+		createdAt: current.createdAt,
+		applicationId: current.applicationId
+	};
 
 	// Валидация
 	let validated: ProcessingOperation;
 	try {
 		validated = ProcessingOperationSchema.parse(updated);
 	} catch (error) {
-		throw new ValidationError('Invalid operation update data', error);
+		throw new ValidationError('Invalid operation data', error);
 	}
 
 	const row = processingOperationToRow(validated);
@@ -210,6 +184,8 @@ export function updateOperation(
 	try {
 		const stmt = db.prepare(`
 			UPDATE processing_operations SET
+				type = :type,
+				provider = :provider,
 				status = :status,
 				provider_data = :provider_data,
 				result = :result,
@@ -218,46 +194,15 @@ export function updateOperation(
 		`);
 		stmt.run({ ...row, id });
 
+		// Синхронизируем с заявкой, если операция завершена
+		if (validated.status === 'completed' || validated.status === 'failed') {
+			syncOperationToApplication(validated);
+		}
+
 		return validated;
 	} catch (error) {
 		throw new StorageError('Failed to update operation', error as Error);
 	}
-}
-
-/**
- * Обновляет статус операции с автоматическим заполнением временных меток
- */
-export function updateOperationStatus(
-	id: string,
-	status: ProcessingOperationStatus,
-	data?: {
-		result?: Record<string, unknown>;
-		error?: { message: string; code?: string; details?: unknown };
-		providerData?: Record<string, unknown>;
-	}
-): ProcessingOperation | null {
-	const updates: ProcessingOperationUpdate = {
-		status
-	};
-
-	// Если есть ошибка, добавляем её в result
-	if (data?.error !== undefined) {
-		updates.result = {
-			error: {
-				message: data.error.message,
-				code: data.error.code,
-				details: data.error.details
-			}
-		};
-	} else if (data?.result !== undefined) {
-		updates.result = data.result;
-	}
-
-	if (data?.providerData !== undefined) {
-		updates.providerData = data.providerData;
-	}
-
-	return updateOperation(id, updates);
 }
 
 /**
@@ -267,7 +212,7 @@ export function updateOperationStatus(
  * @param operation - Операция обработки
  * @returns true если синхронизация выполнена, false если операция не завершена или не требует синхронизации
  */
-export function syncOperationToApplication(operation: ProcessingOperation): boolean {
+function syncOperationToApplication(operation: ProcessingOperation): boolean {
 	// Синхронизируем только завершенные операции
 	if (operation.status !== 'completed' || !operation.result) {
 		return false;
@@ -365,44 +310,3 @@ export function syncOperationToApplication(operation: ProcessingOperation): bool
 	}
 }
 
-/**
- * Получает операцию по ID с автоматической синхронизацией результата с заявкой
- */
-export function getOperationWithSync(id: string): ProcessingOperation | null {
-	const operation = getOperation(id);
-	if (operation) {
-		syncOperationToApplication(operation);
-	}
-	return operation;
-}
-
-/**
- * Получает операцию по applicationId и типу с автоматической синхронизацией результата с заявкой
- */
-export function getOperationByApplicationAndTypeWithSync(
-	applicationId: string,
-	type: ProcessingOperationType
-): ProcessingOperation | null {
-	const operation = getOperationByApplicationAndType(applicationId, type);
-	if (operation) {
-		syncOperationToApplication(operation);
-	}
-	return operation;
-}
-
-/**
- * Получает список операций для заявки с автоматической синхронизацией результатов с заявкой
- */
-export function getOperationsByApplicationWithSync(
-	applicationId: string,
-	type?: ProcessingOperationType
-): ProcessingOperation[] {
-	const operations = getOperationsByApplication(applicationId, type);
-	// Синхронизируем каждую завершенную операцию
-	for (const operation of operations) {
-		if (operation.status === 'completed') {
-			syncOperationToApplication(operation);
-		}
-	}
-	return operations;
-}

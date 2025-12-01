@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplication, getOperationWithSync } from '$lib/storage/index.js';
+import { getApplication, getOperation} from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
 
 /**
@@ -30,8 +30,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			return json({ error: 'Заявка не найдена' }, { status: 404 });
 		}
 
-		// Получаем операцию с автоматической синхронизацией
-		const operation = getOperationWithSync(operationId);
+		// Получаем операцию
+		const operation = getOperation(operationId);
 		if (!operation) {
 			return json({ error: 'Операция не найдена' }, { status: 404 });
 		}

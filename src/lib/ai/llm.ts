@@ -11,13 +11,15 @@ import { z } from 'zod';
 import type { LLMOptions } from './types.js';
 import type { ProcessingOperationType } from '../storage/types.js';
 import {
-	createOrUpdateOperation,
-	updateOperationStatus,
+	createOperation,
+	updateOperation,
+	getOperation,
 	getOperationByApplicationAndType
 } from '../storage/operationsRepository.js';
+import { OperationAlreadyExistsError } from '../storage/errors.js';
 import { logger } from '../utils/logger.js';
 import {
-	callYandexGPT,
+	callYandexGPT as callYandexGPTImpl,
 	callYandexGPTStructured as callYandexGPTStructuredImpl,
 	YandexLLMError
 } from './yandex/llm.js';
@@ -64,19 +66,39 @@ export async function callLLM(
 	// Создаем операцию, если указана конфигурация
 	let operationId: string | undefined;
 	if (operationConfig) {
-		const operation = createOrUpdateOperation(
-			operationConfig.applicationId,
-			operationConfig.type,
-			provider,
-			{} // providerData пустой для LLM операций
-		);
-		operationId = operation.id;
-		logger.debug('Создана операция LLM', {
-			operationId,
-			applicationId: operationConfig.applicationId,
-			type: operationConfig.type,
-			provider
-		});
+		try {
+			const operation = createOperation(
+				operationConfig.applicationId,
+				operationConfig.type,
+				provider,
+				{} // providerData пустой для LLM операций
+			);
+			operationId = operation.id;
+			logger.debug('Создана операция LLM', {
+				operationId,
+				applicationId: operationConfig.applicationId,
+				type: operationConfig.type,
+				provider
+			});
+		} catch (error) {
+			if (error instanceof OperationAlreadyExistsError) {
+				// Если операция уже существует, получаем её
+				const existing = getOperationByApplicationAndType(
+					operationConfig.applicationId,
+					operationConfig.type
+				);
+				if (existing) {
+					operationId = existing.id;
+					logger.debug('Использована существующая операция LLM', {
+						operationId,
+						applicationId: operationConfig.applicationId,
+						type: operationConfig.type
+					});
+				}
+			} else {
+				throw error;
+			}
+		}
 	}
 
 	try {
@@ -85,7 +107,7 @@ export async function callLLM(
 		// Switch по провайдеру
 		switch (provider) {
 			case 'yandex': {
-				text = await callYandexGPT(prompt, systemPrompt, options);
+				text = await callYandexGPTImpl(prompt, systemPrompt, options);
 				break;
 			}
 
@@ -101,9 +123,15 @@ export async function callLLM(
 
 		// Сохраняем результат в операцию
 		if (operationId) {
-			updateOperationStatus(operationId, 'completed', {
-				result: { text }
-			});
+			const current = getOperation(operationId);
+			if (current) {
+				updateOperation(operationId, {
+					...current,
+					status: 'completed',
+					result: { text },
+					completedAt: new Date().toISOString()
+				});
+			}
 		}
 
 		return text;
@@ -116,12 +144,20 @@ export async function callLLM(
 		});
 
 		if (operationId) {
-			updateOperationStatus(operationId, 'failed', {
-				error: {
-					message: error instanceof Error ? error.message : 'Unknown error',
-					details: error
-				}
-			});
+			const current = getOperation(operationId);
+			if (current) {
+				updateOperation(operationId, {
+					...current,
+					status: 'failed',
+					result: {
+						error: {
+							message: error instanceof Error ? error.message : 'Unknown error',
+							details: error
+						}
+					},
+					completedAt: new Date().toISOString()
+				});
+			}
 		}
 
 		if (error instanceof YandexLLMError) {
@@ -172,19 +208,39 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 	// Создаем операцию, если указана конфигурация
 	let operationId: string | undefined;
 	if (operationConfig) {
-		const operation = createOrUpdateOperation(
-			operationConfig.applicationId,
-			operationConfig.type,
-			provider,
-			{} // providerData пустой для LLM операций
-		);
-		operationId = operation.id;
-		logger.debug('Создана операция LLM', {
-			operationId,
-			applicationId: operationConfig.applicationId,
-			type: operationConfig.type,
-			provider
-		});
+		try {
+			const operation = createOperation(
+				operationConfig.applicationId,
+				operationConfig.type,
+				provider,
+				{} // providerData пустой для LLM операций
+			);
+			operationId = operation.id;
+			logger.debug('Создана операция LLM', {
+				operationId,
+				applicationId: operationConfig.applicationId,
+				type: operationConfig.type,
+				provider
+			});
+		} catch (error) {
+			if (error instanceof OperationAlreadyExistsError) {
+				// Если операция уже существует, получаем её
+				const existing = getOperationByApplicationAndType(
+					operationConfig.applicationId,
+					operationConfig.type
+				);
+				if (existing) {
+					operationId = existing.id;
+					logger.debug('Использована существующая операция LLM', {
+						operationId,
+						applicationId: operationConfig.applicationId,
+						type: operationConfig.type
+					});
+				}
+			} else {
+				throw error;
+			}
+		}
 	}
 
 	try {
@@ -216,9 +272,15 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 
 		// Обновляем операцию с результатом (если она была создана)
 		if (operationId) {
-			updateOperationStatus(operationId, 'completed', {
-				result: validated
-			});
+			const current = getOperation(operationId);
+			if (current) {
+				updateOperation(operationId, {
+					...current,
+					status: 'completed',
+					result: validated,
+					completedAt: new Date().toISOString()
+				});
+			}
 		}
 
 		return validated;
@@ -233,12 +295,20 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 		});
 
 		if (operationId) {
-			updateOperationStatus(operationId, 'failed', {
-				error: {
-					message: error instanceof Error ? error.message : 'Unknown error',
-					details: error
-				}
-			});
+			const current = getOperation(operationId);
+			if (current) {
+				updateOperation(operationId, {
+					...current,
+					status: 'failed',
+					result: {
+						error: {
+							message: error instanceof Error ? error.message : 'Unknown error',
+							details: error
+						}
+					},
+					completedAt: new Date().toISOString()
+				});
+			}
 		}
 
 		if (error instanceof YandexLLMError) {

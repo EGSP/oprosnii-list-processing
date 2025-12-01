@@ -70,6 +70,20 @@
 		}
 	}
 
+	/**
+	 * Обновляет заявку без показа индикатора загрузки (для фонового обновления)
+	 */
+	async function refreshApplication() {
+		if (!applicationId) return;
+
+		try {
+			application = await getApplication(applicationId);
+		} catch (err) {
+			// Игнорируем ошибки при фоновом обновлении
+			console.warn('Не удалось обновить заявку:', err);
+		}
+	}
+
 	async function loadFileInfo() {
 		if (!applicationId) return;
 
@@ -90,7 +104,7 @@
 
 		try {
 			operations = await getOperations(applicationId);
-			// Запускаем периодическое обновление, если есть операции в статусе "running"
+			// Запускаем периодическое обновление, если нужно
 			startOperationsUpdate();
 		} catch (err) {
 			// Игнорируем ошибки загрузки операций, чтобы не блокировать отображение заявки
@@ -99,20 +113,57 @@
 		}
 	}
 
+	/**
+	 * Проверяет, нужно ли обновлять данные заявки и операций
+	 */
+	function shouldUpdate(): boolean {
+		// Если нет заявки - не обновляем
+		if (!application) return false;
+
+		// Если есть аббревиатура (processingEndDate) - не обновляем
+		if (application.processingEndDate) return false;
+
+		// Если есть операции в статусе "running" - обновляем
+		// Статусы операций: 'running', 'completed', 'failed' (pending убран)
+		// not_started - это placeholder для несуществующих операций, не проверяем
+		// Обновляем только если есть незавершенные операции (running)
+		const hasIncompleteOperations = operations.some(
+			(op) => op.status === 'running'
+		);
+
+		return hasIncompleteOperations;
+	}
+
 	function startOperationsUpdate() {
 		stopOperationsUpdate();
-		
-		// Проверяем, есть ли операции в статусе "running"
-		const hasRunningOperations = operations.some((op) => op.status === 'running');
-		
-		if (hasRunningOperations) {
-			// Обновляем операции каждые 3 секунды, если есть выполняющиеся операции
-			operationsUpdateInterval = setInterval(async () => {
-				if (applicationId) {
-					await loadOperations();
-				}
-			}, 3000);
+
+		// Проверяем, нужно ли обновление
+		if (!shouldUpdate()) {
+			return;
 		}
+
+		// Обновляем заявку и операции каждые 3 секунды
+		operationsUpdateInterval = setInterval(async () => {
+			if (!applicationId) {
+				stopOperationsUpdate();
+				return;
+			}
+
+			// Проверяем перед каждым обновлением
+			if (!shouldUpdate()) {
+				stopOperationsUpdate();
+				return;
+			}
+
+			// Обновляем и заявку (без показа индикатора загрузки), и операции
+			try {
+				await refreshApplication();
+				await loadOperations();
+			} catch (err) {
+				// Игнорируем ошибки, чтобы не прерывать polling
+				console.warn('Ошибка при обновлении данных:', err);
+			}
+		}, 3000);
 	}
 
 	function stopOperationsUpdate() {
@@ -132,13 +183,13 @@
 		error = null;
 		try {
 			await processApplication(applicationId, selectedTechnicalSpecId);
-			// Обновляем данные заявки и операции после обработки
-			await loadApplication();
-			// После обработки могут появиться новые операции в статусе "running"
-			await loadOperations();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
 		} finally {
+			// Всегда обновляем данные после обработки, даже при ошибке
+			// Это обеспечит отображение частичных результатов
+			await loadApplication();
+			await loadOperations();
 			isProcessing = false;
 		}
 	}

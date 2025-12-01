@@ -49,3 +49,10 @@ export class OperationNotFoundError extends StorageError {
 		this.name = 'OperationNotFoundError';
 	}
 }
+
+export class OperationAlreadyExistsError extends StorageError {
+	constructor(applicationId: string, type: string) {
+		super(`Processing operation with type ${type} already exists for application ${applicationId}`);
+		this.name = 'OperationAlreadyExistsError';
+	}
+}
