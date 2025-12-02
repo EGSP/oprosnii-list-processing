@@ -9,6 +9,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { StorageError, ValidationError, OperationAlreadyExistsError } from './errors.js';
 import { updateApplication } from './repository.js';
 import { logger } from '../utils/logger.js';
+import { err, ok, Result } from 'neverthrow';
+
 
 /**
  * Создает новую операцию обработки
@@ -20,38 +22,35 @@ export function createOperation(
 	provider: string,
 	providerData: Record<string, unknown> = {},
 	status: ProcessingOperationStatus = 'running'
-): ProcessingOperation {
+): Result<ProcessingOperation, Error> {
 	const db = getDatabase();
 
 	// Проверяем, существует ли операция с таким типом для заявки
 	const existing = getOperationByApplicationAndType(applicationId, type);
 	if (existing) {
-		throw new OperationAlreadyExistsError(applicationId, type);
+		return err(new OperationAlreadyExistsError(applicationId, type));
 	}
 
 	// Создаем новую операцию
 	const now = new Date().toISOString();
-	const operation: ProcessingOperation = {
-		id: uuidv4(),
-		applicationId,
-		type,
-		provider,
-		status,
-		providerData,
-		result: null,
-		createdAt: now,
-		completedAt: status === 'completed' || status === 'failed' ? now : null
-	};
-
-	// Валидация через Zod
-	let validated: ProcessingOperation;
+	let operation: ProcessingOperation;
 	try {
-		validated = ProcessingOperationSchema.parse(operation);
+		operation = ProcessingOperationSchema.parse({
+			id: uuidv4(),
+			applicationId,
+			type,
+			provider,
+			status,
+			providerData,
+			result: null,
+			createdAt: now,
+			completedAt: status === 'completed' || status === 'failed' ? now : null
+		});
 	} catch (error) {
-		throw new ValidationError('Invalid processing operation data', error);
+		return err(new ValidationError('Invalid processing operation data', error));
 	}
 
-	const row = processingOperationToRow(validated);
+	const row = processingOperationToRow(operation);
 
 	try {
 		const stmt = db.prepare(`
@@ -65,33 +64,28 @@ export function createOperation(
 		`);
 		stmt.run(row);
 
-		// Синхронизируем с заявкой, если операция завершена
-		if (validated.status === 'completed' || validated.status === 'failed') {
-			syncOperationToApplication(validated);
-		}
-
-		return validated;
+		return ok(operation);
 	} catch (error) {
-		throw new StorageError('Failed to create operation', error as Error);
+		return err(new StorageError('Failed to create operation', error as Error));
 	}
 }
 
 /**
  * Получает операцию по ID
  */
-export function getOperation(id: string): ProcessingOperation | null {
+export function getOperation(id: string): Result<ProcessingOperation, Error> {
 	try {
 		const db = getDatabase();
 		const stmt = db.prepare('SELECT * FROM processing_operations WHERE id = ?');
 		const row = stmt.get(id) as ProcessingOperationRow | undefined;
 
 		if (!row) {
-			return null;
+			return err(new StorageError(`Operation not found ${id}`));
 		}
 
-		return rowToProcessingOperation(row);
+		return ok(rowToProcessingOperation(row));
 	} catch (error) {
-		throw new StorageError('Failed to get operation', error as Error);
+		return err(new StorageError('Failed to get operation', error as Error));
 	}
 }
 
@@ -101,7 +95,7 @@ export function getOperation(id: string): ProcessingOperation | null {
 export function getOperationByApplicationAndType(
 	applicationId: string,
 	type: ProcessingOperationType
-): ProcessingOperation | null {
+): Result<ProcessingOperation, Error> {
 	try {
 		const db = getDatabase();
 		const stmt = db.prepare(
@@ -110,12 +104,12 @@ export function getOperationByApplicationAndType(
 		const row = stmt.get(applicationId, type) as ProcessingOperationRow | undefined;
 
 		if (!row) {
-			return null;
+			return err(new StorageError(`Operation not found ${applicationId} ${type}`));
 		}
 
-		return rowToProcessingOperation(row);
+		return ok(rowToProcessingOperation(row));
 	} catch (error) {
-		throw new StorageError('Failed to get operation by application and type', error as Error);
+		return err(new StorageError('Failed to get operation by application and type', error as Error));
 	}
 }
 
@@ -125,7 +119,7 @@ export function getOperationByApplicationAndType(
 export function getOperationsByApplication(
 	applicationId: string,
 	type?: ProcessingOperationType
-): string[] {
+): Result<string[], Error> {
 	try {
 		const db = getDatabase();
 		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
@@ -141,9 +135,9 @@ export function getOperationsByApplication(
 		const stmt = db.prepare(query);
 		const rows = stmt.all(...params) as { id: string }[];
 
-		return rows.map((row) => row.id);
+		return ok(rows.map((row) => row.id));
 	} catch (error) {
-		throw new StorageError('Failed to list operations', error as Error);
+		return err(new StorageError('Failed to list operations', error as Error));
 	}
 }
 
@@ -154,32 +148,30 @@ export function getOperationsByApplication(
 export function updateOperation(
 	id: string,
 	operation: ProcessingOperation
-): ProcessingOperation | null {
+): Result<ProcessingOperation, Error> {
 	const db = getDatabase();
 
 	// Получаем текущую операцию
-	const current = getOperation(id);
-	if (!current) {
-		return null;
+	const currentOperation = getOperation(id);
+	if (currentOperation.isErr()) {
+		return currentOperation;
 	}
 
-	// Сохраняем createdAt и applicationId из существующей операции
-	const updated: ProcessingOperation = {
-		...operation,
-		id,
-		createdAt: current.createdAt,
-		applicationId: current.applicationId
-	};
+	let newOperation: ProcessingOperation;
+	try {
+		// Сохраняем createdAt и applicationId из существующей операции
+		newOperation = ProcessingOperationSchema.parse({
+			...operation,
+			id,
+			createdAt: currentOperation.value.createdAt,
+			applicationId: currentOperation.value.applicationId
+		});
+	} catch (error) {
+		return err(new ValidationError('Invalid operation data', error));
+	}
 
 	// Валидация
-	let validated: ProcessingOperation;
-	try {
-		validated = ProcessingOperationSchema.parse(updated);
-	} catch (error) {
-		throw new ValidationError('Invalid operation data', error);
-	}
-
-	const row = processingOperationToRow(validated);
+	const row = processingOperationToRow(newOperation);
 
 	try {
 		const stmt = db.prepare(`
@@ -194,15 +186,32 @@ export function updateOperation(
 		`);
 		stmt.run({ ...row, id });
 
-		// Синхронизируем с заявкой, если операция завершена
-		if (validated.status === 'completed' || validated.status === 'failed') {
-			syncOperationToApplication(validated);
-		}
-
-		return validated;
+		return ok(newOperation);
 	} catch (error) {
-		throw new StorageError('Failed to update operation', error as Error);
+		return err(new StorageError('Failed to update operation', error as Error));
 	}
+}
+
+/**
+ * Применяет результаты операций к заявке
+ * @param applicationId - ID заявки
+ * @returns Result<void, Error> - Результат применения операций к заявке
+ */
+export function applyOperationsToApplication(applicationId: string): Result<void, Error> {
+	const operations = getOperationsByApplication(applicationId);
+	if (operations.isErr()) {
+		return err(operations.error);
+	}
+	for (const id of operations.value) {
+		const operation = getOperation(id);
+		if (operation.isOk()) {
+			const result = writeOperationResultToApplication(applicationId, operation.value);
+			if (result.isErr()) {
+				logger.error('Failed to write operation result to application', { applicationId, operationId: id, error: result.error });
+			}
+		}
+	}
+	return ok(undefined);
 }
 
 /**
@@ -212,101 +221,56 @@ export function updateOperation(
  * @param operation - Операция обработки
  * @returns true если синхронизация выполнена, false если операция не завершена или не требует синхронизации
  */
-function syncOperationToApplication(operation: ProcessingOperation): boolean {
+function writeOperationResultToApplication(applicationId: string, operation: ProcessingOperation): Result<void, Error> {
 	// Синхронизируем только завершенные операции
-	if (operation.status !== 'completed' || !operation.result) {
-		return false;
+	if (operation.status !== 'completed' || !operation.result || 'error' in operation.result) {
+		return err(new Error('Operation is not completed or has an error'));
 	}
 
-	try {
-		const applicationId = operation.applicationId;
-		const updates: Parameters<typeof updateApplication>[1] = {};
+	const updates: Parameters<typeof updateApplication>[1] = {};
 
-		switch (operation.type) {
-			case 'ocr': {
-				// Обновляем ocrResult
-				// Проверяем, есть ли ошибка в result
-				if (operation.result && 'error' in operation.result) {
-					// Операция завершена с ошибкой, не синхронизируем
-					return false;
-				}
-				const result = operation.result as { text?: string };
-				if (result?.text) {
-					updates.ocrResult = { text: result.text };
-					logger.debug('Синхронизация OCR результата с заявкой', {
-						applicationId,
-						operationId: operation.id
-					});
-				}
-				break;
+	switch (operation.type) {
+		case 'ocr': {
+			const result = operation.result as { text?: string };
+			if (result?.text) {
+				updates.ocrResult = { text: result.text };
 			}
-
-			case 'llm_product_type': {
-				// Обновляем llmProductTypeResult и productType
-				// Проверяем, есть ли ошибка в result
-				if (operation.result && 'error' in operation.result) {
-					// Операция завершена с ошибкой, не синхронизируем
-					return false;
-				}
-				const result = operation.result as { type?: string; confidence?: number; reasoning?: string };
-				if (result?.type) {
-					updates.llmProductTypeResult = result;
-					updates.productType = result.type;
-					logger.debug('Синхронизация результата определения типа изделия с заявкой', {
-						applicationId,
-						operationId: operation.id,
-						productType: result.type
-					});
-				}
-				break;
-			}
-
-			case 'llm_abbreviation': {
-				// Обновляем llmAbbreviationResult и processingEndDate
-				// Проверяем, есть ли ошибка в result
-				if (operation.result && 'error' in operation.result) {
-					// Операция завершена с ошибкой, не синхронизируем
-					return false;
-				}
-				const result = operation.result as {
-					parameters?: unknown[];
-					abbreviation?: string;
-					technicalSpecId?: string;
-					generatedAt?: string;
-				};
-				if (result?.parameters || result?.abbreviation) {
-					updates.llmAbbreviationResult = result;
-					updates.processingEndDate = result.generatedAt || operation.completedAt || new Date().toISOString();
-					logger.debug('Синхронизация результата формирования аббревиатуры с заявкой', {
-						applicationId,
-						operationId: operation.id,
-						abbreviation: result.abbreviation
-					});
-				}
-				break;
-			}
-
-			default:
-				// Неизвестный тип операции, не синхронизируем
-				return false;
+			break;
 		}
 
-		// Обновляем заявку только если есть что обновлять
-		if (Object.keys(updates).length > 0) {
-			updateApplication(applicationId, updates);
-			return true;
+		case 'llm_product_type': {
+			const result = operation.result as { type?: string; confidence?: number; reasoning?: string };
+			if (result?.type) {
+				updates.llmProductTypeResult = result;
+				updates.productType = result.type;
+			}
+			break;
 		}
 
-		return false;
-	} catch (error) {
-		logger.error('Ошибка при синхронизации операции с заявкой', {
-			operationId: operation.id,
-			applicationId: operation.applicationId,
-			error: error instanceof Error ? error.message : String(error),
-			stack: error instanceof Error ? error.stack : undefined
-		});
-		// Не пробрасываем ошибку, чтобы не ломать основной поток
-		return false;
+		case 'llm_abbreviation': {
+			const result = operation.result as {
+				parameters?: unknown[];
+				abbreviation?: string;
+				technicalSpecId?: string;
+				generatedAt?: string;
+			};
+			if (result?.parameters || result?.abbreviation) {
+				updates.llmAbbreviationResult = result;
+				updates.processingEndDate = result.generatedAt || operation.completedAt || new Date().toISOString();
+			}
+			break;
+		}
+
+		default:
+			// Неизвестный тип операции, не синхронизируем
+			return err(new Error('Unknown operation type'));
 	}
+
+	// Обновляем заявку только если есть что обновлять
+	if (Object.keys(updates).length > 0) {
+		updateApplication(applicationId, updates);
+	}
+
+	return ok(undefined);
 }
 

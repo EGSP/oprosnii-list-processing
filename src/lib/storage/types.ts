@@ -73,7 +73,7 @@ export type ProcessingOperationStatus = 'running' | 'completed' | 'failed';
 export const ProcessingOperationSchema = z.object({
 	id: z.string().uuid(),
 	applicationId: z.string().uuid(),
-	type: z.enum(['ocr', 'llm_product_type', 'llm_abbreviation']),
+	type: z.enum(['file','ocr', 'llm_product_type', 'llm_abbreviation']),
 	provider: z.string(),
 	status: z.enum(['running', 'completed', 'failed']),
 	providerData: z.record(z.unknown()),
