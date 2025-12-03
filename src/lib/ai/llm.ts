@@ -22,7 +22,7 @@ import {
 	callYandexGPT as callYandexGPTImpl,
 	callYandexGPTStructured as callYandexGPTStructuredImpl,
 	YandexLLMError
-} from './yandex/llm.js';
+} from './yandex/api-llm.js';
 
 export class LLMError extends Error {
 	constructor(

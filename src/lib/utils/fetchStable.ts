@@ -1,3 +1,5 @@
+import { Result, ok, err } from 'neverthrow';
+
 /**
  * Fetch с таймаутом и retry логикой для стабильной работы с внешними API
  */
@@ -10,7 +12,7 @@
  * @param timeout - Таймаут в миллисекундах (по умолчанию 30000 = 30 секунд)
  * @param maxRetries - Максимальное количество попыток (по умолчанию 2, итого 3 запроса)
  * @param retryDelay - Задержка между попытками в миллисекундах (по умолчанию 1000 = 1 секунда)
- * @returns Promise с Response
+ * @returns Promise с Result, содержащий Response при успехе или Error при ошибке
  */
 export async function fetchStable(
 	url: string,
@@ -18,7 +20,7 @@ export async function fetchStable(
 	timeout: number = 30000,
 	maxRetries: number = 2,
 	retryDelay: number = 1000
-): Promise<Response> {
+): Promise<Result<Response, Error>> {
 	let lastError: Error | null = null;
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -38,7 +40,7 @@ export async function fetchStable(
 			if (timeoutId) {
 				clearTimeout(timeoutId);
 			}
-			return response;
+			return ok(response);
 		} catch (error) {
 			if (timeoutId) {
 				clearTimeout(timeoutId);
@@ -56,9 +58,9 @@ export async function fetchStable(
 
 			lastError = error as Error;
 
-			// Если это не сетевая ошибка или последняя попытка - выбрасываем ошибку
+			// Если это не сетевая ошибка или последняя попытка - возвращаем ошибку
 			if (!isNetworkError || attempt === maxRetries) {
-				throw error;
+				return err(error as Error);
 			}
 
 			// Ждем перед следующей попыткой (экспоненциальная задержка)
@@ -66,6 +68,6 @@ export async function fetchStable(
 		}
 	}
 
-	throw lastError || new Error('Неизвестная ошибка при выполнении fetch запроса');
+	return err(lastError || new Error('Неизвестная ошибка при выполнении fetch запроса'));
 }
 

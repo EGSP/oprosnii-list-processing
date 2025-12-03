@@ -8,12 +8,12 @@
  */
 
 import {
-	getOperation,
-	updateOperation
+	getOperation
 } from '../storage/operationsRepository.js';
 import { logger } from '../utils/logger.js';
-import { callYandexOCR, checkYandexOCROperation } from './yandex/ocr.js';
+import { callYandexOCR, checkYandexOCROperation } from './yandex/api-ocr.js';
 import type { ProcessingOperation } from '../storage/types.js';
+import { ok, Result, err } from 'neverthrow';
 
 export class OCRError extends Error {
 	constructor(
@@ -109,7 +109,7 @@ export async function extractText(
 		pageCount: number;
 		filename?: string;
 	}
-): Promise<ExtractTextResult> {
+): Promise<Result<ExtractTextResult, Error>> {
 	const { buffer, mimeType, fileType, pageCount, filename } = fileInfo;
 
 	// Для локальных файлов (DOCX, XLSX) - извлекаем текст напрямую, операции не создаем
@@ -134,7 +134,7 @@ export async function extractText(
 				textLength: text.length
 			});
 
-			return { type: 'text', text };
+			return ok({ type: 'text', text });
 		} catch (error) {
 			logger.error('Ошибка при локальном извлечении текста', {
 				applicationId,
@@ -155,18 +155,12 @@ export async function extractText(
 			pageCount
 		});
 
-		try {
-			const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
-			// callYandexOCR возвращает ExtractTextResult и сам создает/обновляет операцию
-			return result;
-		} catch (error) {
-			logger.error('Ошибка при извлечении текста через YandexOCR', {
-				applicationId,
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined
-			});
-			throw error;
+		const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
+		if (result.isErr()) {
+			return err(new OCRError('Не удалось извлечь текст через YandexOCR', result.error));
 		}
+		return ok({ type: 'text', text: result.value.result?.text as string });
+
 	}
 
 	logger.error('Неподдерживаемый тип файла', {
@@ -184,89 +178,30 @@ export async function extractText(
  * Для Yandex OCR проверяет статус у внешнего сервиса
  *
  * @param operationId - ID операции
- * @returns Обновленная операция или null, если не найдена
+ * @returns Обновленная операция или ошибка, если не найдена
  */
-export async function checkOCROperation(operationId: string): Promise<ProcessingOperation | null> {
+export async function checkOCROperation(operationId: string): Promise<Result<ProcessingOperation, OCRError>> {
 	logger.debug('Проверка статуса OCR операции', { operationId });
 
 	const operation = getOperation(operationId);
-	if (!operation) {
+	if (operation.isErr()) {
 		logger.warn('Операция не найдена', { operationId });
-		return null;
+		return err(new OCRError('Операция не найдена', operation.error));
 	}
 
 	// Если операция уже завершена, возвращаем как есть
-	if (operation.status === 'completed' || operation.status === 'failed') {
-		return operation;
+	if (operation.value.status === 'completed' || operation.value.status === 'failed') {
+		return ok(operation.value);
 	}
 
 	// Проверяем статус в зависимости от провайдера
-	switch (operation.provider) {
+	switch (operation.value.provider) {
 		case 'yandex': {
-			try {
-				logger.debug('Проверка статуса YandexOCR операции', {
-					operationId,
-					providerData: operation.providerData
-				});
-
-				const checkResult = await checkYandexOCROperation(operation);
-
-				if (checkResult.done) {
-					const current = getOperation(operationId);
-					if (current) {
-						if (checkResult.text) {
-							// Операция завершена успешно
-							logger.info('YandexOCR операция завершена успешно', {
-								operationId,
-								textLength: checkResult.text.length
-							});
-							updateOperation(operationId, {
-								...current,
-								status: 'completed',
-								result: { text: checkResult.text },
-								completedAt: new Date().toISOString()
-							});
-						} else if (checkResult.error) {
-							// Операция завершена с ошибкой
-							logger.error('YandexOCR операция завершена с ошибкой', {
-								operationId,
-								error: checkResult.error
-							});
-							updateOperation(operationId, {
-								...current,
-								status: 'failed',
-								result: { error: { message: checkResult.error } },
-								completedAt: new Date().toISOString()
-							});
-						}
-					}
-				}
-				// Если done === false, операция еще выполняется, статус не меняем
-
-				return getOperation(operationId);
-			} catch (error) {
-				// Ошибка при проверке статуса
-				logger.error('Ошибка при проверке статуса YandexOCR операции', {
-					operationId,
-					error: error instanceof Error ? error.message : String(error),
-					stack: error instanceof Error ? error.stack : undefined
-				});
-				const current = getOperation(operationId);
-				if (current) {
-					updateOperation(operationId, {
-						...current,
-						status: 'failed',
-						result: {
-							error: {
-								message: error instanceof Error ? error.message : 'Unknown error',
-								details: error
-							}
-						},
-						completedAt: new Date().toISOString()
-					});
-				}
-				return getOperation(operationId);
+			const updatedOperation = await checkYandexOCROperation(operation.value.id);
+			if (updatedOperation.isErr()) {
+				return err(new OCRError('Не удалось проверить статус асинхронной операции', updatedOperation.error));
 			}
+			return ok(updatedOperation.value);
 		}
 
 		case 'local': {
@@ -277,7 +212,7 @@ export async function checkOCROperation(operationId: string): Promise<Processing
 		default:
 			logger.warn('Неизвестный провайдер OCR', {
 				operationId,
-				provider: operation.provider
+				provider: operation.value.provider
 			});
 			return operation;
 	}
