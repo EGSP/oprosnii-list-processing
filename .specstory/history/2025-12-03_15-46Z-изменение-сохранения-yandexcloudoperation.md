@@ -120,7 +120,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 5, lines removed: 2
@@ -148,7 +148,7 @@ Lines added: 5, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -156,7 +156,7 @@ Lines added: 1, lines removed: 1
 ```diff
 @@ -286,5 +286,5 @@
   
-  			existingOperation.value.status = &#39;running&#39;;
+  			existingOperation.value.status = 'running';
 - 			existingOperation.value.providerData.operationId = yandexCloudOperation.id;
 + 			existingOperation.value.providerData.yandexCloudOperation = yandexCloudOperation;
   
@@ -171,7 +171,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -197,8 +197,8 @@ Lines added: 3, lines removed: 2
 + 	const yandexCloudOperation = operation.providerData?.yandexCloudOperation as YandexCloudOperation | undefined;
 + 	const operationId = yandexCloudOperation?.id;
   	if (!operationId) {
-- 		throw new YandexOCRError(&#39;Operation ID не найден в providerData&#39;);
-+ 		throw new YandexOCRError(&#39;Operation ID не найден в providerData.yandexCloudOperation&#39;);
+- 		throw new YandexOCRError('Operation ID не найден в providerData');
++ 		throw new YandexOCRError('Operation ID не найден в providerData.yandexCloudOperation');
   	}
   
 ```
@@ -297,15 +297,21 @@ Output mode: content
 ---
 
 
+Исправляю ошибки: обновляю использование `fetchYandexOCRResult` и удаляю неиспользуемую функцию.
+
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_file">
-<details>
-<summary>Tool use: **read_file**</summary>
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
 
-Status: **loading**
+</details>
+</tool-use>
 
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
 
 </details>
 </tool-use>
@@ -317,6 +323,176 @@ Status: **loading**
 ---
 
 
+Исправляю ошибки:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 3
+
+```diff
+@@ -90,7 +90,4 @@
+  export type YandexRecognitionResult = z.infer&lt;typeof YandexRecognitionResultSchema&gt;;
+  
+- function hasYandexCloudOperationDone(operation: ProcessingOperation): boolean {
+- 	
+- }
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -340,5 +340,6 @@
+  
+  	if (existingOperation.value.status === 'failed') {
+- 		return err(new YandexOCRError('Операция обработки завершена с ошибкой', existingOperation.value.error));
++ 		const errorMessage = existingOperation.value.result?.error as string | undefined || 'Неизвестная ошибка';
++ 		return err(new YandexOCRError('Операция обработки завершена с ошибкой', new Error(errorMessage)));
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 35, lines removed: 1
+
+```diff
+@@ -454,5 +454,39 @@
+  
+  			try {
+- 				const text = await fetchYandexOCRResult(operationId);
++ 				const fetchResult = await fetchYandexOCRResult(operationId);
++ 				if (fetchResult.isErr()) {
++ 					logger.error('Ошибка при получении результатов через GetRecognition', {
++ 						operationId: operation.id,
++ 						externalOperationId: operationId,
++ 						error: fetchResult.error.message
++ 					});
++ 					// Пробуем извлечь текст из response, если есть (fallback)
++ 					if (result.response) {
++ 						const textResult = getYandexRecognitionResultText(result.response);
++ 						if (textResult.isOk()) {
++ 							logger.info('Использован fallback: текст извлечен из Operation.Get ответа', {
++ 								operationId: operation.id,
++ 								externalOperationId: operationId,
++ 								textLength: textResult.value.length
++ 							});
++ 							return {
++ 								done: true,
++ 								text: textResult.value
++ 							};
++ 						}
++ 					}
++ 					// Если не удалось получить текст, возвращаем ошибку
++ 					return {
++ 						done: true,
++ 						error: fetchResult.error.message
++ 					};
++ 				}
++ 				const text = fetchResult.value.result?.text as string | undefined;
++ 				if (!text) {
++ 					return {
++ 						done: true,
++ 						error: 'Текст не найден в результате операции'
++ 					};
++ 				}
+  				logger.info('YandexOCR операция завершена успешно', {
+  					operationId: operation.id,
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -466,5 +500,5 @@
+  				};
+  			} catch (error) {
+- 				logger.error('Ошибка при получении результатов через GetRecognition', {
++ 				logger.error('Неожиданная ошибка при получении результатов через GetRecognition', {
+  					operationId: operation.id,
+  					externalOperationId: operationId,
+```
+
+**Chunk 3**
+Lines added: 4, lines removed: 4
+
+```diff
+@@ -473,14 +507,14 @@
+  				// Пробуем извлечь текст из response, если есть (fallback)
+  				if (result.response) {
+- 					const text = extractTextFromResponse(result.response);
+- 					if (text) {
++ 					const textResult = getYandexRecognitionResultText(result.response);
++ 					if (textResult.isOk()) {
+  						logger.info('Использован fallback: текст извлечен из Operation.Get ответа', {
+  							operationId: operation.id,
+  							externalOperationId: operationId,
+- 							textLength: text.length
++ 							textLength: textResult.value.length
+  						});
+  						return {
+  							done: true,
+- 							text
++ 							text: textResult.value
+  						};
+  					}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -17,7 +17,6 @@
+  	getOperationByApplicationAndType
+  } from '../../storage/operationsRepository.js';
+- import type { ExtractTextResult } from '../ocr.js';
+  import { fetchStable } from '../../utils/fetchStable.js';
+- import { ok, err, Result, ResultAsync } from 'neverthrow';
++ import { ok, err, Result } from 'neverthrow';
+  
+  export class YandexOCRError extends Error {
+```
+
+</details>
+
+</tool-use>
 
 ---
 
@@ -324,12 +500,38 @@ Status: **loading**
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+
+Проверяю, остались ли ошибки линтера:
+
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **search_replace**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/ai/yandex/ocr.ts`
 
+Lint results
+
+Lint errors for `src/lib/ai/yandex/ocr.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'recognitionResult' is declared but its value is never read. | 241:10-241:27 | DIAGNOSTIC_SEVERITY_HINT |
+| 'recognitionResult' is assigned a value but never used. | 241:10-241:27 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/ocr.ts</summary>
 
 </details>
 </tool-use>
@@ -341,28 +543,48 @@ Status: **loading**
 ---
 
 
-
----
-
+Удаляю неиспользуемую переменную в TODO-блоке:
 
 
 ---
 
+<tool-use data-tool-type="write" data-tool-name="search_replace">
 
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -239,6 +239,6 @@
+  		const yandexCloudOperation = existingOperation.value.providerData.yandexCloudOperation as YandexCloudOperation | undefined;
+  		if (yandexCloudOperation?.id) {
+- 			const recognitionResult = await fetchYandexOCRResult(yandexCloudOperation.id);
+- 			////////////////////////////////////////////////////////////
++ 			// TODO: Проверить статус операции и получить результаты, если завершена
++ 			// const recognitionResult = await fetchYandexOCRResult(yandexCloudOperation.id);
+  		}
+  	}
+```
+
+</details>
+
+</tool-use>
 
 ---
 
-
-
----
-
-<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **read_lints**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/ai/yandex/ocr.ts`
+
+Lint results
 
 
+**No lint errors found**
 </details>
 </tool-use>
 
@@ -373,34 +595,17 @@ Status: **loading**
 ---
 
 
+Изменения внесены, ошибки линтера исправлены. Итоги:
 
----
+1. **Сохранение всего объекта `yandexCloudOperation`**: В строке 285 вместо сохранения только `id` теперь сохраняется весь объект `yandexCloudOperation` в `providerData.yandexCloudOperation`.
 
+2. **Извлечение `id` из объекта**: Обновлены места, где используется `operationId`:
+   - В строке 240: извлечение `id` из `providerData.yandexCloudOperation.id` для проверки существующей операции
+   - В строке 401: извлечение `id` из `providerData.yandexCloudOperation.id` в функции `checkYandexOCROperation`
 
+3. **Исправлены ошибки линтера**: Удалена неиспользуемая функция `hasYandexCloudOperationDone`, исправлена обработка результата `fetchYandexOCRResult`, удалены неиспользуемые импорты.
 
----
-
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
-<details>
-<summary>Tool use: **search_replace**</summary>
-
-Status: **loading**
-
-
-</details>
-</tool-use>
-
----
-
-
-
----
-
-
-
----
-
-
+Теперь в `providerData` сохраняется весь объект `yandexCloudOperation`, что позволяет использовать все его поля (например, `done`, `error`, `metadata` и т.д.), а не только `id`.
 
 ---
 

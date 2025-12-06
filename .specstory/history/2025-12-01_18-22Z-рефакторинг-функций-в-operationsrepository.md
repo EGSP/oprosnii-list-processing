@@ -205,32 +205,32 @@ Parameters:
 
 ```json
 {
-  &quot;questions&quot;: [
+  "questions": [
     {
-      &quot;id&quot;: &quot;update_operation&quot;,
-      &quot;prompt&quot;: &quot;Что означает \&quot;полностью перезаписывает операцию\&quot; для функции updateOperation? Нужно передавать все поля операции (applicationId, type, provider и т.д.) или только те, которые нужно обновить?&quot;,
-      &quot;options&quot;: [
+      "id": "update_operation",
+      "prompt": "Что означает \"полностью перезаписывает операцию\" для функции updateOperation? Нужно передавать все поля операции (applicationId, type, provider и т.д.) или только те, которые нужно обновить?",
+      "options": [
         {
-          &quot;id&quot;: &quot;full&quot;,
-          &quot;label&quot;: &quot;Передавать все поля операции (полная перезапись)&quot;
+          "id": "full",
+          "label": "Передавать все поля операции (полная перезапись)"
         },
         {
-          &quot;id&quot;: &quot;partial&quot;,
-          &quot;label&quot;: &quot;Передавать только поля, которые нужно обновить (как сейчас через ProcessingOperationUpdate)&quot;
+          "id": "partial",
+          "label": "Передавать только поля, которые нужно обновить (как сейчас через ProcessingOperationUpdate)"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;sync_timing&quot;,
-      &quot;prompt&quot;: &quot;Когда вызывать syncOperationToApplication в функциях создания и обновления?&quot;,
-      &quot;options&quot;: [
+      "id": "sync_timing",
+      "prompt": "Когда вызывать syncOperationToApplication в функциях создания и обновления?",
+      "options": [
         {
-          &quot;id&quot;: &quot;always&quot;,
-          &quot;label&quot;: &quot;Всегда после создания/обновления&quot;
+          "id": "always",
+          "label": "Всегда после создания/обновления"
         },
         {
-          &quot;id&quot;: &quot;completed_only&quot;,
-          &quot;label&quot;: &quot;Только если статус операции completed или failed&quot;
+          "id": "completed_only",
+          "label": "Только если статус операции completed или failed"
         }
       ]
     }
@@ -241,13 +241,13 @@ Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;submitted&quot;,
-  &quot;currentSelections&quot;: {
-    &quot;update_operation&quot;: [
-      &quot;full&quot;
+  "status": "submitted",
+  "currentSelections": {
+    "update_operation": [
+      "full"
     ],
-    &quot;sync_timing&quot;: [
-      &quot;completed_only&quot;
+    "sync_timing": [
+      "completed_only"
     ]
   }
 }
@@ -256,17 +256,17 @@ Result:
 
 ```json
 {
-  &quot;answers&quot;: [
+  "answers": [
     {
-      &quot;questionId&quot;: &quot;update_operation&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;full&quot;
+      "questionId": "update_operation",
+      "selectedOptionIds": [
+        "full"
       ]
     },
     {
-      &quot;questionId&quot;: &quot;sync_timing&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;completed_only&quot;
+      "questionId": "sync_timing",
+      "selectedOptionIds": [
+        "completed_only"
       ]
     }
   ]
@@ -361,112 +361,112 @@ Parameters:
 
 ```json
 {
-  &quot;plan&quot;: &quot;# Рефакторинг operationsRepository.ts\n\n## Изменения в operationsRepository.ts\n\n### 1. Переименование и изменение createOrUpdateOperation\n- Переименовать &#96;createOrUpdateOperation&#96; в &#96;createOperation&#96;\n- Изменить логику: если операция с таким (applicationId, type) уже существует - выбрасывать ошибку &#96;OperationAlreadyExistsError&#96; (создать новый класс ошибки)\n- Добавить вызов &#96;syncOperationToApplication&#96; после создания, если статус &#96;completed&#96; или &#96;failed&#96;\n\n### 2. Изменение updateOperation\n- Изменить сигнатуру: принимать полный объект &#96;ProcessingOperation&#96; вместо &#96;ProcessingOperationUpdate&#96;\n- Сохранять &#96;createdAt&#96; и &#96;applicationId&#96; из существующей операции (не перезаписывать)\n- Добавить вызов &#96;syncOperationToApplication&#96; после обновления, если статус &#96;completed&#96; или &#96;failed&#96;\n\n### 3. Изменение getOperationsByApplication\n- Изменить возвращаемый тип с &#96;ProcessingOperation[]&#96; на &#96;string[]&#96; (массив id)\n- Упростить реализацию - возвращать только id операций\n\n### 4. Удаление функций\n- Удалить &#96;updateOperationStatus&#96;\n- Удалить &#96;getOperationWithSync&#96;\n- Удалить &#96;getOperationByApplicationAndTypeWithSync&#96;\n- Удалить &#96;getOperationsByApplicationWithSync&#96;\n\n### 5. Создание нового класса ошибки\n- Добавить &#96;OperationAlreadyExistsError&#96; в &#96;src/lib/storage/errors.ts&#96;\n\n## Обновление использования функций\n\n### 6. Обновление src/lib/ai/yandex/ocr.ts\n- Заменить &#96;createOrUpdateOperation&#96; на &#96;createOperation&#96;\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n- Обработать ошибку &#96;OperationAlreadyExistsError&#96; при создании\n\n### 7. Обновление src/lib/ai/llm.ts\n- Заменить &#96;createOrUpdateOperation&#96; на &#96;createOperation&#96;\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n- Обработать ошибку &#96;OperationAlreadyExistsError&#96; при создании\n\n### 8. Обновление src/lib/ai/ocr.ts\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n\n### 9. Обновление src/lib/business/processing.ts\n- Заменить все вызовы &#96;getOperationByApplicationAndTypeWithSync&#96; на &#96;getOperationByApplicationAndType&#96;\n- Добавить вызовы &#96;syncOperationToApplication&#96; там, где это необходимо (после получения завершенных операций)\n\n### 10. Обновление src/lib/storage/fileStorage.ts\n- Заменить &#96;getOperationByApplicationAndTypeWithSync&#96; на &#96;getOperationByApplicationAndType&#96;\n- Добавить вызов &#96;syncOperationToApplication&#96; при необходимости\n\n### 11. Обновление API endpoints\n- **src/routes/api/applications/[id]/operations/+server.ts**: Заменить &#96;getOperationsByApplicationWithSync&#96; на &#96;getOperationsByApplication&#96;. Поскольку теперь возвращается массив id, нужно будет получить полные объекты операций через &#96;getOperation&#96; для каждого id, если endpoint должен возвращать полные объекты. Или изменить логику endpoint&#39;а, чтобы возвращать только id.\n- **src/routes/api/applications/[id]/operations/[operationId]/+server.ts**: Заменить &#96;getOperationWithSync&#96; на &#96;getOperation&#96; и добавить вызов &#96;syncOperationToApplication&#96; при необходимости\n\n### 12. Обновление документации\n- Обновить &#96;src/lib/storage/STORAGE.md&#96; с новыми сигнатурами функций и удалением устаревших\n\n## Вопросы для уточнения\n\n- В endpoint &#96;/api/applications/[id]/operations&#96; нужно возвращать полные объекты операций или только id? Сейчас endpoint возвращает полные объекты, но &#96;getOperationsByApplication&#96; будет возвращать только id.&quot;,
-  &quot;name&quot;: &quot;Рефакторинг operationsRepository&quot;,
-  &quot;todos&quot;: [
+  "plan": "# Рефакторинг operationsRepository.ts\n\n## Изменения в operationsRepository.ts\n\n### 1. Переименование и изменение createOrUpdateOperation\n- Переименовать &#96;createOrUpdateOperation&#96; в &#96;createOperation&#96;\n- Изменить логику: если операция с таким (applicationId, type) уже существует - выбрасывать ошибку &#96;OperationAlreadyExistsError&#96; (создать новый класс ошибки)\n- Добавить вызов &#96;syncOperationToApplication&#96; после создания, если статус &#96;completed&#96; или &#96;failed&#96;\n\n### 2. Изменение updateOperation\n- Изменить сигнатуру: принимать полный объект &#96;ProcessingOperation&#96; вместо &#96;ProcessingOperationUpdate&#96;\n- Сохранять &#96;createdAt&#96; и &#96;applicationId&#96; из существующей операции (не перезаписывать)\n- Добавить вызов &#96;syncOperationToApplication&#96; после обновления, если статус &#96;completed&#96; или &#96;failed&#96;\n\n### 3. Изменение getOperationsByApplication\n- Изменить возвращаемый тип с &#96;ProcessingOperation[]&#96; на &#96;string[]&#96; (массив id)\n- Упростить реализацию - возвращать только id операций\n\n### 4. Удаление функций\n- Удалить &#96;updateOperationStatus&#96;\n- Удалить &#96;getOperationWithSync&#96;\n- Удалить &#96;getOperationByApplicationAndTypeWithSync&#96;\n- Удалить &#96;getOperationsByApplicationWithSync&#96;\n\n### 5. Создание нового класса ошибки\n- Добавить &#96;OperationAlreadyExistsError&#96; в &#96;src/lib/storage/errors.ts&#96;\n\n## Обновление использования функций\n\n### 6. Обновление src/lib/ai/yandex/ocr.ts\n- Заменить &#96;createOrUpdateOperation&#96; на &#96;createOperation&#96;\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n- Обработать ошибку &#96;OperationAlreadyExistsError&#96; при создании\n\n### 7. Обновление src/lib/ai/llm.ts\n- Заменить &#96;createOrUpdateOperation&#96; на &#96;createOperation&#96;\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n- Обработать ошибку &#96;OperationAlreadyExistsError&#96; при создании\n\n### 8. Обновление src/lib/ai/ocr.ts\n- Заменить &#96;updateOperationStatus&#96; на &#96;updateOperation&#96; с полным объектом операции\n\n### 9. Обновление src/lib/business/processing.ts\n- Заменить все вызовы &#96;getOperationByApplicationAndTypeWithSync&#96; на &#96;getOperationByApplicationAndType&#96;\n- Добавить вызовы &#96;syncOperationToApplication&#96; там, где это необходимо (после получения завершенных операций)\n\n### 10. Обновление src/lib/storage/fileStorage.ts\n- Заменить &#96;getOperationByApplicationAndTypeWithSync&#96; на &#96;getOperationByApplicationAndType&#96;\n- Добавить вызов &#96;syncOperationToApplication&#96; при необходимости\n\n### 11. Обновление API endpoints\n- **src/routes/api/applications/[id]/operations/+server.ts**: Заменить &#96;getOperationsByApplicationWithSync&#96; на &#96;getOperationsByApplication&#96;. Поскольку теперь возвращается массив id, нужно будет получить полные объекты операций через &#96;getOperation&#96; для каждого id, если endpoint должен возвращать полные объекты. Или изменить логику endpoint'а, чтобы возвращать только id.\n- **src/routes/api/applications/[id]/operations/[operationId]/+server.ts**: Заменить &#96;getOperationWithSync&#96; на &#96;getOperation&#96; и добавить вызов &#96;syncOperationToApplication&#96; при необходимости\n\n### 12. Обновление документации\n- Обновить &#96;src/lib/storage/STORAGE.md&#96; с новыми сигнатурами функций и удалением устаревших\n\n## Вопросы для уточнения\n\n- В endpoint &#96;/api/applications/[id]/operations&#96; нужно возвращать полные объекты операций или только id? Сейчас endpoint возвращает полные объекты, но &#96;getOperationsByApplication&#96; будет возвращать только id.",
+  "name": "Рефакторинг operationsRepository",
+  "todos": [
     {
-      &quot;content&quot;: &quot;Добавить OperationAlreadyExistsError в errors.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;add-error-class&quot;
+      "content": "Добавить OperationAlreadyExistsError в errors.ts",
+      "status": "pending",
+      "id": "add-error-class"
     },
     {
-      &quot;content&quot;: &quot;Переименовать createOrUpdateOperation в createOperation с проверкой на существование и синхронизацией&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;refactor-create&quot;,
-      &quot;dependencies&quot;: [
-        &quot;add-error-class&quot;
+      "content": "Переименовать createOrUpdateOperation в createOperation с проверкой на существование и синхронизацией",
+      "status": "pending",
+      "id": "refactor-create",
+      "dependencies": [
+        "add-error-class"
       ]
     },
     {
-      &quot;content&quot;: &quot;Изменить updateOperation на полную перезапись с синхронизацией&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;refactor-update&quot;
+      "content": "Изменить updateOperation на полную перезапись с синхронизацией",
+      "status": "pending",
+      "id": "refactor-update"
     },
     {
-      &quot;content&quot;: &quot;Изменить getOperationsByApplication на возврат только массива id&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;refactor-get-operations&quot;
+      "content": "Изменить getOperationsByApplication на возврат только массива id",
+      "status": "pending",
+      "id": "refactor-get-operations"
     },
     {
-      &quot;content&quot;: &quot;Удалить updateOperationStatus и все функции *WithSync&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;remove-functions&quot;
+      "content": "Удалить updateOperationStatus и все функции *WithSync",
+      "status": "pending",
+      "id": "remove-functions"
     },
     {
-      &quot;content&quot;: &quot;Обновить использование в yandex/ocr.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-yandex-ocr&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-create&quot;,
-        &quot;refactor-update&quot;
+      "content": "Обновить использование в yandex/ocr.ts",
+      "status": "pending",
+      "id": "update-yandex-ocr",
+      "dependencies": [
+        "refactor-create",
+        "refactor-update"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить использование в llm.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-llm&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-create&quot;,
-        &quot;refactor-update&quot;
+      "content": "Обновить использование в llm.ts",
+      "status": "pending",
+      "id": "update-llm",
+      "dependencies": [
+        "refactor-create",
+        "refactor-update"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить использование в ocr.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-ocr&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-update&quot;
+      "content": "Обновить использование в ocr.ts",
+      "status": "pending",
+      "id": "update-ocr",
+      "dependencies": [
+        "refactor-update"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить использование в processing.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-processing&quot;,
-      &quot;dependencies&quot;: [
-        &quot;remove-functions&quot;
+      "content": "Обновить использование в processing.ts",
+      "status": "pending",
+      "id": "update-processing",
+      "dependencies": [
+        "remove-functions"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить использование в fileStorage.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-file-storage&quot;,
-      &quot;dependencies&quot;: [
-        &quot;remove-functions&quot;
+      "content": "Обновить использование в fileStorage.ts",
+      "status": "pending",
+      "id": "update-file-storage",
+      "dependencies": [
+        "remove-functions"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить API endpoints&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-api-endpoints&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-get-operations&quot;,
-        &quot;remove-functions&quot;
+      "content": "Обновить API endpoints",
+      "status": "pending",
+      "id": "update-api-endpoints",
+      "dependencies": [
+        "refactor-get-operations",
+        "remove-functions"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить STORAGE.md документацию&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-docs&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-create&quot;,
-        &quot;refactor-update&quot;,
-        &quot;refactor-get-operations&quot;,
-        &quot;remove-functions&quot;
+      "content": "Обновить STORAGE.md документацию",
+      "status": "pending",
+      "id": "update-docs",
+      "dependencies": [
+        "refactor-create",
+        "refactor-update",
+        "refactor-get-operations",
+        "remove-functions"
       ]
     }
   ],
-  &quot;overview&quot;: &quot;Рефакторинг репозитория операций: переименование createOrUpdateOperation в createOperation с проверкой на существование, изменение updateOperation на полную перезапись, изменение getOperationsByApplication на возврат только id, удаление всех функций *WithSync и updateOperationStatus, добавление синхронизации в create/update функции.&quot;
+  "overview": "Рефакторинг репозитория операций: переименование createOrUpdateOperation в createOperation с проверкой на существование, изменение updateOperation на полную перезапись, изменение getOperationsByApplication на возврат только id, удаление всех функций *WithSync и updateOperationStatus, добавление синхронизации в create/update функции."
 }
 ```
 Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;accepted&quot;,
-  &quot;reviewData&quot;: {
-    &quot;status&quot;: &quot;Requested&quot;,
-    &quot;selectedOption&quot;: &quot;none&quot;,
-    &quot;isShowingInput&quot;: false
+  "status": "accepted",
+  "reviewData": {
+    "status": "Requested",
+    "selectedOption": "none",
+    "isShowingInput": false
   }
 }
 ```
@@ -474,96 +474,96 @@ Result:
 
 ```json
 {
-  &quot;accepted&quot;: {
-    &quot;finalTodos&quot;: [
+  "accepted": {
+    "finalTodos": [
       {
-        &quot;content&quot;: &quot;Добавить OperationAlreadyExistsError в errors.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;add-error-class&quot;
+        "content": "Добавить OperationAlreadyExistsError в errors.ts",
+        "status": "pending",
+        "id": "add-error-class"
       },
       {
-        &quot;content&quot;: &quot;Переименовать createOrUpdateOperation в createOperation с проверкой на существование и синхронизацией&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;refactor-create&quot;,
-        &quot;dependencies&quot;: [
-          &quot;add-error-class&quot;
+        "content": "Переименовать createOrUpdateOperation в createOperation с проверкой на существование и синхронизацией",
+        "status": "pending",
+        "id": "refactor-create",
+        "dependencies": [
+          "add-error-class"
         ]
       },
       {
-        &quot;content&quot;: &quot;Изменить updateOperation на полную перезапись с синхронизацией&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;refactor-update&quot;
+        "content": "Изменить updateOperation на полную перезапись с синхронизацией",
+        "status": "pending",
+        "id": "refactor-update"
       },
       {
-        &quot;content&quot;: &quot;Изменить getOperationsByApplication на возврат только массива id&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;refactor-get-operations&quot;
+        "content": "Изменить getOperationsByApplication на возврат только массива id",
+        "status": "pending",
+        "id": "refactor-get-operations"
       },
       {
-        &quot;content&quot;: &quot;Удалить updateOperationStatus и все функции *WithSync&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;remove-functions&quot;
+        "content": "Удалить updateOperationStatus и все функции *WithSync",
+        "status": "pending",
+        "id": "remove-functions"
       },
       {
-        &quot;content&quot;: &quot;Обновить использование в yandex/ocr.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-yandex-ocr&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-create&quot;,
-          &quot;refactor-update&quot;
+        "content": "Обновить использование в yandex/ocr.ts",
+        "status": "pending",
+        "id": "update-yandex-ocr",
+        "dependencies": [
+          "refactor-create",
+          "refactor-update"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить использование в llm.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-llm&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-create&quot;,
-          &quot;refactor-update&quot;
+        "content": "Обновить использование в llm.ts",
+        "status": "pending",
+        "id": "update-llm",
+        "dependencies": [
+          "refactor-create",
+          "refactor-update"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить использование в ocr.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-ocr&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-update&quot;
+        "content": "Обновить использование в ocr.ts",
+        "status": "pending",
+        "id": "update-ocr",
+        "dependencies": [
+          "refactor-update"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить использование в processing.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-processing&quot;,
-        &quot;dependencies&quot;: [
-          &quot;remove-functions&quot;
+        "content": "Обновить использование в processing.ts",
+        "status": "pending",
+        "id": "update-processing",
+        "dependencies": [
+          "remove-functions"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить использование в fileStorage.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-file-storage&quot;,
-        &quot;dependencies&quot;: [
-          &quot;remove-functions&quot;
+        "content": "Обновить использование в fileStorage.ts",
+        "status": "pending",
+        "id": "update-file-storage",
+        "dependencies": [
+          "remove-functions"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить API endpoints&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-api-endpoints&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-get-operations&quot;,
-          &quot;remove-functions&quot;
+        "content": "Обновить API endpoints",
+        "status": "pending",
+        "id": "update-api-endpoints",
+        "dependencies": [
+          "refactor-get-operations",
+          "remove-functions"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить STORAGE.md документацию&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-docs&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-create&quot;,
-          &quot;refactor-update&quot;,
-          &quot;refactor-get-operations&quot;,
-          &quot;remove-functions&quot;
+        "content": "Обновить STORAGE.md документацию",
+        "status": "pending",
+        "id": "update-docs",
+        "dependencies": [
+          "refactor-create",
+          "refactor-update",
+          "refactor-get-operations",
+          "remove-functions"
         ]
       }
     ]
@@ -639,7 +639,7 @@ _**Agent (model default, mode Agent)**_
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/errors.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/errors.ts</summary>
 
 **Chunk 1**
 Lines added: 7, lines removed: undefined
@@ -652,7 +652,7 @@ Lines added: 7, lines removed: undefined
 + export class OperationAlreadyExistsError extends StorageError {
 + 	constructor(applicationId: string, type: string) {
 + 		super(&#96;Processing operation with type ${type} already exists for application ${applicationId}&#96;);
-+ 		this.name = &#39;OperationAlreadyExistsError&#39;;
++ 		this.name = 'OperationAlreadyExistsError';
 + 	}
 + }
   
@@ -705,19 +705,19 @@ Lines added: 7, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -8,5 +8,5 @@
-  } from &#39;./types.js&#39;;
-  import { v4 as uuidv4 } from &#39;uuid&#39;;
-- import { StorageError, ValidationError } from &#39;./errors.js&#39;;
-+ import { StorageError, ValidationError, OperationAlreadyExistsError } from &#39;./errors.js&#39;;
-  import { updateApplication } from &#39;./repository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
+  } from './types.js';
+  import { v4 as uuidv4 } from 'uuid';
+- import { StorageError, ValidationError } from './errors.js';
++ import { StorageError, ValidationError, OperationAlreadyExistsError } from './errors.js';
+  import { updateApplication } from './repository.js';
+  import { logger } from '../utils/logger.js';
 ```
 
 </details>
@@ -728,7 +728,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 3, lines removed: 3
@@ -768,7 +768,7 @@ Lines added: 16, lines removed: 29
 - 			providerData,
 - 			// Сбрасываем результат при обновлении
 - 			result: null,
-- 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null
+- 			completedAt: status === 'completed' || status === 'failed' ? now : null
 - 		};
 - 	} else {
 - 		// Создаем новую операцию
@@ -782,7 +782,7 @@ Lines added: 16, lines removed: 29
 - 			providerData,
 - 			result: null,
 - 			createdAt: now,
-- 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null
+- 			completedAt: status === 'completed' || status === 'failed' ? now : null
 - 		};
 - 	}
 + 		throw new OperationAlreadyExistsError(applicationId, type);
@@ -799,7 +799,7 @@ Lines added: 16, lines removed: 29
 + 		providerData,
 + 		result: null,
 + 		createdAt: now,
-+ 		completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null
++ 		completedAt: status === 'completed' || status === 'failed' ? now : null
 + 	};
   
   	// Валидация через Zod
@@ -853,14 +853,14 @@ Lines added: 19, lines removed: 29
 + 		stmt.run(row);
 + 
 + 		// Синхронизируем с заявкой, если операция завершена
-+ 		if (validated.status === &#39;completed&#39; || validated.status === &#39;failed&#39;) {
++ 		if (validated.status === 'completed' || validated.status === 'failed') {
 + 			syncOperationToApplication(validated);
 + 		}
 + 
 + 		return validated;
   	} catch (error) {
-- 		throw new StorageError(&#39;Failed to create or update operation&#39;, error as Error);
-+ 		throw new StorageError(&#39;Failed to create operation&#39;, error as Error);
+- 		throw new StorageError('Failed to create or update operation', error as Error);
++ 		throw new StorageError('Failed to create operation', error as Error);
   	}
   }
 ```
@@ -904,7 +904,7 @@ Lines added: 19, lines removed: 29
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 3, lines removed: 2
@@ -938,7 +938,7 @@ Lines added: 7, lines removed: 10
 - 	// Автоматически обновляем временные метки при изменении статуса
 - 	if (updates.status) {
 - 		const now = new Date().toISOString();
-- 		if ((updates.status === &#39;completed&#39; || updates.status === &#39;failed&#39;) &amp;&amp; !updated.completedAt) {
+- 		if ((updates.status === 'completed' || updates.status === 'failed') &amp;&amp; !updated.completedAt) {
 - 			updated.completedAt = now;
 - 		}
 - 	}
@@ -960,8 +960,8 @@ Lines added: 1, lines removed: 1
 @@ -180,5 +178,5 @@
   		validated = ProcessingOperationSchema.parse(updated);
   	} catch (error) {
-- 		throw new ValidationError(&#39;Invalid operation update data&#39;, error);
-+ 		throw new ValidationError(&#39;Invalid operation data&#39;, error);
+- 		throw new ValidationError('Invalid operation update data', error);
++ 		throw new ValidationError('Invalid operation data', error);
   	}
   
 ```
@@ -988,7 +988,7 @@ Lines added: 5, lines removed: undefined
   		stmt.run({ ...row, id });
 + 
 + 		// Синхронизируем с заявкой, если операция завершена
-+ 		if (validated.status === &#39;completed&#39; || validated.status === &#39;failed&#39;) {
++ 		if (validated.status === 'completed' || validated.status === 'failed') {
 + 			syncOperationToApplication(validated);
 + 		}
   
@@ -1024,7 +1024,7 @@ Lines added: 5, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 3, lines removed: 3
@@ -1043,8 +1043,8 @@ Lines added: 3, lines removed: 3
 + ): string[] {
   	try {
   		const db = getDatabase();
-- 		let query = &#39;SELECT * FROM processing_operations WHERE application_id = ?&#39;;
-+ 		let query = &#39;SELECT id FROM processing_operations WHERE application_id = ?&#39;;
+- 		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
++ 		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
   		const params: (string | ProcessingOperationType)[] = [applicationId];
   
 ```
@@ -1062,7 +1062,7 @@ Lines added: 2, lines removed: 2
 - 		return rows.map(rowToProcessingOperation);
 + 		return rows.map((row) =&gt; row.id);
   	} catch (error) {
-  		throw new StorageError(&#39;Failed to list operations&#39;, error as Error);
+  		throw new StorageError('Failed to list operations', error as Error);
 ```
 
 </details>
@@ -1094,7 +1094,7 @@ Lines added: 2, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 36
@@ -1151,7 +1151,7 @@ Lines added: undefined, lines removed: 36
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 42
@@ -1196,7 +1196,7 @@ Lines added: undefined, lines removed: 42
 - 	const operations = getOperationsByApplication(applicationId, type);
 - 	// Синхронизируем каждую завершенную операцию
 - 	for (const operation of operations) {
-- 		if (operation.status === &#39;completed&#39;) {
+- 		if (operation.status === 'completed') {
 - 			syncOperationToApplication(operation);
 - 		}
 - 	}
@@ -1247,7 +1247,7 @@ Lint errors for `src/lib/storage/operationsRepository.ts`
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 1
@@ -1308,24 +1308,24 @@ Lines added: undefined, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 2
 
 ```diff
 @@ -12,7 +12,9 @@
-  import type { ProcessingOperation } from &#39;../../storage/types.js&#39;;
+  import type { ProcessingOperation } from '../../storage/types.js';
   import {
 - 	createOrUpdateOperation,
 - 	updateOperationStatus
 + 	createOperation,
 + 	updateOperation,
 + 	getOperation
-  } from &#39;../../storage/operationsRepository.js&#39;;
-+ import { OperationAlreadyExistsError } from &#39;../../storage/errors.js&#39;;
-  import type { ExtractTextResult } from &#39;../ocr.js&#39;;
-  import { fetchStable } from &#39;../../utils/fetchStable.js&#39;;
+  } from '../../storage/operationsRepository.js';
++ import { OperationAlreadyExistsError } from '../../storage/errors.js';
+  import type { ExtractTextResult } from '../ocr.js';
+  import { fetchStable } from '../../utils/fetchStable.js';
 ```
 
 </details>
@@ -1354,7 +1354,7 @@ Lines added: 4, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 20, lines removed: 6
@@ -1365,16 +1365,16 @@ Lines added: 20, lines removed: 6
   	// Создаем операцию перед вызовом API
 - 	const operation = createOrUpdateOperation(
 - 		applicationId,
-- 		&#39;ocr&#39;,
-- 		&#39;yandex&#39;,
+- 		'ocr',
+- 		'yandex',
 - 		{} // providerData будет заполнено после вызова API
 - 	);
 + 	let operation: ProcessingOperation;
 + 	try {
 + 		operation = createOperation(
 + 			applicationId,
-+ 			&#39;ocr&#39;,
-+ 			&#39;yandex&#39;,
++ 			'ocr',
++ 			'yandex',
 + 			{} // providerData будет заполнено после вызова API
 + 		);
 + 	} catch (error) {
@@ -1382,7 +1382,7 @@ Lines added: 20, lines removed: 6
 + 			// Если операция уже существует, получаем её
 + 			const existing = getOperation(applicationId);
 + 			if (!existing) {
-+ 				throw new YandexOCRError(&#39;Операция уже существует, но не найдена&#39;);
++ 				throw new YandexOCRError('Операция уже существует, но не найдена');
 + 			}
 + 			operation = existing;
 + 		} else {
@@ -1401,7 +1401,7 @@ Lines added: 20, lines removed: 6
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 8, lines removed: 3
@@ -1410,19 +1410,19 @@ Lines added: 8, lines removed: 3
 @@ -197,7 +197,12 @@
   					externalOperationId: result.id
   				});
-- 				updateOperationStatus(operation.id, &#39;running&#39;, {
+- 				updateOperationStatus(operation.id, 'running', {
 - 					providerData: { operationId: result.id }
 - 				});
 + 				const current = getOperation(operation.id);
 + 				if (current) {
 + 					updateOperation(operation.id, {
 + 						...current,
-+ 						status: &#39;running&#39;,
++ 						status: 'running',
 + 						providerData: { operationId: result.id }
 + 					});
 + 				}
   				return {
-  					type: &#39;processing&#39;,
+  					type: 'processing',
 ```
 
 </details>
@@ -1433,7 +1433,7 @@ Lines added: 8, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1442,19 +1442,19 @@ Lines added: 9, lines removed: 3
 @@ -216,7 +216,13 @@
   				responseStructure: JSON.stringify(result).substring(0, 200)
   			});
-- 			updateOperationStatus(operation.id, &#39;failed&#39;, {
-- 				error: { message: &#39;Неожиданный ответ от async endpoint YandexOCR&#39; }
+- 			updateOperationStatus(operation.id, 'failed', {
+- 				error: { message: 'Неожиданный ответ от async endpoint YandexOCR' }
 - 			});
 + 			const current = getOperation(operation.id);
 + 			if (current) {
 + 				updateOperation(operation.id, {
 + 					...current,
-+ 					status: &#39;failed&#39;,
-+ 					result: { error: { message: &#39;Неожиданный ответ от async endpoint YandexOCR&#39; } },
++ 					status: 'failed',
++ 					result: { error: { message: 'Неожиданный ответ от async endpoint YandexOCR' } },
 + 					completedAt: new Date().toISOString()
 + 				});
 + 			}
-  			throw new YandexOCRError(&#39;Неожиданный ответ от async endpoint YandexOCR&#39;);
+  			throw new YandexOCRError('Неожиданный ответ от async endpoint YandexOCR');
   		}
 ```
 
@@ -1466,7 +1466,7 @@ Lines added: 9, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1475,19 +1475,19 @@ Lines added: 9, lines removed: 3
 @@ -237,7 +237,13 @@
   					textLength: text.length
   				});
-- 				updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 				updateOperationStatus(operation.id, 'completed', {
 - 					result: { text }
 - 				});
 + 				const current = getOperation(operation.id);
 + 				if (current) {
 + 					updateOperation(operation.id, {
 + 						...current,
-+ 						status: &#39;completed&#39;,
++ 						status: 'completed',
 + 						result: { text },
 + 						completedAt: new Date().toISOString()
 + 					});
 + 				}
-  				return { type: &#39;text&#39;, text };
+  				return { type: 'text', text };
   			}
 ```
 
@@ -1499,7 +1499,7 @@ Lines added: 9, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1508,19 +1508,19 @@ Lines added: 9, lines removed: 3
 @@ -258,7 +258,13 @@
   				textLength: text.length
   			});
-- 			updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 			updateOperationStatus(operation.id, 'completed', {
 - 				result: { text }
 - 			});
 + 			const current = getOperation(operation.id);
 + 			if (current) {
 + 				updateOperation(operation.id, {
 + 					...current,
-+ 					status: &#39;completed&#39;,
++ 					status: 'completed',
 + 					result: { text },
 + 					completedAt: new Date().toISOString()
 + 				});
 + 			}
-  			return { type: &#39;text&#39;, text };
+  			return { type: 'text', text };
   		}
 ```
 
@@ -1532,7 +1532,7 @@ Lines added: 9, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1541,19 +1541,19 @@ Lines added: 9, lines removed: 3
 @@ -275,7 +275,13 @@
   			responseStructure: JSON.stringify(result).substring(0, 200)
   		});
-- 		updateOperationStatus(operation.id, &#39;failed&#39;, {
-- 			error: { message: &#39;Не удалось извлечь текст из ответа YandexOCR&#39; }
+- 		updateOperationStatus(operation.id, 'failed', {
+- 			error: { message: 'Не удалось извлечь текст из ответа YandexOCR' }
 - 		});
 + 		const current = getOperation(operation.id);
 + 		if (current) {
 + 			updateOperation(operation.id, {
 + 				...current,
-+ 				status: &#39;failed&#39;,
-+ 				result: { error: { message: &#39;Не удалось извлечь текст из ответа YandexOCR&#39; } },
++ 				status: 'failed',
++ 				result: { error: { message: 'Не удалось извлечь текст из ответа YandexOCR' } },
 + 				completedAt: new Date().toISOString()
 + 			});
 + 		}
-  		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+  		throw new YandexOCRError('Не удалось извлечь текст из ответа YandexOCR');
   	} catch (error) {
 ```
 
@@ -1565,7 +1565,7 @@ Lines added: 9, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 14, lines removed: 6
@@ -1574,9 +1574,9 @@ Lines added: 14, lines removed: 6
 @@ -292,10 +292,18 @@
   			stack: error instanceof Error ? error.stack : undefined
   		});
-- 		updateOperationStatus(operation.id, &#39;failed&#39;, {
+- 		updateOperationStatus(operation.id, 'failed', {
 - 			error: {
-- 				message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 				message: error instanceof Error ? error.message : 'Unknown error',
 - 				details: error
 - 			}
 - 		});
@@ -1584,10 +1584,10 @@ Lines added: 14, lines removed: 6
 + 		if (current) {
 + 			updateOperation(operation.id, {
 + 				...current,
-+ 				status: &#39;failed&#39;,
++ 				status: 'failed',
 + 				result: {
 + 					error: {
-+ 						message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 						message: error instanceof Error ? error.message : 'Unknown error',
 + 						details: error
 + 					}
 + 				},
@@ -1656,7 +1656,7 @@ _No matches found_
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 1
@@ -1668,8 +1668,8 @@ Lines added: 2, lines removed: 1
 - 	getOperation
 + 	getOperation,
 + 	getOperationByApplicationAndType
-  } from &#39;../../storage/operationsRepository.js&#39;;
-  import { OperationAlreadyExistsError } from &#39;../../storage/errors.js&#39;;
+  } from '../../storage/operationsRepository.js';
+  import { OperationAlreadyExistsError } from '../../storage/errors.js';
 ```
 
 </details>
@@ -1680,7 +1680,7 @@ Lines added: 2, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -1690,9 +1690,9 @@ Lines added: 1, lines removed: 1
   		if (error instanceof OperationAlreadyExistsError) {
   			// Если операция уже существует, получаем её
 - 			const existing = getOperation(applicationId);
-+ 			const existing = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
++ 			const existing = getOperationByApplicationAndType(applicationId, 'ocr');
   			if (!existing) {
-  				throw new YandexOCRError(&#39;Операция уже существует, но не найдена&#39;);
+  				throw new YandexOCRError('Операция уже существует, но не найдена');
 ```
 
 </details>
@@ -1759,14 +1759,14 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 2
 
 ```diff
 @@ -12,8 +12,10 @@
-  import type { ProcessingOperationType } from &#39;../storage/types.js&#39;;
+  import type { ProcessingOperationType } from '../storage/types.js';
   import {
 - 	createOrUpdateOperation,
 - 	updateOperationStatus,
@@ -1774,9 +1774,9 @@ Lines added: 4, lines removed: 2
 + 	updateOperation,
 + 	getOperation,
   	getOperationByApplicationAndType
-  } from &#39;../storage/operationsRepository.js&#39;;
-+ import { OperationAlreadyExistsError } from &#39;../storage/errors.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
+  } from '../storage/operationsRepository.js';
++ import { OperationAlreadyExistsError } from '../storage/errors.js';
+  import { logger } from '../utils/logger.js';
   import {
 ```
 
@@ -1792,7 +1792,7 @@ The model provided an ambiguous search string to replace.
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1801,14 +1801,14 @@ Lines added: 9, lines removed: 3
 @@ -104,7 +104,13 @@
   		// Сохраняем результат в операцию
   		if (operationId) {
-- 			updateOperationStatus(operationId, &#39;completed&#39;, {
+- 			updateOperationStatus(operationId, 'completed', {
 - 				result: { text }
 - 			});
 + 			const current = getOperation(operationId);
 + 			if (current) {
 + 				updateOperation(operationId, {
 + 					...current,
-+ 					status: &#39;completed&#39;,
++ 					status: 'completed',
 + 					result: { text },
 + 					completedAt: new Date().toISOString()
 + 				});
@@ -1833,7 +1833,7 @@ The model provided an ambiguous search string to replace.
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 9, lines removed: 3
@@ -1842,14 +1842,14 @@ Lines added: 9, lines removed: 3
 @@ -225,7 +225,13 @@
   		// Обновляем операцию с результатом (если она была создана)
   		if (operationId) {
-- 			updateOperationStatus(operationId, &#39;completed&#39;, {
+- 			updateOperationStatus(operationId, 'completed', {
 - 				result: validated
 - 			});
 + 			const current = getOperation(operationId);
 + 			if (current) {
 + 				updateOperation(operationId, {
 + 					...current,
-+ 					status: &#39;completed&#39;,
++ 					status: 'completed',
 + 					result: validated,
 + 					completedAt: new Date().toISOString()
 + 				});
@@ -1909,7 +1909,7 @@ The model provided an ambiguous search string to replace.
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -1920,8 +1920,8 @@ Lines added: 1, lines removed: 1
   	getOperation,
 - 	updateOperationStatus
 + 	updateOperation
-  } from &#39;../storage/operationsRepository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
+  } from '../storage/operationsRepository.js';
+  import { logger } from '../utils/logger.js';
 ```
 
 </details>
@@ -1932,7 +1932,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 27, lines removed: 18
@@ -1943,45 +1943,45 @@ Lines added: 27, lines removed: 18
   				if (checkResult.done) {
 - 					if (checkResult.text) {
 - 						// Операция завершена успешно
-- 						logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
+- 						logger.info('YandexOCR операция завершена успешно', {
 - 							operationId,
 - 							textLength: checkResult.text.length
 - 						});
-- 						updateOperationStatus(operationId, &#39;completed&#39;, {
+- 						updateOperationStatus(operationId, 'completed', {
 - 							result: { text: checkResult.text }
 - 						});
 - 					} else if (checkResult.error) {
 - 						// Операция завершена с ошибкой
-- 						logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
+- 						logger.error('YandexOCR операция завершена с ошибкой', {
 - 							operationId,
 - 							error: checkResult.error
 - 						});
-- 						updateOperationStatus(operationId, &#39;failed&#39;, {
+- 						updateOperationStatus(operationId, 'failed', {
 - 							error: { message: checkResult.error }
 - 						});
 + 					const current = getOperation(operationId);
 + 					if (current) {
 + 						if (checkResult.text) {
 + 							// Операция завершена успешно
-+ 							logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
++ 							logger.info('YandexOCR операция завершена успешно', {
 + 								operationId,
 + 								textLength: checkResult.text.length
 + 							});
 + 							updateOperation(operationId, {
 + 								...current,
-+ 								status: &#39;completed&#39;,
++ 								status: 'completed',
 + 								result: { text: checkResult.text },
 + 								completedAt: new Date().toISOString()
 + 							});
 + 						} else if (checkResult.error) {
 + 							// Операция завершена с ошибкой
-+ 							logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
++ 							logger.error('YandexOCR операция завершена с ошибкой', {
 + 								operationId,
 + 								error: checkResult.error
 + 							});
 + 							updateOperation(operationId, {
 + 								...current,
-+ 								status: &#39;failed&#39;,
++ 								status: 'failed',
 + 								result: { error: { message: checkResult.error } },
 + 								completedAt: new Date().toISOString()
 + 							});
@@ -1998,7 +1998,7 @@ Lines added: 27, lines removed: 18
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 14, lines removed: 6
@@ -2007,9 +2007,9 @@ Lines added: 14, lines removed: 6
 @@ -252,10 +252,18 @@
   					stack: error instanceof Error ? error.stack : undefined
   				});
-- 				updateOperationStatus(operationId, &#39;failed&#39;, {
+- 				updateOperationStatus(operationId, 'failed', {
 - 					error: {
-- 						message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 						message: error instanceof Error ? error.message : 'Unknown error',
 - 						details: error
 - 					}
 - 				});
@@ -2017,10 +2017,10 @@ Lines added: 14, lines removed: 6
 + 				if (current) {
 + 					updateOperation(operationId, {
 + 						...current,
-+ 						status: &#39;failed&#39;,
++ 						status: 'failed',
 + 						result: {
 + 							error: {
-+ 								message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 								message: error instanceof Error ? error.message : 'Unknown error',
 + 								details: error
 + 							}
 + 						},
@@ -2129,7 +2129,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 33, lines removed: 13
@@ -2145,7 +2145,7 @@ Lines added: 33, lines removed: 13
 - 			{} // providerData пустой для LLM операций
 - 		);
 - 		operationId = operation.id;
-- 		logger.debug(&#39;Создана операция LLM&#39;, {
+- 		logger.debug('Создана операция LLM', {
 - 			operationId,
 - 			applicationId: operationConfig.applicationId,
 - 			type: operationConfig.type,
@@ -2159,7 +2159,7 @@ Lines added: 33, lines removed: 13
 + 				{} // providerData пустой для LLM операций
 + 			);
 + 			operationId = operation.id;
-+ 			logger.debug(&#39;Создана операция LLM&#39;, {
++ 			logger.debug('Создана операция LLM', {
 + 				operationId,
 + 				applicationId: operationConfig.applicationId,
 + 				type: operationConfig.type,
@@ -2174,7 +2174,7 @@ Lines added: 33, lines removed: 13
 + 				);
 + 				if (existing) {
 + 					operationId = existing.id;
-+ 					logger.debug(&#39;Использована существующая операция LLM&#39;, {
++ 					logger.debug('Использована существующая операция LLM', {
 + 						operationId,
 + 						applicationId: operationConfig.applicationId,
 + 						type: operationConfig.type
@@ -2196,7 +2196,7 @@ Lines added: 33, lines removed: 13
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 14, lines removed: 6
@@ -2205,9 +2205,9 @@ Lines added: 14, lines removed: 6
 @@ -145,10 +145,18 @@
   
   		if (operationId) {
-- 			updateOperationStatus(operationId, &#39;failed&#39;, {
+- 			updateOperationStatus(operationId, 'failed', {
 - 				error: {
-- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 					message: error instanceof Error ? error.message : 'Unknown error',
 - 					details: error
 - 				}
 - 			});
@@ -2215,10 +2215,10 @@ Lines added: 14, lines removed: 6
 + 			if (current) {
 + 				updateOperation(operationId, {
 + 					...current,
-+ 					status: &#39;failed&#39;,
++ 					status: 'failed',
 + 					result: {
 + 						error: {
-+ 							message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 							message: error instanceof Error ? error.message : 'Unknown error',
 + 							details: error
 + 						}
 + 					},
@@ -2237,7 +2237,7 @@ Lines added: 14, lines removed: 6
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 33, lines removed: 13
@@ -2253,7 +2253,7 @@ Lines added: 33, lines removed: 13
 - 			{} // providerData пустой для LLM операций
 - 		);
 - 		operationId = operation.id;
-- 		logger.debug(&#39;Создана операция LLM&#39;, {
+- 		logger.debug('Создана операция LLM', {
 - 			operationId,
 - 			applicationId: operationConfig.applicationId,
 - 			type: operationConfig.type,
@@ -2267,7 +2267,7 @@ Lines added: 33, lines removed: 13
 + 				{} // providerData пустой для LLM операций
 + 			);
 + 			operationId = operation.id;
-+ 			logger.debug(&#39;Создана операция LLM&#39;, {
++ 			logger.debug('Создана операция LLM', {
 + 				operationId,
 + 				applicationId: operationConfig.applicationId,
 + 				type: operationConfig.type,
@@ -2282,7 +2282,7 @@ Lines added: 33, lines removed: 13
 + 				);
 + 				if (existing) {
 + 					operationId = existing.id;
-+ 					logger.debug(&#39;Использована существующая операция LLM&#39;, {
++ 					logger.debug('Использована существующая операция LLM', {
 + 						operationId,
 + 						applicationId: operationConfig.applicationId,
 + 						type: operationConfig.type
@@ -2304,7 +2304,7 @@ Lines added: 33, lines removed: 13
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 14, lines removed: 6
@@ -2313,9 +2313,9 @@ Lines added: 14, lines removed: 6
 @@ -296,10 +296,18 @@
   
   		if (operationId) {
-- 			updateOperationStatus(operationId, &#39;failed&#39;, {
+- 			updateOperationStatus(operationId, 'failed', {
 - 				error: {
-- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 					message: error instanceof Error ? error.message : 'Unknown error',
 - 					details: error
 - 				}
 - 			});
@@ -2323,10 +2323,10 @@ Lines added: 14, lines removed: 6
 + 			if (current) {
 + 				updateOperation(operationId, {
 + 					...current,
-+ 					status: &#39;failed&#39;,
++ 					status: 'failed',
 + 					result: {
 + 						error: {
-+ 							message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 							message: error instanceof Error ? error.message : 'Unknown error',
 + 							details: error
 + 						}
 + 					},
@@ -2465,14 +2465,14 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -20,5 +20,5 @@
-  import { logger } from &#39;../utils/logger.js&#39;;
+  import { logger } from '../utils/logger.js';
   import {
 - 	callYandexGPT,
 + 	callYandexGPT as callYandexGPTImpl,
@@ -2488,7 +2488,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -2496,7 +2496,7 @@ Lines added: 1, lines removed: 1
 ```diff
 @@ -108,5 +108,5 @@
   		switch (provider) {
-  			case &#39;yandex&#39;: {
+  			case 'yandex': {
 - 				text = await callYandexGPT(prompt, systemPrompt, options);
 + 				text = await callYandexGPTImpl(prompt, systemPrompt, options);
   				break;
@@ -2511,7 +2511,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -2523,7 +2523,7 @@ Lines added: 1, lines removed: 1
 - 	getOperationByApplicationAndTypeWithSync,
 + 	getOperationByApplicationAndType,
   	syncOperationToApplication
-  } from &#39;../storage/index.js&#39;;
+  } from '../storage/index.js';
 ```
 
 </details>
@@ -2534,7 +2534,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2543,13 +2543,13 @@ Lines added: 4, lines removed: 1
 @@ -101,5 +101,8 @@
   	if (fileInfo.extractedText) {
   		extractedText = fileInfo.extractedText;
-- 		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;ocr&#39;);
-+ 		const existingOCROperation = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
-+ 		if (existingOCROperation &amp;&amp; (existingOCROperation.status === &#39;completed&#39; || existingOCROperation.status === &#39;failed&#39;)) {
+- 		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
++ 		const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
++ 		if (existingOCROperation &amp;&amp; (existingOCROperation.status === 'completed' || existingOCROperation.status === 'failed')) {
 + 			syncOperationToApplication(existingOCROperation);
 + 		}
   		ocrOperationId = existingOCROperation?.id;
-  		logger.info(&#39;Использован уже извлеченный текст&#39;, {
+  		logger.info('Использован уже извлеченный текст', {
 ```
 
 **Chunk 2**
@@ -2559,13 +2559,13 @@ Lines added: 4, lines removed: 1
 @@ -286,5 +289,8 @@
   	if (fileInfo.extractedText) {
   		extractedText = fileInfo.extractedText;
-- 		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;ocr&#39;);
-+ 		const existingOCROperation = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
-+ 		if (existingOCROperation &amp;&amp; (existingOCROperation.status === &#39;completed&#39; || existingOCROperation.status === &#39;failed&#39;)) {
+- 		const existingOCROperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
++ 		const existingOCROperation = getOperationByApplicationAndType(applicationId, 'ocr');
++ 		if (existingOCROperation &amp;&amp; (existingOCROperation.status === 'completed' || existingOCROperation.status === 'failed')) {
 + 			syncOperationToApplication(existingOCROperation);
 + 		}
   		ocrOperationId = existingOCROperation?.id;
-  		logger.info(&#39;Использован уже извлеченный текст для формирования аббревиатуры&#39;, {
+  		logger.info('Использован уже извлеченный текст для формирования аббревиатуры', {
 ```
 
 </details>
@@ -2648,7 +2648,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2657,13 +2657,13 @@ Lines added: 4, lines removed: 1
 @@ -128,5 +128,8 @@
   				// Синхронная операция завершена
   				extractedText = ocrResult.text;
-- 				const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;ocr&#39;);
-+ 				const ocrOperation = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
-+ 				if (ocrOperation &amp;&amp; (ocrOperation.status === &#39;completed&#39; || ocrOperation.status === &#39;failed&#39;)) {
+- 				const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
++ 				const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
++ 				if (ocrOperation &amp;&amp; (ocrOperation.status === 'completed' || ocrOperation.status === 'failed')) {
 + 					syncOperationToApplication(ocrOperation);
 + 				}
   				ocrOperationId = ocrOperation?.id;
-  				logger.info(&#39;Текст успешно извлечен из файла&#39;, {
+  				logger.info('Текст успешно извлечен из файла', {
 ```
 
 </details>
@@ -2674,7 +2674,7 @@ Lines added: 4, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2683,9 +2683,9 @@ Lines added: 4, lines removed: 1
 @@ -229,5 +229,8 @@
   
   		// Получаем ID операции LLM (с синхронизацией)
-- 		const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;llm_product_type&#39;);
-+ 		const llmOperation = getOperationByApplicationAndType(applicationId, &#39;llm_product_type&#39;);
-+ 		if (llmOperation &amp;&amp; (llmOperation.status === &#39;completed&#39; || llmOperation.status === &#39;failed&#39;)) {
+- 		const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_product_type');
++ 		const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_product_type');
++ 		if (llmOperation &amp;&amp; (llmOperation.status === 'completed' || llmOperation.status === 'failed')) {
 + 			syncOperationToApplication(llmOperation);
 + 		}
   		const llmOperationId = llmOperation?.id;
@@ -2700,7 +2700,7 @@ Lines added: 4, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2709,13 +2709,13 @@ Lines added: 4, lines removed: 1
 @@ -329,5 +329,8 @@
   			// Синхронная операция завершена
   			extractedText = ocrResult.text;
-- 			const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;ocr&#39;);
-+ 			const ocrOperation = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
-+ 			if (ocrOperation &amp;&amp; (ocrOperation.status === &#39;completed&#39; || ocrOperation.status === &#39;failed&#39;)) {
+- 			const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
++ 			const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
++ 			if (ocrOperation &amp;&amp; (ocrOperation.status === 'completed' || ocrOperation.status === 'failed')) {
 + 				syncOperationToApplication(ocrOperation);
 + 			}
   			ocrOperationId = ocrOperation?.id;
-  			logger.info(&#39;Текст успешно извлечен для формирования аббревиатуры&#39;, {
+  			logger.info('Текст успешно извлечен для формирования аббревиатуры', {
 ```
 
 </details>
@@ -2726,7 +2726,7 @@ Lines added: 4, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2735,9 +2735,9 @@ Lines added: 4, lines removed: 1
 @@ -437,5 +437,8 @@
   
   	// Получаем ID операции LLM с синхронизацией
-- 	const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;llm_abbreviation&#39;);
-+ 	const llmOperation = getOperationByApplicationAndType(applicationId, &#39;llm_abbreviation&#39;);
-+ 	if (llmOperation &amp;&amp; (llmOperation.status === &#39;completed&#39; || llmOperation.status === &#39;failed&#39;)) {
+- 	const llmOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'llm_abbreviation');
++ 	const llmOperation = getOperationByApplicationAndType(applicationId, 'llm_abbreviation');
++ 	if (llmOperation &amp;&amp; (llmOperation.status === 'completed' || llmOperation.status === 'failed')) {
 + 		syncOperationToApplication(llmOperation);
 + 	}
   	const llmOperationId = llmOperation?.id;
@@ -2820,19 +2820,19 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/fileStorage.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/fileStorage.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -12,5 +12,5 @@
-  import { config } from &#39;../config.js&#39;;
-  import { FileStorageError } from &#39;./errors.js&#39;;
-- import { getOperationByApplicationAndTypeWithSync } from &#39;./operationsRepository.js&#39;;
-+ import { getOperationByApplicationAndType, syncOperationToApplication } from &#39;./operationsRepository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
-  import { PDFDocument } from &#39;pdf-lib&#39;;
+  import { config } from '../config.js';
+  import { FileStorageError } from './errors.js';
+- import { getOperationByApplicationAndTypeWithSync } from './operationsRepository.js';
++ import { getOperationByApplicationAndType, syncOperationToApplication } from './operationsRepository.js';
+  import { logger } from '../utils/logger.js';
+  import { PDFDocument } from 'pdf-lib';
 ```
 
 </details>
@@ -2843,7 +2843,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/fileStorage.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/fileStorage.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 1
@@ -2852,9 +2852,9 @@ Lines added: 4, lines removed: 1
 @@ -241,5 +241,8 @@
   	// Проверяем существующую OCR операцию для получения текста
   	let extractedText: string | undefined;
-- 	const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, &#39;ocr&#39;);
-+ 	const ocrOperation = getOperationByApplicationAndType(applicationId, &#39;ocr&#39;);
-+ 	if (ocrOperation &amp;&amp; (ocrOperation.status === &#39;completed&#39; || ocrOperation.status === &#39;failed&#39;)) {
+- 	const ocrOperation = getOperationByApplicationAndTypeWithSync(applicationId, 'ocr');
++ 	const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
++ 	if (ocrOperation &amp;&amp; (ocrOperation.status === 'completed' || ocrOperation.status === 'failed')) {
 + 		syncOperationToApplication(ocrOperation);
 + 	}
   	if (
@@ -2916,19 +2916,19 @@ Lines added: 4, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/routes/api/applications/[id]/operations/+server.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/routes/api/applications/[id]/operations/+server.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -1,5 +1,5 @@
-  import { json } from &#39;@sveltejs/kit&#39;;
-  import type { RequestHandler } from &#39;./$types.js&#39;;
-- import { getApplication, getOperationsByApplicationWithSync } from &#39;$lib/storage/index.js&#39;;
-+ import { getApplication, getOperationsByApplication } from &#39;$lib/storage/index.js&#39;;
-  import { requireValidUUID, handleStorageError } from &#39;$lib/api/index.js&#39;;
-  import type { ProcessingOperationType } from &#39;$lib/storage/types.js&#39;;
+  import { json } from '@sveltejs/kit';
+  import type { RequestHandler } from './$types.js';
+- import { getApplication, getOperationsByApplicationWithSync } from '$lib/storage/index.js';
++ import { getApplication, getOperationsByApplication } from '$lib/storage/index.js';
+  import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
+  import type { ProcessingOperationType } from '$lib/storage/types.js';
 ```
 
 </details>
@@ -2939,7 +2939,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/routes/api/applications/[id]/operations/+server.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/routes/api/applications/[id]/operations/+server.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 4
@@ -2969,18 +2969,18 @@ Lines added: 4, lines removed: 4
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/routes/api/applications/[id]/operations/[operationId]/+server.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/routes/api/applications/[id]/operations/[operationId]/+server.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -1,5 +1,5 @@
-  import { json } from &#39;@sveltejs/kit&#39;;
-  import type { RequestHandler } from &#39;./$types.js&#39;;
-- import { getApplication, getOperationWithSync } from &#39;$lib/storage/index.js&#39;;
-+ import { getApplication, getOperation, syncOperationToApplication } from &#39;$lib/storage/index.js&#39;;
-  import { requireValidUUID, handleStorageError } from &#39;$lib/api/index.js&#39;;
+  import { json } from '@sveltejs/kit';
+  import type { RequestHandler } from './$types.js';
+- import { getApplication, getOperationWithSync } from '$lib/storage/index.js';
++ import { getApplication, getOperation, syncOperationToApplication } from '$lib/storage/index.js';
+  import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
   
 ```
 
@@ -2992,7 +2992,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/routes/api/applications/[id]/operations/[operationId]/+server.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/routes/api/applications/[id]/operations/[operationId]/+server.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 2
@@ -3006,7 +3006,7 @@ Lines added: 2, lines removed: 2
 + 		// Получаем операцию
 + 		const operation = getOperation(operationId);
   		if (!operation) {
-  			return json({ error: &#39;Операция не найдена&#39; }, { status: 404 });
+  			return json({ error: 'Операция не найдена' }, { status: 404 });
 ```
 
 **Chunk 2**
@@ -3014,11 +3014,11 @@ Lines added: 5, lines removed: undefined
 
 ```diff
 @@ -41,4 +41,9 @@
-  			return json({ error: &#39;Операция не принадлежит указанной заявке&#39; }, { status: 400 });
+  			return json({ error: 'Операция не принадлежит указанной заявке' }, { status: 400 });
   		}
 + 
 + 		// Синхронизируем с заявкой, если операция завершена
-+ 		if (operation.status === &#39;completed&#39; || operation.status === &#39;failed&#39;) {
++ 		if (operation.status === 'completed' || operation.status === 'failed') {
 + 			syncOperationToApplication(operation);
 + 		}
   
@@ -3073,14 +3073,212 @@ Lines added: 5, lines removed: undefined
 ---
 
 
+Обновляю документацию:
+
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_file">
-<details>
-<summary>Tool use: **read_file**</summary>
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/STORAGE.md</summary>
 
-Status: **loading**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
+
+**Chunk 1**
+Lines added: 15, lines removed: 9
+
+```diff
+@@ -241,16 +241,22 @@
+  ### Репозиторий операций обработки (&#96;operationsRepository.ts&#96;)
+  
+- #### &#96;createOrUpdateOperation(applicationId: string, type: ProcessingOperationType, provider: string, providerData?: Record&lt;string, unknown&gt;, status?: ProcessingOperationStatus): ProcessingOperation&#96;
++ #### &#96;createOperation(applicationId: string, type: ProcessingOperationType, provider: string, providerData?: Record&lt;string, unknown&gt;, status?: ProcessingOperationStatus): ProcessingOperation&#96;
+  
+- Создает новую операцию обработки или обновляет существующую (если операция с таким типом уже есть для заявки).
++ Создает новую операцию обработки. Если операция с таким (applicationId, type) уже существует, выбрасывает ошибку &#96;OperationAlreadyExistsError&#96;. Автоматически синхронизирует результат с заявкой, если статус &#96;completed&#96; или &#96;failed&#96;.
+  
+  &#96;&#96;&#96;typescript
+- const operation = createOrUpdateOperation(
+- 	'application-id',
+- 	'ocr',
+- 	'yandex',
+- 	{ operationId: 'external-operation-id' }, // providerData
+- 	'running' // status
+- );
++ try {
++ 	const operation = createOperation(
++ 		'application-id',
++ 		'ocr',
++ 		'yandex',
++ 		{ operationId: 'external-operation-id' }, // providerData
++ 		'running' // status
++ 	);
++ } catch (error) {
++ 	if (error instanceof OperationAlreadyExistsError) {
++ 		// Операция уже существует
++ 	}
++ }
+  &#96;&#96;&#96;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 6
+
+```diff
+@@ -280,14 +280,17 @@
+  &#96;&#96;&#96;
+  
+- #### &#96;getOperationsByApplication(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]&#96;
++ #### &#96;getOperationsByApplication(applicationId: string, type?: ProcessingOperationType): string[]&#96;
+  
+- Получает список всех операций для заявки с опциональной фильтрацией по типу.
++ Получает список id операций для заявки с опциональной фильтрацией по типу. Возвращает массив id операций.
+  
+  &#96;&#96;&#96;typescript
+- // Все операции заявки
+- const allOperations = getOperationsByApplication('application-id');
++ // Все id операций заявки
++ const operationIds = getOperationsByApplication('application-id');
+  
+- // Только OCR операции
+- const ocrOperations = getOperationsByApplication('application-id', 'ocr');
++ // Только id OCR операций
++ const ocrOperationIds = getOperationsByApplication('application-id', 'ocr');
++ 
++ // Для получения полных объектов используйте getOperation для каждого id
++ const operations = operationIds.map(id =&gt; getOperation(id)).filter(op =&gt; op !== null);
+  &#96;&#96;&#96;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
+
+**Chunk 1**
+Lines added: 12, lines removed: 56
+
+```diff
+@@ -312,63 +312,19 @@
+  &#96;&#96;&#96;
+  
+- #### &#96;getOperationWithSync(id: string): ProcessingOperation | null&#96;
++ #### &#96;updateOperation(id: string, operation: ProcessingOperation): ProcessingOperation | null&#96;
+  
+- Получает операцию по ID с автоматической синхронизацией результата с заявкой. Если операция завершена, автоматически обновляет соответствующее поле в таблице &#96;applications&#96;.
++ Обновляет операцию (полная перезапись). Сохраняет &#96;createdAt&#96; и &#96;applicationId&#96; из существующей операции. Автоматически синхронизирует результат с заявкой, если статус &#96;completed&#96; или &#96;failed&#96;.
+  
+  &#96;&#96;&#96;typescript
+- const operation = getOperationWithSync('operation-id');
+- // Если операция завершена, результат уже синхронизирован с заявкой
+- &#96;&#96;&#96;
+- 
+- #### &#96;getOperationByApplicationAndTypeWithSync(applicationId: string, type: ProcessingOperationType): ProcessingOperation | null&#96;
+- 
+- Получает операцию по ID заявки и типу с автоматической синхронизацией результата с заявкой.
+- 
+- &#96;&#96;&#96;typescript
+- const ocrOperation = getOperationByApplicationAndTypeWithSync('application-id', 'ocr');
+- // Если операция завершена, результат уже синхронизирован с заявкой
+- &#96;&#96;&#96;
+- 
+- #### &#96;getOperationsByApplicationWithSync(applicationId: string, type?: ProcessingOperationType): ProcessingOperation[]&#96;
+- 
+- Получает список всех операций для заявки с автоматической синхронизацией результатов завершенных операций с заявкой.
+- 
+- &#96;&#96;&#96;typescript
+- // Все операции заявки (завершенные автоматически синхронизируются)
+- const allOperations = getOperationsByApplicationWithSync('application-id');
+- &#96;&#96;&#96;
+- 
+- **Примечание:** Функции с синхронизацией (&#96;*WithSync&#96;) рекомендуется использовать в API эндпоинтах для автоматического обновления таблицы &#96;applications&#96; при получении операций.
+- 
+- #### &#96;updateOperation(id: string, updates: ProcessingOperationUpdate): ProcessingOperation | null&#96;
+- 
+- Обновляет операцию. Автоматически заполняет временные метки при изменении статуса.
+- 
+- &#96;&#96;&#96;typescript
+- const updated = updateOperation('operation-id', {
+- 	status: 'completed',
+- 	result: { text: 'Extracted text...' }
+- });
+- &#96;&#96;&#96;
+- 
+- #### &#96;updateOperationStatus(id: string, status: ProcessingOperationStatus, data?: {...}): ProcessingOperation | null&#96;
+- 
+- Обновляет статус операции с автоматическим заполнением временных меток и дополнительных данных.
+- 
+- &#96;&#96;&#96;typescript
+- updateOperationStatus('operation-id', 'completed', {
+- 	result: { text: 'Extracted text...' }
+- });
+- 
+- updateOperationStatus('operation-id', 'failed', {
+- 	error: { message: 'Error message', code: 'ERROR_CODE' }
+- });
+- 
+- updateOperationStatus('operation-id', 'running', {
+- 	providerData: { operationId: 'external-operation-id' }
+- });
+- &#96;&#96;&#96;
+- 
+- **Примечание:** При статусе 'failed' ошибка автоматически добавляется в поле &#96;result&#96; в формате &#96;{ error: { message, code?, details? } }&#96;.
++ const current = getOperation('operation-id');
++ if (current) {
++ 	const updated = updateOperation('operation-id', {
++ 		...current,
++ 		status: 'completed',
++ 		result: { text: 'Extracted text...' },
++ 		completedAt: new Date().toISOString()
++ 	});
++ }
++ &#96;&#96;&#96;
+  
+  ### Утилиты БД (&#96;db.ts&#96;)
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "getOperationWithSync|getOperationByApplicationAndTypeWithSync|getOperationsByApplicationWithSync|updateOperationStatus|createOrUpdateOperation" in "src/lib/storage/STORAGE.md" • 4 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/storage/STORAGE.md` | `createOrUpdateOperation,` | L500 |
+| `src/lib/storage/STORAGE.md` | `getOperationWithSync,` | L502 |
+| `src/lib/storage/STORAGE.md` | `getOperationByApplicationAndTypeWithSync,` | L503 |
+| `src/lib/storage/STORAGE.md` | `getOperationsByApplicationWithSync,` | L505 |
 
 
 </details>
@@ -3093,31 +3291,88 @@ Status: **loading**
 ---
 
 
-
----
-
+Обновляю примеры импорта в документации:
 
 
 ---
 
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/STORAGE.md</summary>
 
-
----
-
-
-
----
-
-
+</details>
+</tool-use>
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_file">
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: 5
+
+```diff
+@@ -498,12 +498,12 @@
+  	saveApplicationFile,
+  	listTechnicalSpecs,
+- 	createOrUpdateOperation,
++ 	createOperation,
+  	getOperation,
+- 	getOperationWithSync,
+- 	getOperationByApplicationAndTypeWithSync,
++ 	getOperationByApplicationAndType,
+  	getOperationsByApplication,
+- 	getOperationsByApplicationWithSync,
+  	syncOperationToApplication,
+- 	StorageError
++ 	updateOperation,
++ 	StorageError,
++ 	OperationAlreadyExistsError
+  } from '$lib/storage';
+  &#96;&#96;&#96;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **read_file**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 4 files</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/storage`
+- `src/lib/ai`
+- `src/lib/business`
+- `src/routes/api`
 
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="task" data-tool-name="todo_write">
+<details><summary>Tool use: **todo_write** • Todo List</summary>
+
+- [x] Добавить OperationAlreadyExistsError в errors.ts
+- [x] Переименовать createOrUpdateOperation в createOperation с проверкой на существование и синхронизацией
+- [x] Изменить updateOperation на полную перезапись с синхронизацией
+- [x] Изменить getOperationsByApplication на возврат только массива id
+- [x] Удалить updateOperationStatus и все функции *WithSync
+- [x] Обновить использование в yandex/ocr.ts
+- [x] Обновить использование в llm.ts
+- [x] Обновить использование в ocr.ts
+- [x] Обновить использование в processing.ts
+- [x] Обновить использование в fileStorage.ts
+- [x] Обновить API endpoints
+- [x] Обновить STORAGE.md документацию
 
 </details>
 </tool-use>
@@ -3129,28 +3384,47 @@ Status: **loading**
 ---
 
 
-
----
-
+Обновляю последнюю часть документации:
 
 
 ---
 
+<tool-use data-tool-type="write" data-tool-name="search_replace">
 
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -522,5 +522,6 @@
+  - При ошибках парсинга JSON из БД возвращается &#96;null&#96; для соответствующего поля
+  - Операции обработки: одна операция каждого типа на заявку (уникальный индекс)
+- - При создании операции с существующим типом - обновление, а не создание новой
++ - При создании операции с существующим типом выбрасывается ошибка &#96;OperationAlreadyExistsError&#96;
+  - Завершенные операции не удаляются (хранится история)
++ - Функции &#96;createOperation&#96; и &#96;updateOperation&#96; автоматически синхронизируют результаты завершенных операций с заявкой
+  
+```
+
+</details>
+
+</tool-use>
 
 ---
 
-
-
----
-
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **search_replace**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/storage/operationsRepository.ts`
+
+Lint results
 
 
+**No lint errors found**
 </details>
 </tool-use>
 
@@ -3161,10 +3435,17 @@ Status: **loading**
 ---
 
 
+Рефакторинг завершен. Все задачи выполнены:
 
----
+1. Добавлен класс ошибки `OperationAlreadyExistsError`
+2. `createOrUpdateOperation` переименована в `createOperation` с проверкой на существование и синхронизацией
+3. `updateOperation` изменена на полную перезапись с синхронизацией
+4. `getOperationsByApplication` теперь возвращает только массив id
+5. Удалены все функции `*WithSync` и `updateOperationStatus`
+6. Обновлены все места использования в коде
+7. Обновлена документация
 
-
+Все изменения применены, ошибок линтера нет. Код готов к использованию.
 
 ---
 

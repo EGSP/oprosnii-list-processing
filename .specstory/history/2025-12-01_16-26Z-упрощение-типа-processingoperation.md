@@ -382,22 +382,22 @@ Parameters:
 
 ```json
 {
-  &quot;questions&quot;: [
+  "questions": [
     {
-      &quot;id&quot;: &quot;pending_status&quot;,
-      &quot;prompt&quot;: &quot;Что означает статус \&quot;pending\&quot; в контексте операций? Это операция, которая создана, но еще не начала выполняться? Или он не нужен, и можно использовать только \&quot;running\&quot;, \&quot;completed\&quot;, \&quot;failed\&quot;?&quot;,
-      &quot;options&quot;: [
+      "id": "pending_status",
+      "prompt": "Что означает статус \"pending\" в контексте операций? Это операция, которая создана, но еще не начала выполняться? Или он не нужен, и можно использовать только \"running\", \"completed\", \"failed\"?",
+      "options": [
         {
-          &quot;id&quot;: &quot;pending_needed&quot;,
-          &quot;label&quot;: &quot;pending нужен - операция создана, но еще не начала выполняться&quot;
+          "id": "pending_needed",
+          "label": "pending нужен - операция создана, но еще не начала выполняться"
         },
         {
-          &quot;id&quot;: &quot;pending_not_needed&quot;,
-          &quot;label&quot;: &quot;pending не нужен - используем только running/completed/failed&quot;
+          "id": "pending_not_needed",
+          "label": "pending не нужен - используем только running/completed/failed"
         },
         {
-          &quot;id&quot;: &quot;pending_other&quot;,
-          &quot;label&quot;: &quot;Другое (объясню в комментарии)&quot;
+          "id": "pending_other",
+          "label": "Другое (объясню в комментарии)"
         }
       ]
     }
@@ -408,10 +408,10 @@ Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;submitted&quot;,
-  &quot;currentSelections&quot;: {
-    &quot;pending_status&quot;: [
-      &quot;pending_not_needed&quot;
+  "status": "submitted",
+  "currentSelections": {
+    "pending_status": [
+      "pending_not_needed"
     ]
   }
 }
@@ -420,11 +420,11 @@ Result:
 
 ```json
 {
-  &quot;answers&quot;: [
+  "answers": [
     {
-      &quot;questionId&quot;: &quot;pending_status&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;pending_not_needed&quot;
+      "questionId": "pending_status",
+      "selectedOptionIds": [
+        "pending_not_needed"
       ]
     }
   ]
@@ -459,88 +459,88 @@ Parameters:
 
 ```json
 {
-  &quot;plan&quot;: &quot;# Упрощение ProcessingOperation и рефакторинг провайдеров\n\n## Цель\nУпростить тип &#96;ProcessingOperation&#96;, убрать избыточные поля, создать отдельные модули для провайдеров (yandex), реализовать логику через switch по провайдеру.\n\n## Изменения в типе ProcessingOperation\n\n### Новые поля:\n- &#96;id: string&#96; - UUID операции\n- &#96;applicationId: string&#96; - UUID заявки\n- &#96;type: &#39;ocr&#39; | &#39;llm_product_type&#39; | &#39;llm_abbreviation&#39;&#96; - тип операции\n- &#96;provider: string&#96; - провайдер (например, &#39;yandex&#39;, &#39;local&#39;)\n- &#96;status: &#39;running&#39; | &#39;completed&#39; | &#39;failed&#39;&#96; - статус (убираем &#39;pending&#39;)\n- &#96;providerData: Record&lt;string, unknown&gt;&#96; - данные провайдера (для yandex будет &#96;{ operationId: string }&#96;)\n- &#96;result: Record&lt;string, unknown&gt; | null&#96; - результат (JSON, включая ошибки)\n- &#96;createdAt: string&#96; - дата создания (ISO datetime)\n- &#96;completedAt: string | null&#96; - дата завершения (ISO datetime)\n\n### Удаляемые поля:\n- &#96;externalOperationId&#96; → переносится в &#96;providerData.operationId&#96;\n- &#96;requestData&#96; → не нужен\n- &#96;error&#96; → переносится в &#96;result&#96; (при статусе &#39;failed&#39;)\n- &#96;startedAt&#96; → не нужен (используем только createdAt и completedAt)\n- &#96;progress&#96; → не нужен\n- &#96;retryCount&#96;, &#96;maxRetries&#96; → не нужны\n- &#96;isAsync&#96; → определяется по статусу (если не completed/failed, значит асинхронная)\n\n## План реализации\n\n### 1. Обновление типов и схем ([src/lib/storage/types.ts](src/lib/storage/types.ts))\n- Обновить &#96;ProcessingOperationSchema&#96; с новыми полями\n- Убрать &#96;ProcessingOperationRequestData&#96;, &#96;ProcessingOperationError&#96;, &#96;ProcessingOperationProgress&#96;\n- Обновить &#96;ProcessingOperationStatus&#96; (убрать &#39;pending&#39;)\n- Обновить &#96;ProcessingOperationUpdate&#96;\n\n### 2. Миграция схемы БД ([src/lib/storage/db.ts](src/lib/storage/db.ts))\n- Обновить &#96;initializeDatabase&#96; для новой структуры таблицы\n- Добавить миграцию для существующих данных (если нужно)\n- Обновить &#96;ProcessingOperationRow&#96; интерфейс\n- Обновить &#96;rowToProcessingOperation&#96; и &#96;processingOperationToRow&#96;\n\n### 3. Обновление репозитория операций ([src/lib/storage/operationsRepository.ts](src/lib/storage/operationsRepository.ts))\n- Обновить &#96;createOrUpdateOperation&#96; (убрать параметр &#96;requestData&#96;, добавить &#96;providerData&#96;)\n- Обновить &#96;updateOperationStatus&#96; (убрать &#96;error&#96;, добавить в &#96;result&#96;)\n- Обновить &#96;syncOperationToApplication&#96; для работы с новой структурой\n\n### 4. Создание модулей провайдеров\n- Создать [src/lib/ai/yandex/ocr.ts](src/lib/ai/yandex/ocr.ts) - функции для Yandex OCR\n- Создать [src/lib/ai/yandex/llm.ts](src/lib/ai/yandex/llm.ts) - функции для Yandex LLM\n- Вынести логику из [src/lib/ai/ocr.ts](src/lib/ai/ocr.ts) в yandex/ocr.ts\n- Вынести логику из [src/lib/ai/llm.ts](src/lib/ai/llm.ts) в yandex/llm.ts\n\n### 5. Рефакторинг OCR модуля ([src/lib/ai/ocr.ts](src/lib/ai/ocr.ts))\n- Использовать switch по провайдеру для вызова соответствующих функций\n- Для &#39;yandex&#39; → вызывать функции из &#96;yandex/ocr.ts&#96;\n- Для &#39;local&#39; → оставить локальную логику (DOCX, XLSX)\n- Обновить &#96;extractTextFromFileWithOperation&#96; для работы с новой структурой\n\n### 6. Рефакторинг LLM модуля ([src/lib/ai/llm.ts](src/lib/ai/llm.ts))\n- Использовать switch по провайдеру\n- Для &#39;yandex&#39; → вызывать функции из &#96;yandex/llm.ts&#96;\n- Обновить функции для работы с новой структурой операций\n\n### 7. Обновление бизнес-логики ([src/lib/business/processing.ts](src/lib/business/processing.ts))\n- Обновить &#96;checkAndUpdateOperation&#96; для работы с новой структурой\n- Убрать проверки &#96;isAsync&#96; (определять по статусу)\n- Обновить работу с &#96;providerData&#96; вместо &#96;externalOperationId&#96;\n\n### 8. Обновление документации\n- Обновить [src/lib/storage/STORAGE.md](src/lib/storage/STORAGE.md)\n- Обновить [src/lib/ai/AI.md](src/lib/ai/AI.md)\n- Добавить документацию для новых модулей yandex\n\n## Детали реализации\n\n### Структура providerData для Yandex:\n&#96;&#96;&#96;typescript\n// Для OCR\n{ operationId: string }\n\n// Для LLM (может быть пустым или содержать дополнительные данные)\n{}\n&#96;&#96;&#96;\n\n### Структура result:\n&#96;&#96;&#96;typescript\n// Успешный результат OCR\n{ text: string }\n\n// Успешный результат LLM\n{ type: string, confidence: number, ... } // зависит от типа операции\n\n// Ошибка (при status === &#39;failed&#39;)\n{ error: { message: string, code?: string, details?: unknown } }\n&#96;&#96;&#96;\n\n### Логика определения асинхронности:\n- Если &#96;status === &#39;running&#39;&#96; → операция асинхронная\n- Если &#96;status === &#39;completed&#39; || status === &#39;failed&#39;&#96; → операция завершена\n\n### Switch по провайдеру (пример):\n&#96;&#96;&#96;typescript\nswitch (provider) {\n  case &#39;yandex&#39;:\n    if (type === &#39;ocr&#39;) {\n      return await yandexOCR.process(operation, ...);\n    } else if (type === &#39;llm_product_type&#39; || type === &#39;llm_abbreviation&#39;) {\n      return await yandexLLM.process(operation, ...);\n    }\n    break;\n  case &#39;local&#39;:\n    // локальная обработка\n    break;\n  default:\n    throw new Error(&#96;Unknown provider: ${provider}&#96;);\n}\n&#96;&#96;&#96;&quot;,
-  &quot;name&quot;: &quot;Упрощение ProcessingOperation и рефакторинг провайдеров&quot;,
-  &quot;todos&quot;: [
+  "plan": "# Упрощение ProcessingOperation и рефакторинг провайдеров\n\n## Цель\nУпростить тип &#96;ProcessingOperation&#96;, убрать избыточные поля, создать отдельные модули для провайдеров (yandex), реализовать логику через switch по провайдеру.\n\n## Изменения в типе ProcessingOperation\n\n### Новые поля:\n- &#96;id: string&#96; - UUID операции\n- &#96;applicationId: string&#96; - UUID заявки\n- &#96;type: 'ocr' | 'llm_product_type' | 'llm_abbreviation'&#96; - тип операции\n- &#96;provider: string&#96; - провайдер (например, 'yandex', 'local')\n- &#96;status: 'running' | 'completed' | 'failed'&#96; - статус (убираем 'pending')\n- &#96;providerData: Record&lt;string, unknown&gt;&#96; - данные провайдера (для yandex будет &#96;{ operationId: string }&#96;)\n- &#96;result: Record&lt;string, unknown&gt; | null&#96; - результат (JSON, включая ошибки)\n- &#96;createdAt: string&#96; - дата создания (ISO datetime)\n- &#96;completedAt: string | null&#96; - дата завершения (ISO datetime)\n\n### Удаляемые поля:\n- &#96;externalOperationId&#96; → переносится в &#96;providerData.operationId&#96;\n- &#96;requestData&#96; → не нужен\n- &#96;error&#96; → переносится в &#96;result&#96; (при статусе 'failed')\n- &#96;startedAt&#96; → не нужен (используем только createdAt и completedAt)\n- &#96;progress&#96; → не нужен\n- &#96;retryCount&#96;, &#96;maxRetries&#96; → не нужны\n- &#96;isAsync&#96; → определяется по статусу (если не completed/failed, значит асинхронная)\n\n## План реализации\n\n### 1. Обновление типов и схем ([src/lib/storage/types.ts](src/lib/storage/types.ts))\n- Обновить &#96;ProcessingOperationSchema&#96; с новыми полями\n- Убрать &#96;ProcessingOperationRequestData&#96;, &#96;ProcessingOperationError&#96;, &#96;ProcessingOperationProgress&#96;\n- Обновить &#96;ProcessingOperationStatus&#96; (убрать 'pending')\n- Обновить &#96;ProcessingOperationUpdate&#96;\n\n### 2. Миграция схемы БД ([src/lib/storage/db.ts](src/lib/storage/db.ts))\n- Обновить &#96;initializeDatabase&#96; для новой структуры таблицы\n- Добавить миграцию для существующих данных (если нужно)\n- Обновить &#96;ProcessingOperationRow&#96; интерфейс\n- Обновить &#96;rowToProcessingOperation&#96; и &#96;processingOperationToRow&#96;\n\n### 3. Обновление репозитория операций ([src/lib/storage/operationsRepository.ts](src/lib/storage/operationsRepository.ts))\n- Обновить &#96;createOrUpdateOperation&#96; (убрать параметр &#96;requestData&#96;, добавить &#96;providerData&#96;)\n- Обновить &#96;updateOperationStatus&#96; (убрать &#96;error&#96;, добавить в &#96;result&#96;)\n- Обновить &#96;syncOperationToApplication&#96; для работы с новой структурой\n\n### 4. Создание модулей провайдеров\n- Создать [src/lib/ai/yandex/ocr.ts](src/lib/ai/yandex/ocr.ts) - функции для Yandex OCR\n- Создать [src/lib/ai/yandex/llm.ts](src/lib/ai/yandex/llm.ts) - функции для Yandex LLM\n- Вынести логику из [src/lib/ai/ocr.ts](src/lib/ai/ocr.ts) в yandex/ocr.ts\n- Вынести логику из [src/lib/ai/llm.ts](src/lib/ai/llm.ts) в yandex/llm.ts\n\n### 5. Рефакторинг OCR модуля ([src/lib/ai/ocr.ts](src/lib/ai/ocr.ts))\n- Использовать switch по провайдеру для вызова соответствующих функций\n- Для 'yandex' → вызывать функции из &#96;yandex/ocr.ts&#96;\n- Для 'local' → оставить локальную логику (DOCX, XLSX)\n- Обновить &#96;extractTextFromFileWithOperation&#96; для работы с новой структурой\n\n### 6. Рефакторинг LLM модуля ([src/lib/ai/llm.ts](src/lib/ai/llm.ts))\n- Использовать switch по провайдеру\n- Для 'yandex' → вызывать функции из &#96;yandex/llm.ts&#96;\n- Обновить функции для работы с новой структурой операций\n\n### 7. Обновление бизнес-логики ([src/lib/business/processing.ts](src/lib/business/processing.ts))\n- Обновить &#96;checkAndUpdateOperation&#96; для работы с новой структурой\n- Убрать проверки &#96;isAsync&#96; (определять по статусу)\n- Обновить работу с &#96;providerData&#96; вместо &#96;externalOperationId&#96;\n\n### 8. Обновление документации\n- Обновить [src/lib/storage/STORAGE.md](src/lib/storage/STORAGE.md)\n- Обновить [src/lib/ai/AI.md](src/lib/ai/AI.md)\n- Добавить документацию для новых модулей yandex\n\n## Детали реализации\n\n### Структура providerData для Yandex:\n&#96;&#96;&#96;typescript\n// Для OCR\n{ operationId: string }\n\n// Для LLM (может быть пустым или содержать дополнительные данные)\n{}\n&#96;&#96;&#96;\n\n### Структура result:\n&#96;&#96;&#96;typescript\n// Успешный результат OCR\n{ text: string }\n\n// Успешный результат LLM\n{ type: string, confidence: number, ... } // зависит от типа операции\n\n// Ошибка (при status === 'failed')\n{ error: { message: string, code?: string, details?: unknown } }\n&#96;&#96;&#96;\n\n### Логика определения асинхронности:\n- Если &#96;status === 'running'&#96; → операция асинхронная\n- Если &#96;status === 'completed' || status === 'failed'&#96; → операция завершена\n\n### Switch по провайдеру (пример):\n&#96;&#96;&#96;typescript\nswitch (provider) {\n  case 'yandex':\n    if (type === 'ocr') {\n      return await yandexOCR.process(operation, ...);\n    } else if (type === 'llm_product_type' || type === 'llm_abbreviation') {\n      return await yandexLLM.process(operation, ...);\n    }\n    break;\n  case 'local':\n    // локальная обработка\n    break;\n  default:\n    throw new Error(&#96;Unknown provider: ${provider}&#96;);\n}\n&#96;&#96;&#96;",
+  "name": "Упрощение ProcessingOperation и рефакторинг провайдеров",
+  "todos": [
     {
-      &quot;content&quot;: &quot;Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-types&quot;
+      "content": "Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)",
+      "status": "pending",
+      "id": "update-types"
     },
     {
-      &quot;content&quot;: &quot;Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;migrate-db&quot;,
-      &quot;dependencies&quot;: [
-        &quot;update-types&quot;
+      "content": "Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)",
+      "status": "pending",
+      "id": "migrate-db",
+      "dependencies": [
+        "update-types"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить operationsRepository.ts для работы с новой структурой&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-repository&quot;,
-      &quot;dependencies&quot;: [
-        &quot;migrate-db&quot;
+      "content": "Обновить operationsRepository.ts для работы с новой структурой",
+      "status": "pending",
+      "id": "update-repository",
+      "dependencies": [
+        "migrate-db"
       ]
     },
     {
-      &quot;content&quot;: &quot;Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;create-yandex-ocr&quot;
+      "content": "Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR",
+      "status": "pending",
+      "id": "create-yandex-ocr"
     },
     {
-      &quot;content&quot;: &quot;Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;create-yandex-llm&quot;
+      "content": "Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM",
+      "status": "pending",
+      "id": "create-yandex-llm"
     },
     {
-      &quot;content&quot;: &quot;Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;refactor-ocr&quot;,
-      &quot;dependencies&quot;: [
-        &quot;create-yandex-ocr&quot;,
-        &quot;update-repository&quot;
+      "content": "Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts",
+      "status": "pending",
+      "id": "refactor-ocr",
+      "dependencies": [
+        "create-yandex-ocr",
+        "update-repository"
       ]
     },
     {
-      &quot;content&quot;: &quot;Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;refactor-llm&quot;,
-      &quot;dependencies&quot;: [
-        &quot;create-yandex-llm&quot;,
-        &quot;update-repository&quot;
+      "content": "Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts",
+      "status": "pending",
+      "id": "refactor-llm",
+      "dependencies": [
+        "create-yandex-llm",
+        "update-repository"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить processing.ts для работы с новой структурой операций&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-business-logic&quot;,
-      &quot;dependencies&quot;: [
-        &quot;refactor-ocr&quot;,
-        &quot;refactor-llm&quot;
+      "content": "Обновить processing.ts для работы с новой структурой операций",
+      "status": "pending",
+      "id": "update-business-logic",
+      "dependencies": [
+        "refactor-ocr",
+        "refactor-llm"
       ]
     },
     {
-      &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
-      &quot;status&quot;: &quot;pending&quot;,
-      &quot;id&quot;: &quot;update-docs&quot;,
-      &quot;dependencies&quot;: [
-        &quot;update-business-logic&quot;
+      "content": "Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)",
+      "status": "pending",
+      "id": "update-docs",
+      "dependencies": [
+        "update-business-logic"
       ]
     }
   ],
-  &quot;overview&quot;: &quot;Упрощение типа ProcessingOperation: удаление лишних полей, объединение error в result, создание отдельных модулей для провайдеров (yandex ocr/llm), логика через switch по провайдеру&quot;
+  "overview": "Упрощение типа ProcessingOperation: удаление лишних полей, объединение error в result, создание отдельных модулей для провайдеров (yandex ocr/llm), логика через switch по провайдеру"
 }
 ```
 Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;accepted&quot;,
-  &quot;reviewData&quot;: {
-    &quot;status&quot;: &quot;Requested&quot;,
-    &quot;selectedOption&quot;: &quot;none&quot;,
-    &quot;isShowingInput&quot;: false
+  "status": "accepted",
+  "reviewData": {
+    "status": "Requested",
+    "selectedOption": "none",
+    "isShowingInput": false
   }
 }
 ```
@@ -548,72 +548,72 @@ Result:
 
 ```json
 {
-  &quot;accepted&quot;: {
-    &quot;finalTodos&quot;: [
+  "accepted": {
+    "finalTodos": [
       {
-        &quot;content&quot;: &quot;Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-types&quot;
+        "content": "Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)",
+        "status": "pending",
+        "id": "update-types"
       },
       {
-        &quot;content&quot;: &quot;Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;migrate-db&quot;,
-        &quot;dependencies&quot;: [
-          &quot;update-types&quot;
+        "content": "Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)",
+        "status": "pending",
+        "id": "migrate-db",
+        "dependencies": [
+          "update-types"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить operationsRepository.ts для работы с новой структурой&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-repository&quot;,
-        &quot;dependencies&quot;: [
-          &quot;migrate-db&quot;
+        "content": "Обновить operationsRepository.ts для работы с новой структурой",
+        "status": "pending",
+        "id": "update-repository",
+        "dependencies": [
+          "migrate-db"
         ]
       },
       {
-        &quot;content&quot;: &quot;Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;create-yandex-ocr&quot;
+        "content": "Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR",
+        "status": "pending",
+        "id": "create-yandex-ocr"
       },
       {
-        &quot;content&quot;: &quot;Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;create-yandex-llm&quot;
+        "content": "Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM",
+        "status": "pending",
+        "id": "create-yandex-llm"
       },
       {
-        &quot;content&quot;: &quot;Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;refactor-ocr&quot;,
-        &quot;dependencies&quot;: [
-          &quot;create-yandex-ocr&quot;,
-          &quot;update-repository&quot;
+        "content": "Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts",
+        "status": "pending",
+        "id": "refactor-ocr",
+        "dependencies": [
+          "create-yandex-ocr",
+          "update-repository"
         ]
       },
       {
-        &quot;content&quot;: &quot;Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;refactor-llm&quot;,
-        &quot;dependencies&quot;: [
-          &quot;create-yandex-llm&quot;,
-          &quot;update-repository&quot;
+        "content": "Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts",
+        "status": "pending",
+        "id": "refactor-llm",
+        "dependencies": [
+          "create-yandex-llm",
+          "update-repository"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить processing.ts для работы с новой структурой операций&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-business-logic&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-ocr&quot;,
-          &quot;refactor-llm&quot;
+        "content": "Обновить processing.ts для работы с новой структурой операций",
+        "status": "pending",
+        "id": "update-business-logic",
+        "dependencies": [
+          "refactor-ocr",
+          "refactor-llm"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
-        &quot;status&quot;: &quot;pending&quot;,
-        &quot;id&quot;: &quot;update-docs&quot;,
-        &quot;dependencies&quot;: [
-          &quot;update-business-logic&quot;
+        "content": "Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)",
+        "status": "pending",
+        "id": "update-docs",
+        "dependencies": [
+          "update-business-logic"
         ]
       }
     ]
@@ -686,7 +686,7 @@ _**Agent (model default, mode Agent)**_
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/types.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/types.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 29
@@ -694,15 +694,15 @@ Lines added: 1, lines removed: 29
 ```diff
 @@ -66,33 +66,5 @@
    */
-  export type ProcessingOperationType = &#39;ocr&#39; | &#39;llm_product_type&#39; | &#39;llm_abbreviation&#39;;
-- export type ProcessingOperationStatus = &#39;pending&#39; | &#39;running&#39; | &#39;completed&#39; | &#39;failed&#39;;
+  export type ProcessingOperationType = 'ocr' | 'llm_product_type' | 'llm_abbreviation';
+- export type ProcessingOperationStatus = 'pending' | 'running' | 'completed' | 'failed';
 - 
 - /**
 -  * Схема валидации для requestData операции
 -  */
 - export const ProcessingOperationRequestDataSchema = z.object({
 - 	endpoint: z.string().url(),
-- 	method: z.enum([&#39;GET&#39;, &#39;POST&#39;, &#39;PUT&#39;, &#39;DELETE&#39;]),
+- 	method: z.enum(['GET', 'POST', 'PUT', 'DELETE']),
 - 	headers: z.record(z.string()).optional(),
 - 	body: z.unknown().optional()
 - });
@@ -724,7 +724,7 @@ Lines added: 1, lines removed: 29
 - 	total: z.number(),
 - 	message: z.string().optional()
 - });
-+ export type ProcessingOperationStatus = &#39;running&#39; | &#39;completed&#39; | &#39;failed&#39;;
++ export type ProcessingOperationStatus = 'running' | 'completed' | 'failed';
   
   /**
 ```
@@ -734,12 +734,12 @@ Lines added: 4, lines removed: 24
 
 ```diff
 @@ -104,38 +76,18 @@
-  	type: z.enum([&#39;ocr&#39;, &#39;llm_product_type&#39;, &#39;llm_abbreviation&#39;]),
+  	type: z.enum(['ocr', 'llm_product_type', 'llm_abbreviation']),
   	provider: z.string(),
-- 	status: z.enum([&#39;pending&#39;, &#39;running&#39;, &#39;completed&#39;, &#39;failed&#39;]),
+- 	status: z.enum(['pending', 'running', 'completed', 'failed']),
 - 	externalOperationId: z.string().nullable().optional(),
 - 	requestData: ProcessingOperationRequestDataSchema,
-+ 	status: z.enum([&#39;running&#39;, &#39;completed&#39;, &#39;failed&#39;]),
++ 	status: z.enum(['running', 'completed', 'failed']),
 + 	providerData: z.record(z.unknown()),
   	result: z.record(z.unknown()).nullable().optional(),
 - 	error: ProcessingOperationErrorSchema.nullable().optional(),
@@ -763,17 +763,17 @@ Lines added: 4, lines removed: 24
   export type ProcessingOperationUpdate = Partial&lt;
 - 	Pick&lt;
 - 		ProcessingOperation,
-- 		| &#39;status&#39;
-- 		| &#39;externalOperationId&#39;
-- 		| &#39;result&#39;
-- 		| &#39;error&#39;
-- 		| &#39;startedAt&#39;
-- 		| &#39;completedAt&#39;
-- 		| &#39;progress&#39;
-- 		| &#39;retryCount&#39;
-- 		| &#39;maxRetries&#39;
+- 		| 'status'
+- 		| 'externalOperationId'
+- 		| 'result'
+- 		| 'error'
+- 		| 'startedAt'
+- 		| 'completedAt'
+- 		| 'progress'
+- 		| 'retryCount'
+- 		| 'maxRetries'
 - 	&gt;
-+ 	Pick&lt;ProcessingOperation, &#39;status&#39; | &#39;providerData&#39; | &#39;result&#39; | &#39;completedAt&#39;&gt;
++ 	Pick&lt;ProcessingOperation, 'status' | 'providerData' | 'result' | 'completedAt'&gt;
   &gt;;
   
 ```
@@ -814,7 +814,7 @@ Lines added: 4, lines removed: 24
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/db.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/db.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 7
@@ -846,7 +846,7 @@ Lines added: 1, lines removed: 7
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/db.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/db.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 7
@@ -878,7 +878,7 @@ Lines added: 1, lines removed: 7
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/db.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/db.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 8
@@ -886,9 +886,9 @@ Lines added: 2, lines removed: 8
 ```diff
 @@ -179,14 +179,8 @@
   		provider: row.provider,
-  		status: row.status as ProcessingOperation[&#39;status&#39;],
+  		status: row.status as ProcessingOperation['status'],
 - 		externalOperationId: row.external_operation_id || null,
-- 		requestData: safeJsonParse(row.request_data) || { endpoint: &#39;&#39;, method: &#39;POST&#39; },
+- 		requestData: safeJsonParse(row.request_data) || { endpoint: '', method: 'POST' },
 + 		providerData: safeJsonParse(row.provider_data) || {},
   		result: safeJsonParse(row.result),
 - 		error: safeJsonParse(row.error),
@@ -911,7 +911,7 @@ Lines added: 2, lines removed: 8
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/db.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/db.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 10
@@ -994,7 +994,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 3
@@ -1003,11 +1003,11 @@ Lines added: 2, lines removed: 3
 @@ -20,7 +20,6 @@
   	type: ProcessingOperationType,
   	provider: string,
-- 	requestData: ProcessingOperation[&#39;requestData&#39;],
-- 	status: ProcessingOperationStatus = &#39;pending&#39;,
+- 	requestData: ProcessingOperation['requestData'],
+- 	status: ProcessingOperationStatus = 'pending',
 - 	externalOperationId?: string | null
 + 	providerData: Record&lt;string, unknown&gt; = {},
-+ 	status: ProcessingOperationStatus = &#39;running&#39;
++ 	status: ProcessingOperationStatus = 'running'
   ): ProcessingOperation {
   	const db = getDatabase();
 ```
@@ -1026,10 +1026,10 @@ Lines added: 3, lines removed: 7
 + 			// Сбрасываем результат при обновлении
   			result: null,
 - 			error: null,
-- 			startedAt: status === &#39;running&#39; || status === &#39;completed&#39; ? now : null,
-- 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null,
+- 			startedAt: status === 'running' || status === 'completed' ? now : null,
+- 			completedAt: status === 'completed' || status === 'failed' ? now : null,
 - 			retryCount: (existing.retryCount ?? 0) + 1
-+ 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null
++ 			completedAt: status === 'completed' || status === 'failed' ? now : null
   		};
   	} else {
 ```
@@ -1047,12 +1047,12 @@ Lines added: 2, lines removed: 8
   			result: null,
 - 			error: null,
   			createdAt: now,
-- 			startedAt: status === &#39;running&#39; || status === &#39;completed&#39; ? now : null,
-- 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null,
+- 			startedAt: status === 'running' || status === 'completed' ? now : null,
+- 			completedAt: status === 'completed' || status === 'failed' ? now : null,
 - 			progress: null,
 - 			retryCount: 0,
 - 			maxRetries: 3
-+ 			completedAt: status === &#39;completed&#39; || status === &#39;failed&#39; ? now : null
++ 			completedAt: status === 'completed' || status === 'failed' ? now : null
   		};
   	}
 ```
@@ -1065,7 +1065,7 @@ Lines added: 2, lines removed: 8
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 28, lines removed: 38
@@ -1141,7 +1141,7 @@ Lines added: 28, lines removed: 38
 + 				return validated;
 + 			}
   	} catch (error) {
-  		throw new StorageError(&#39;Failed to create or update operation&#39;, error as Error);
+  		throw new StorageError('Failed to create or update operation', error as Error);
 ```
 
 </details>
@@ -1152,7 +1152,7 @@ Lines added: 28, lines removed: 38
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 3
@@ -1161,10 +1161,10 @@ Lines added: undefined, lines removed: 3
 @@ -193,7 +193,4 @@
   	if (updates.status) {
   		const now = new Date().toISOString();
-- 		if (updates.status === &#39;running&#39; &amp;&amp; !updated.startedAt) {
+- 		if (updates.status === 'running' &amp;&amp; !updated.startedAt) {
 - 			updated.startedAt = now;
 - 		}
-  		if ((updates.status === &#39;completed&#39; || updates.status === &#39;failed&#39;) &amp;&amp; !updated.completedAt) {
+  		if ((updates.status === 'completed' || updates.status === 'failed') &amp;&amp; !updated.completedAt) {
   			updated.completedAt = now;
 ```
 
@@ -1176,7 +1176,7 @@ Lines added: undefined, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 7
@@ -1207,7 +1207,7 @@ Lines added: 2, lines removed: 7
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 2
@@ -1266,17 +1266,17 @@ Lines added: 13, lines removed: 9
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/operationsRepository.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/operationsRepository.ts</summary>
 
 **Chunk 1**
 Lines added: 6, lines removed: 1
 
 ```diff
 @@ -281,6 +281,11 @@
-  			case &#39;ocr&#39;: {
+  			case 'ocr': {
   				// Обновляем ocrResult
 + 				// Проверяем, есть ли ошибка в result
-+ 				if (operation.result &amp;&amp; &#39;error&#39; in operation.result) {
++ 				if (operation.result &amp;&amp; 'error' in operation.result) {
 + 					// Операция завершена с ошибкой, не синхронизируем
 + 					return false;
 + 				}
@@ -1284,7 +1284,7 @@ Lines added: 6, lines removed: 1
 - 				if (result.text) {
 + 				if (result?.text) {
   					updates.ocrResult = { text: result.text };
-  					logger.debug(&#39;Синхронизация OCR результата с заявкой&#39;, {
+  					logger.debug('Синхронизация OCR результата с заявкой', {
 ```
 
 **Chunk 2**
@@ -1292,10 +1292,10 @@ Lines added: 6, lines removed: 1
 
 ```diff
 @@ -294,6 +299,11 @@
-  			case &#39;llm_product_type&#39;: {
+  			case 'llm_product_type': {
   				// Обновляем llmProductTypeResult и productType
 + 				// Проверяем, есть ли ошибка в result
-+ 				if (operation.result &amp;&amp; &#39;error&#39; in operation.result) {
++ 				if (operation.result &amp;&amp; 'error' in operation.result) {
 + 					// Операция завершена с ошибкой, не синхронизируем
 + 					return false;
 + 				}
@@ -1311,10 +1311,10 @@ Lines added: 5, lines removed: undefined
 
 ```diff
 @@ -309,4 +319,9 @@
-  			case &#39;llm_abbreviation&#39;: {
+  			case 'llm_abbreviation': {
   				// Обновляем llmAbbreviationResult и processingEndDate
 + 				// Проверяем, есть ли ошибка в result
-+ 				if (operation.result &amp;&amp; &#39;error&#39; in operation.result) {
++ 				if (operation.result &amp;&amp; 'error' in operation.result) {
 + 					// Операция завершена с ошибкой, не синхронизируем
 + 					return false;
 + 				}
@@ -1406,7 +1406,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="write">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **write** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 418, lines removed: 1
@@ -1423,9 +1423,9 @@ Lines added: 418, lines removed: 1
 +  * - Получение результатов распознавания
 +  */
 + 
-+ import { aiConfig } from &#39;../config.js&#39;;
-+ import { logger } from &#39;../../utils/logger.js&#39;;
-+ import type { ProcessingOperation } from &#39;../../storage/types.js&#39;;
++ import { aiConfig } from '../config.js';
++ import { logger } from '../../utils/logger.js';
++ import type { ProcessingOperation } from '../../storage/types.js';
 + 
 + export class YandexOCRError extends Error {
 + 	constructor(
@@ -1433,7 +1433,7 @@ Lines added: 418, lines removed: 1
 + 		public cause?: Error
 + 	) {
 + 		super(message);
-+ 		this.name = &#39;YandexOCRError&#39;;
++ 		this.name = 'YandexOCRError';
 + 	}
 + }
 + 
@@ -1442,14 +1442,14 @@ Lines added: 418, lines removed: 1
 +  */
 + function createYandexOCRRequestBody(fileBuffer: Buffer, mimeType: string): Record&lt;string, unknown&gt; {
 + 	const config = aiConfig.yandexOCR;
-+ 	const base64Content = fileBuffer.toString(&#39;base64&#39;);
++ 	const base64Content = fileBuffer.toString('base64');
 + 
 + 	// Определяем тип контента для API
 + 	let contentType: string;
-+ 	if (mimeType.startsWith(&#39;image/&#39;)) {
++ 	if (mimeType.startsWith('image/')) {
 + 		contentType = mimeType;
-+ 	} else if (mimeType === &#39;application/pdf&#39;) {
-+ 		contentType = &#39;application/pdf&#39;;
++ 	} else if (mimeType === 'application/pdf') {
++ 		contentType = 'application/pdf';
 + 	} else {
 + 		throw new YandexOCRError(&#96;Неподдерживаемый тип файла для OCR: ${mimeType}&#96;);
 + 	}
@@ -1457,7 +1457,7 @@ Lines added: 418, lines removed: 1
 + 	return {
 + 		content: base64Content,
 + 		mime_type: contentType,
-+ 		language_codes: [&#39;ru&#39;, &#39;en&#39;],
++ 		language_codes: ['ru', 'en'],
 + 		model: config.model
 + 	};
 + }
@@ -1468,7 +1468,7 @@ Lines added: 418, lines removed: 1
 + function extractTextFromResponse(result: unknown): string | undefined {
 + 	// Синхронный ответ (одностраничные PDF, изображения)
 + 	// Структура ответа: { result: { textAnnotation: { fullText: string } } }
-+ 	if (typeof result === &#39;object&#39; &amp;&amp; result !== null) {
++ 	if (typeof result === 'object' &amp;&amp; result !== null) {
 + 		const obj = result as Record&lt;string, unknown&gt;;
 + 		
 + 		// Проверяем различные структуры ответа
@@ -1489,13 +1489,13 @@ Lines added: 418, lines removed: 1
 + 				if (block.lines) {
 + 					for (const line of block.lines) {
 + 						if (line.words) {
-+ 							const words = line.words.map((w) =&gt; w.text).join(&#39; &#39;);
++ 							const words = line.words.map((w) =&gt; w.text).join(' ');
 + 							textBlocks.push(words);
 + 						}
 + 					}
 + 				}
 + 			}
-+ 			return textBlocks.join(&#39;\n&#39;);
++ 			return textBlocks.join('\n');
 + 		}
 + 	}
 + 	return undefined;
@@ -1518,10 +1518,10 @@ Lines added: 418, lines removed: 1
 + 	const config = aiConfig.yandexOCR;
 + 
 + 	// Определяем, нужно ли использовать async endpoint
-+ 	const isMultiPagePDF = mimeType === &#39;application/pdf&#39; &amp;&amp; pageCount &amp;&amp; pageCount &gt; 1;
++ 	const isMultiPagePDF = mimeType === 'application/pdf' &amp;&amp; pageCount &amp;&amp; pageCount &gt; 1;
 + 	const endpoint = isMultiPagePDF &amp;&amp; config.asyncEndpoint ? config.asyncEndpoint : config.endpoint;
 + 
-+ 	logger.debug(&#39;Вызов YandexOCR&#39;, {
++ 	logger.debug('Вызов YandexOCR', {
 + 		mimeType,
 + 		fileSize: fileBuffer.length,
 + 		pageCount,
@@ -1533,24 +1533,24 @@ Lines added: 418, lines removed: 1
 + 	const requestBody = createYandexOCRRequestBody(fileBuffer, mimeType);
 + 
 + 	try {
-+ 		logger.debug(&#39;Отправка запроса в YandexOCR&#39;, {
++ 		logger.debug('Отправка запроса в YandexOCR', {
 + 			endpoint,
 + 			mimeType,
 + 			pageCount
 + 		});
 + 
 + 		const response = await fetch(endpoint!, {
-+ 			method: &#39;POST&#39;,
++ 			method: 'POST',
 + 			headers: {
 + 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-+ 				&#39;Content-Type&#39;: &#39;application/json&#39;
++ 				'Content-Type': 'application/json'
 + 			},
 + 			body: JSON.stringify(requestBody)
 + 		});
 + 
 + 		if (!response.ok) {
 + 			const errorText = await response.text();
-+ 			logger.error(&#39;YandexOCR API вернул ошибку&#39;, {
++ 			logger.error('YandexOCR API вернул ошибку', {
 + 				status: response.status,
 + 				statusText: response.statusText,
 + 				errorText
@@ -1562,10 +1562,10 @@ Lines added: 418, lines removed: 1
 + 
 + 		const result = await response.json();
 + 
-+ 		// Для async endpoint: всегда возвращает { done: false, id: &quot;...&quot; } при создании операции
++ 		// Для async endpoint: всегда возвращает { done: false, id: "..." } при создании операции
 + 		if (isMultiPagePDF) {
 + 			if (result.done === false &amp;&amp; result.id) {
-+ 				logger.info(&#39;YandexOCR async операция создана&#39;, {
++ 				logger.info('YandexOCR async операция создана', {
 + 					operationId: result.id
 + 				});
 + 				return {
@@ -1573,17 +1573,17 @@ Lines added: 418, lines removed: 1
 + 				};
 + 			}
 + 			// Если async endpoint вернул что-то неожиданное
-+ 			logger.error(&#39;Неожиданный ответ от async endpoint&#39;, {
++ 			logger.error('Неожиданный ответ от async endpoint', {
 + 				responseStructure: JSON.stringify(result).substring(0, 200)
 + 			});
-+ 			throw new YandexOCRError(&#39;Неожиданный ответ от async endpoint YandexOCR&#39;);
++ 			throw new YandexOCRError('Неожиданный ответ от async endpoint YandexOCR');
 + 		}
 + 
 + 		// Для синхронного endpoint: проверяем завершенные операции (для обратной совместимости)
 + 		if (result.done === true &amp;&amp; result.response) {
 + 			const text = extractTextFromResponse(result.response);
 + 			if (text) {
-+ 				logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция завершена)&#39;, {
++ 				logger.info('YandexOCR успешно извлек текст (синхронная операция завершена)', {
 + 					textLength: text.length
 + 				});
 + 				return { text };
@@ -1593,29 +1593,29 @@ Lines added: 418, lines removed: 1
 + 		// Синхронный ответ (одностраничные PDF, изображения)
 + 		const text = extractTextFromResponse(result);
 + 		if (text) {
-+ 			logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция)&#39;, {
++ 			logger.info('YandexOCR успешно извлек текст (синхронная операция)', {
 + 				textLength: text.length
 + 			});
 + 			return { text };
 + 		}
 + 
-+ 		logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
++ 		logger.error('Не удалось извлечь текст из ответа YandexOCR', {
 + 			responseStructure: JSON.stringify(result).substring(0, 200)
 + 		});
-+ 		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
++ 		throw new YandexOCRError('Не удалось извлечь текст из ответа YandexOCR');
 + 	} catch (error) {
 + 		if (error instanceof YandexOCRError) {
-+ 			logger.error(&#39;Ошибка YandexOCRError&#39;, {
++ 			logger.error('Ошибка YandexOCRError', {
 + 				message: error.message,
 + 				stack: error.stack
 + 			});
 + 			throw error;
 + 		}
-+ 		logger.error(&#39;Неожиданная ошибка при вызове YandexOCR&#39;, {
++ 		logger.error('Неожиданная ошибка при вызове YandexOCR', {
 + 			error: error instanceof Error ? error.message : String(error),
 + 			stack: error instanceof Error ? error.stack : undefined
 + 		});
-+ 		throw new YandexOCRError(&#39;Ошибка при вызове YandexOCR API&#39;, error as Error);
++ 		throw new YandexOCRError('Ошибка при вызове YandexOCR API', error as Error);
 + 	}
 + }
 + 
@@ -1629,25 +1629,25 @@ Lines added: 418, lines removed: 1
 + 	const config = aiConfig.yandexOCR;
 + 	const endpoint =
 + 		config.getRecognitionEndpoint ||
-+ 		&#39;https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition&#39;;
++ 		'https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition';
 + 
-+ 	logger.debug(&#39;Получение результатов распознавания через GetRecognition&#39;, {
++ 	logger.debug('Получение результатов распознавания через GetRecognition', {
 + 		operationId,
 + 		endpoint
 + 	});
 + 
 + 	try {
 + 		const response = await fetch(&#96;${endpoint}?operationId=${operationId}&#96;, {
-+ 			method: &#39;GET&#39;,
++ 			method: 'GET',
 + 			headers: {
 + 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-+ 				&#39;Content-Type&#39;: &#39;application/json&#39;
++ 				'Content-Type': 'application/json'
 + 			}
 + 		});
 + 
 + 		if (!response.ok) {
 + 			const errorText = await response.text();
-+ 			logger.error(&#39;YandexOCR GetRecognition API вернул ошибку&#39;, {
++ 			logger.error('YandexOCR GetRecognition API вернул ошибку', {
 + 				operationId,
 + 				status: response.status,
 + 				statusText: response.statusText,
@@ -1662,14 +1662,14 @@ Lines added: 418, lines removed: 1
 + 		const text = extractTextFromResponse(result);
 + 
 + 		if (!text) {
-+ 			logger.error(&#39;Не удалось извлечь текст из ответа GetRecognition&#39;, {
++ 			logger.error('Не удалось извлечь текст из ответа GetRecognition', {
 + 				operationId,
 + 				responseStructure: JSON.stringify(result).substring(0, 200)
 + 			});
-+ 			throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа GetRecognition&#39;);
++ 			throw new YandexOCRError('Не удалось извлечь текст из ответа GetRecognition');
 + 		}
 + 
-+ 		logger.info(&#39;Текст успешно получен через GetRecognition&#39;, {
++ 		logger.info('Текст успешно получен через GetRecognition', {
 + 			operationId,
 + 			textLength: text.length
 + 		});
@@ -1677,19 +1677,19 @@ Lines added: 418, lines removed: 1
 + 		return text;
 + 	} catch (error) {
 + 		if (error instanceof YandexOCRError) {
-+ 			logger.error(&#39;Ошибка YandexOCRError при получении результатов&#39;, {
++ 			logger.error('Ошибка YandexOCRError при получении результатов', {
 + 				operationId,
 + 				message: error.message,
 + 				stack: error.stack
 + 			});
 + 			throw error;
 + 		}
-+ 		logger.error(&#39;Неожиданная ошибка при получении результатов GetRecognition&#39;, {
++ 		logger.error('Неожиданная ошибка при получении результатов GetRecognition', {
 + 			operationId,
 + 			error: error instanceof Error ? error.message : String(error),
 + 			stack: error instanceof Error ? error.stack : undefined
 + 		});
-+ 		throw new YandexOCRError(&#39;Ошибка при получении результатов GetRecognition&#39;, error as Error);
++ 		throw new YandexOCRError('Ошибка при получении результатов GetRecognition', error as Error);
 + 	}
 + }
 + 
@@ -1706,15 +1706,15 @@ Lines added: 418, lines removed: 1
 + }&gt; {
 + 	const operationId = operation.providerData?.operationId as string | undefined;
 + 	if (!operationId) {
-+ 		throw new YandexOCRError(&#39;Operation ID не найден в providerData&#39;);
++ 		throw new YandexOCRError('Operation ID не найден в providerData');
 + 	}
 + 
 + 	const config = aiConfig.yandexOCR;
 + 	const baseEndpoint =
-+ 		config.operationEndpoint || &#39;https://operation.api.cloud.yandex.net/operations&#39;;
++ 		config.operationEndpoint || 'https://operation.api.cloud.yandex.net/operations';
 + 	const operationEndpoint = &#96;${baseEndpoint}/${operationId}&#96;;
 + 
-+ 	logger.debug(&#39;Проверка статуса YandexOCR операции&#39;, {
++ 	logger.debug('Проверка статуса YandexOCR операции', {
 + 		operationId: operation.id,
 + 		externalOperationId: operationId,
 + 		operationEndpoint
@@ -1722,7 +1722,7 @@ Lines added: 418, lines removed: 1
 + 
 + 	try {
 + 		const response = await fetch(operationEndpoint, {
-+ 			method: &#39;GET&#39;,
++ 			method: 'GET',
 + 			headers: {
 + 				Authorization: &#96;Api-Key ${config.apiKey}&#96;
 + 			}
@@ -1730,7 +1730,7 @@ Lines added: 418, lines removed: 1
 + 
 + 		if (!response.ok) {
 + 			const errorText = await response.text();
-+ 			logger.error(&#39;YandexOCR Operation API вернул ошибку&#39;, {
++ 			logger.error('YandexOCR Operation API вернул ошибку', {
 + 				operationId: operation.id,
 + 				externalOperationId: operationId,
 + 				status: response.status,
@@ -1746,14 +1746,14 @@ Lines added: 418, lines removed: 1
 + 
 + 		if (result.done === true) {
 + 			// Операция завершена, получаем результаты через GetRecognition
-+ 			logger.debug(&#39;Операция завершена, получаем результаты через GetRecognition&#39;, {
++ 			logger.debug('Операция завершена, получаем результаты через GetRecognition', {
 + 				operationId: operation.id,
 + 				externalOperationId: operationId
 + 			});
 + 
 + 			try {
 + 				const text = await getYandexOCRRecognition(operationId);
-+ 				logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
++ 				logger.info('YandexOCR операция завершена успешно', {
 + 					operationId: operation.id,
 + 					externalOperationId: operationId,
 + 					textLength: text.length
@@ -1764,7 +1764,7 @@ Lines added: 418, lines removed: 1
 + 					text
 + 				};
 + 			} catch (error) {
-+ 				logger.error(&#39;Ошибка при получении результатов через GetRecognition&#39;, {
++ 				logger.error('Ошибка при получении результатов через GetRecognition', {
 + 					operationId: operation.id,
 + 					externalOperationId: operationId,
 + 					error: error instanceof Error ? error.message : String(error)
@@ -1773,7 +1773,7 @@ Lines added: 418, lines removed: 1
 + 				if (result.response) {
 + 					const text = extractTextFromResponse(result.response);
 + 					if (text) {
-+ 						logger.info(&#39;Использован fallback: текст извлечен из Operation.Get ответа&#39;, {
++ 						logger.info('Использован fallback: текст извлечен из Operation.Get ответа', {
 + 							operationId: operation.id,
 + 							externalOperationId: operationId,
 + 							textLength: text.length
@@ -1787,25 +1787,25 @@ Lines added: 418, lines removed: 1
 + 				// Если не удалось получить текст, возвращаем ошибку
 + 				return {
 + 					done: true,
-+ 					error: error instanceof Error ? error.message : &#39;Ошибка при получении результатов&#39;
++ 					error: error instanceof Error ? error.message : 'Ошибка при получении результатов'
 + 				};
 + 			}
 + 		}
 + 
 + 		if (result.error) {
-+ 			logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
++ 			logger.error('YandexOCR операция завершена с ошибкой', {
 + 				operationId: operation.id,
 + 				externalOperationId: operationId,
-+ 				error: result.error.message || &#39;Unknown error&#39;
++ 				error: result.error.message || 'Unknown error'
 + 			});
 + 			return {
 + 				done: true,
-+ 				error: result.error.message || &#39;Unknown error&#39;
++ 				error: result.error.message || 'Unknown error'
 + 			};
 + 		}
 + 
 + 		// Операция еще выполняется
-+ 		logger.debug(&#39;YandexOCR операция еще выполняется&#39;, {
++ 		logger.debug('YandexOCR операция еще выполняется', {
 + 			operationId: operation.id,
 + 			externalOperationId: operationId
 + 		});
@@ -1814,7 +1814,7 @@ Lines added: 418, lines removed: 1
 + 		};
 + 	} catch (error) {
 + 		if (error instanceof YandexOCRError) {
-+ 			logger.error(&#39;Ошибка YandexOCRError при проверке статуса&#39;, {
++ 			logger.error('Ошибка YandexOCRError при проверке статуса', {
 + 				operationId: operation.id,
 + 				externalOperationId: operationId,
 + 				message: error.message,
@@ -1822,13 +1822,13 @@ Lines added: 418, lines removed: 1
 + 			});
 + 			throw error;
 + 		}
-+ 		logger.error(&#39;Неожиданная ошибка при проверке статуса операции YandexOCR&#39;, {
++ 		logger.error('Неожиданная ошибка при проверке статуса операции YandexOCR', {
 + 			operationId: operation.id,
 + 			externalOperationId: operationId,
 + 			error: error instanceof Error ? error.message : String(error),
 + 			stack: error instanceof Error ? error.stack : undefined
 + 		});
-+ 		throw new YandexOCRError(&#39;Ошибка при проверке статуса операции YandexOCR&#39;, error as Error);
++ 		throw new YandexOCRError('Ошибка при проверке статуса операции YandexOCR', error as Error);
 + 	}
 + }
 + 
@@ -1870,7 +1870,7 @@ Lines added: 418, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="write">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/llm.ts</summary>
+<details><summary>Tool use: **write** • Edit file: src/lib/ai/yandex/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 257, lines removed: 1
@@ -1887,10 +1887,10 @@ Lines added: 257, lines removed: 1
 +  * - Настройка параметров модели (temperature, maxTokens и т.д.)
 +  */
 + 
-+ import { z } from &#39;zod&#39;;
-+ import { aiConfig } from &#39;../config.js&#39;;
-+ import type { LLMOptions } from &#39;../types.js&#39;;
-+ import { logger } from &#39;../../utils/logger.js&#39;;
++ import { z } from 'zod';
++ import { aiConfig } from '../config.js';
++ import type { LLMOptions } from '../types.js';
++ import { logger } from '../../utils/logger.js';
 + 
 + export class YandexLLMError extends Error {
 + 	constructor(
@@ -1898,7 +1898,7 @@ Lines added: 257, lines removed: 1
 + 		public cause?: Error
 + 	) {
 + 		super(message);
-+ 		this.name = &#39;YandexLLMError&#39;;
++ 		this.name = 'YandexLLMError';
 + 	}
 + }
 + 
@@ -1917,7 +1917,7 @@ Lines added: 257, lines removed: 1
 + ): Promise&lt;string&gt; {
 + 	const config = aiConfig.yandexGPT;
 + 
-+ 	logger.debug(&#39;Вызов YandexGPT&#39;, {
++ 	logger.debug('Вызов YandexGPT', {
 + 		promptLength: prompt.length,
 + 		hasSystemPrompt: !!systemPrompt
 + 	});
@@ -1927,13 +1927,13 @@ Lines added: 257, lines removed: 1
 + 
 + 	if (systemPrompt) {
 + 		messages.push({
-+ 			role: &#39;system&#39;,
++ 			role: 'system',
 + 			text: systemPrompt
 + 		});
 + 	}
 + 
 + 	messages.push({
-+ 		role: &#39;user&#39;,
++ 		role: 'user',
 + 		text: prompt
 + 	});
 + 
@@ -1947,7 +1947,7 @@ Lines added: 257, lines removed: 1
 + 	} = {
 + 		stream: false,
 + 		temperature: options?.temperature ?? 0.6,
-+ 		maxTokens: options?.maxTokens ?? &#39;2000&#39;
++ 		maxTokens: options?.maxTokens ?? '2000'
 + 	};
 + 
 + 	// Добавляем дополнительные параметры, если указаны
@@ -1965,23 +1965,23 @@ Lines added: 257, lines removed: 1
 + 	};
 + 
 + 	try {
-+ 		logger.debug(&#39;Отправка запроса в YandexGPT&#39;, {
++ 		logger.debug('Отправка запроса в YandexGPT', {
 + 			endpoint: config.endpoint,
 + 			model: config.model
 + 		});
 + 
 + 		const response = await fetch(config.endpoint!, {
-+ 			method: &#39;POST&#39;,
++ 			method: 'POST',
 + 			headers: {
 + 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-+ 				&#39;Content-Type&#39;: &#39;application/json&#39;
++ 				'Content-Type': 'application/json'
 + 			},
 + 			body: JSON.stringify(requestBody)
 + 		});
 + 
 + 		if (!response.ok) {
 + 			const errorText = await response.text();
-+ 			logger.error(&#39;YandexGPT API вернул ошибку&#39;, {
++ 			logger.error('YandexGPT API вернул ошибку', {
 + 				status: response.status,
 + 				statusText: response.statusText,
 + 				errorText
@@ -2003,19 +2003,19 @@ Lines added: 257, lines removed: 1
 + 		}
 + 
 + 		if (!text) {
-+ 			logger.error(&#39;Не удалось извлечь текст из ответа YandexGPT&#39;, {
++ 			logger.error('Не удалось извлечь текст из ответа YandexGPT', {
 + 				responseStructure: JSON.stringify(result).substring(0, 200)
 + 			});
-+ 			throw new YandexLLMError(&#39;Не удалось извлечь текст из ответа YandexGPT&#39;);
++ 			throw new YandexLLMError('Не удалось извлечь текст из ответа YandexGPT');
 + 		}
 + 
-+ 		logger.info(&#39;YandexGPT успешно вернул ответ&#39;, {
++ 		logger.info('YandexGPT успешно вернул ответ', {
 + 			textLength: text.length
 + 		});
 + 
 + 		return text;
 + 	} catch (error) {
-+ 		logger.error(&#39;Ошибка при вызове YandexGPT&#39;, {
++ 		logger.error('Ошибка при вызове YandexGPT', {
 + 			error: error instanceof Error ? error.message : String(error),
 + 			stack: error instanceof Error ? error.stack : undefined
 + 		});
@@ -2023,7 +2023,7 @@ Lines added: 257, lines removed: 1
 + 		if (error instanceof YandexLLMError) {
 + 			throw error;
 + 		}
-+ 		throw new YandexLLMError(&#39;Ошибка при вызове YandexGPT API&#39;, error as Error);
++ 		throw new YandexLLMError('Ошибка при вызове YandexGPT API', error as Error);
 + 	}
 + }
 + 
@@ -2051,7 +2051,7 @@ Lines added: 257, lines removed: 1
 + 
 + 	for (let attempt = 0; attempt &lt;= maxRetries; attempt++) {
 + 		try {
-+ 			logger.debug(&#39;Попытка получения structured output&#39;, {
++ 			logger.debug('Попытка получения structured output', {
 + 				attempt: attempt + 1,
 + 				maxRetries: maxRetries + 1
 + 			});
@@ -2060,7 +2060,7 @@ Lines added: 257, lines removed: 1
 + 			let enhancedPrompt = prompt;
 + 			if (attempt &gt; 0) {
 + 				enhancedPrompt = &#96;${prompt}\n\nВАЖНО: Верни ТОЛЬКО валидный JSON без дополнительного текста, комментариев или markdown разметки.&#96;;
-+ 				logger.debug(&#39;Повторная попытка с усиленным промптом&#39;, {
++ 				logger.debug('Повторная попытка с усиленным промптом', {
 + 					attempt: attempt + 1
 + 				});
 + 			}
@@ -2071,15 +2071,15 @@ Lines added: 257, lines removed: 1
 + 			let jsonText = response.trim();
 + 
 + 			// Удаляем markdown код блоки, если они есть
-+ 			if (jsonText.startsWith(&#39;&#96;&#96;&#96;&#39;)) {
-+ 				const lines = jsonText.split(&#39;\n&#39;);
++ 			if (jsonText.startsWith('&#96;&#96;&#96;')) {
++ 				const lines = jsonText.split('\n');
 + 				// Удаляем первую строку (&#96;&#96;&#96;json или &#96;&#96;&#96;)
 + 				lines.shift();
 + 				// Удаляем последнюю строку (&#96;&#96;&#96;)
-+ 				if (lines.length &gt; 0 &amp;&amp; lines[lines.length - 1].trim() === &#39;&#96;&#96;&#96;&#39;) {
++ 				if (lines.length &gt; 0 &amp;&amp; lines[lines.length - 1].trim() === '&#96;&#96;&#96;') {
 + 					lines.pop();
 + 				}
-+ 				jsonText = lines.join(&#39;\n&#39;);
++ 				jsonText = lines.join('\n');
 + 			}
 + 
 + 			// Парсим JSON
@@ -2087,7 +2087,7 @@ Lines added: 257, lines removed: 1
 + 			try {
 + 				parsed = JSON.parse(jsonText);
 + 			} catch (parseError) {
-+ 				logger.warn(&#39;Ошибка парсинга JSON из ответа LLM&#39;, {
++ 				logger.warn('Ошибка парсинга JSON из ответа LLM', {
 + 					attempt: attempt + 1,
 + 					error: (parseError as Error).message,
 + 					jsonPreview: jsonText.substring(0, 200)
@@ -2100,7 +2100,7 @@ Lines added: 257, lines removed: 1
 + 			// Валидируем через Zod схему
 + 			const validated = schema.parse(parsed);
 + 
-+ 			logger.info(&#39;Structured output успешно получен и валидирован&#39;, {
++ 			logger.info('Structured output успешно получен и валидирован', {
 + 				attempt: attempt + 1
 + 			});
 + 
@@ -2108,7 +2108,7 @@ Lines added: 257, lines removed: 1
 + 		} catch (error) {
 + 			lastError = error as Error;
 + 
-+ 			logger.warn(&#39;Ошибка при получении structured output&#39;, {
++ 			logger.warn('Ошибка при получении structured output', {
 + 				attempt: attempt + 1,
 + 				maxRetries: maxRetries + 1,
 + 				error: error instanceof Error ? error.message : String(error)
@@ -2125,7 +2125,7 @@ Lines added: 257, lines removed: 1
 + 	}
 + 
 + 	// Если все попытки не удались, выбрасываем последнюю ошибку
-+ 	logger.error(&#39;Не удалось получить валидный structured output после всех попыток&#39;, {
++ 	logger.error('Не удалось получить валидный structured output после всех попыток', {
 + 		maxRetries: maxRetries + 1,
 + 		lastError: lastError?.message
 + 	});
@@ -2209,7 +2209,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="write">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **write** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 7, lines removed: 5
@@ -2226,16 +2226,16 @@ Lines added: 7, lines removed: 5
 +  * - Извлечение текста из XLSX через xlsx (локально)
    */
   
-- import { aiConfig } from &#39;./config.js&#39;;
+- import { aiConfig } from './config.js';
   import {
   	createOrUpdateOperation,
 - 	updateOperationStatus
 + 	updateOperationStatus,
 + 	getOperation
-  } from &#39;../storage/operationsRepository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
-+ import { callYandexOCR, checkYandexOCROperation, YandexOCRError } from &#39;./yandex/ocr.js&#39;;
-+ import type { ProcessingOperation } from &#39;../storage/types.js&#39;;
+  } from '../storage/operationsRepository.js';
+  import { logger } from '../utils/logger.js';
++ import { callYandexOCR, checkYandexOCROperation, YandexOCRError } from './yandex/ocr.js';
++ import type { ProcessingOperation } from '../storage/types.js';
   
   export class OCRError extends Error {
 ```
@@ -2245,7 +2245,7 @@ Lines added: undefined, lines removed: 211
 
 ```diff
 @@ -43,215 +45,4 @@
-  	return &#39;unknown&#39;;
+  	return 'unknown';
   }
 - 
 - /**
@@ -2261,14 +2261,14 @@ Lines added: undefined, lines removed: 211
 - 	// https://yandex.cloud/ru/docs/vision/ocr/api-ref/TextRecognition/recognize
 - 	const config = aiConfig.yandexOCR;
 - 	// Конвертируем Buffer в base64
-- 	const base64Content = fileBuffer.toString(&#39;base64&#39;);
+- 	const base64Content = fileBuffer.toString('base64');
 - 
 - 	// Определяем тип контента для API
 - 	let contentType: string;
-- 	if (mimeType.startsWith(&#39;image/&#39;)) {
+- 	if (mimeType.startsWith('image/')) {
 - 		contentType = mimeType;
-- 	} else if (mimeType === &#39;application/pdf&#39;) {
-- 		contentType = &#39;application/pdf&#39;;
+- 	} else if (mimeType === 'application/pdf') {
+- 		contentType = 'application/pdf';
 - 	} else {
 - 		throw new OCRError(&#96;Неподдерживаемый тип файла для OCR: ${mimeType}&#96;);
 - 	}
@@ -2276,7 +2276,7 @@ Lines added: undefined, lines removed: 211
 - 	return {
 - 		content: base64Content,
 - 		mime_type: contentType,
-- 		language_codes: [&#39;ru&#39;, &#39;en&#39;],
+- 		language_codes: ['ru', 'en'],
 - 		model: config.model
 - 	}
 - }
@@ -2297,10 +2297,10 @@ Lines added: undefined, lines removed: 211
 - 	const config = aiConfig.yandexOCR;
 - 
 - 	// Определяем, нужно ли использовать async endpoint
-- 	const isMultiPagePDF = mimeType === &#39;application/pdf&#39; &amp;&amp; pageCount &amp;&amp; pageCount &gt; 1;
+- 	const isMultiPagePDF = mimeType === 'application/pdf' &amp;&amp; pageCount &amp;&amp; pageCount &gt; 1;
 - 	const endpoint = isMultiPagePDF &amp;&amp; config.asyncEndpoint ? config.asyncEndpoint : config.endpoint;
 - 
-- 	logger.debug(&#39;Вызов YandexOCR&#39;, {
+- 	logger.debug('Вызов YandexOCR', {
 - 		mimeType,
 - 		fileSize: fileBuffer.length,
 - 		pageCount,
@@ -2312,24 +2312,24 @@ Lines added: undefined, lines removed: 211
 - 	const requestBody = createYandexOCRRequestBody(fileBuffer, mimeType);
 - 
 - 	try {
-- 		logger.debug(&#39;Отправка запроса в YandexOCR&#39;, {
+- 		logger.debug('Отправка запроса в YandexOCR', {
 - 			endpoint,
 - 			mimeType,
 - 			pageCount
 - 		});
 - 
 - 		const response = await fetch(endpoint!, {
-- 			method: &#39;POST&#39;,
+- 			method: 'POST',
 - 			headers: {
 - 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-- 				&#39;Content-Type&#39;: &#39;application/json&#39;
+- 				'Content-Type': 'application/json'
 - 			},
 - 			body: JSON.stringify(requestBody)
 - 		});
 - 
 - 		if (!response.ok) {
 - 			const errorText = await response.text();
-- 			logger.error(&#39;YandexOCR API вернул ошибку&#39;, {
+- 			logger.error('YandexOCR API вернул ошибку', {
 - 				status: response.status,
 - 				statusText: response.statusText,
 - 				errorText
@@ -2341,10 +2341,10 @@ Lines added: undefined, lines removed: 211
 - 
 - 		const result = await response.json();
 - 
-- 		// Для async endpoint: всегда возвращает { done: false, id: &quot;...&quot; } при создании операции
+- 		// Для async endpoint: всегда возвращает { done: false, id: "..." } при создании операции
 - 		if (isMultiPagePDF) {
 - 			if (result.done === false &amp;&amp; result.id) {
-- 				logger.info(&#39;YandexOCR async операция создана&#39;, {
+- 				logger.info('YandexOCR async операция создана', {
 - 					externalOperationId: result.id
 - 				});
 - 				return {
@@ -2353,10 +2353,10 @@ Lines added: undefined, lines removed: 211
 - 				};
 - 			}
 - 			// Если async endpoint вернул что-то неожиданное
-- 			logger.error(&#39;Неожиданный ответ от async endpoint&#39;, {
+- 			logger.error('Неожиданный ответ от async endpoint', {
 - 				responseStructure: JSON.stringify(result).substring(0, 200)
 - 			});
-- 			throw new OCRError(&#39;Неожиданный ответ от async endpoint YandexOCR&#39;);
+- 			throw new OCRError('Неожиданный ответ от async endpoint YandexOCR');
 - 		}
 - 
 - 		// Для синхронного endpoint: проверяем завершенные операции (для обратной совместимости)
@@ -2376,17 +2376,17 @@ Lines added: undefined, lines removed: 211
 - 					if (block.lines) {
 - 						for (const line of block.lines) {
 - 							if (line.words) {
-- 								const words = line.words.map((w: { text: string }) =&gt; w.text).join(&#39; &#39;);
+- 								const words = line.words.map((w: { text: string }) =&gt; w.text).join(' ');
 - 								textBlocks.push(words);
 - 							}
 - 						}
 - 					}
 - 				}
-- 				text = textBlocks.join(&#39;\n&#39;);
+- 				text = textBlocks.join('\n');
 - 			}
 - 
 - 			if (text) {
-- 				logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция завершена)&#39;, {
+- 				logger.info('YandexOCR успешно извлек текст (синхронная операция завершена)', {
 - 					textLength: text.length
 - 				});
 - 				return { text, isAsync: false };
@@ -2396,7 +2396,7 @@ Lines added: undefined, lines removed: 211
 - 		// Синхронный ответ (одностраничные PDF, изображения)
 - 		// Структура ответа: { result: { textAnnotation: { fullText: string } } }
 - 		if (result.result?.textAnnotation?.fullText) {
-- 			logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция)&#39;, {
+- 			logger.info('YandexOCR успешно извлек текст (синхронная операция)', {
 - 				textLength: result.result.textAnnotation.fullText.length
 - 			});
 - 			return {
@@ -2407,7 +2407,7 @@ Lines added: undefined, lines removed: 211
 - 
 - 		// Альтернативная структура ответа
 - 		if (result.textAnnotation?.fullText) {
-- 			logger.info(&#39;YandexOCR успешно извлек текст (альтернативная структура)&#39;, {
+- 			logger.info('YandexOCR успешно извлек текст (альтернативная структура)', {
 - 				textLength: result.textAnnotation.fullText.length
 - 			});
 - 			return {
@@ -2423,14 +2423,14 @@ Lines added: undefined, lines removed: 211
 - 				if (block.lines) {
 - 					for (const line of block.lines) {
 - 						if (line.words) {
-- 							const words = line.words.map((w: { text: string }) =&gt; w.text).join(&#39; &#39;);
+- 							const words = line.words.map((w: { text: string }) =&gt; w.text).join(' ');
 - 							textBlocks.push(words);
 - 						}
 - 					}
 - 				}
 - 			}
-- 			const extractedText = textBlocks.join(&#39;\n&#39;);
-- 			logger.info(&#39;YandexOCR извлек текст из блоков&#39;, {
+- 			const extractedText = textBlocks.join('\n');
+- 			logger.info('YandexOCR извлек текст из блоков', {
 - 				textLength: extractedText.length
 - 			});
 - 			return {
@@ -2439,23 +2439,23 @@ Lines added: undefined, lines removed: 211
 - 			};
 - 		}
 - 
-- 		logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
+- 		logger.error('Не удалось извлечь текст из ответа YandexOCR', {
 - 			responseStructure: JSON.stringify(result).substring(0, 200)
 - 		});
-- 		throw new OCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+- 		throw new OCRError('Не удалось извлечь текст из ответа YandexOCR');
 - 	} catch (error) {
 - 		if (error instanceof OCRError) {
-- 			logger.error(&#39;Ошибка OCRError&#39;, {
+- 			logger.error('Ошибка OCRError', {
 - 				message: error.message,
 - 				stack: error.stack
 - 			});
 - 			throw error;
 - 		}
-- 		logger.error(&#39;Неожиданная ошибка при вызове YandexOCR&#39;, {
+- 		logger.error('Неожиданная ошибка при вызове YandexOCR', {
 - 			error: error instanceof Error ? error.message : String(error),
 - 			stack: error instanceof Error ? error.stack : undefined
 - 		});
-- 		throw new OCRError(&#39;Ошибка при вызове YandexOCR API&#39;, error as Error);
+- 		throw new OCRError('Ошибка при вызове YandexOCR API', error as Error);
 - 	}
 - }
   
@@ -2479,25 +2479,25 @@ Lines added: undefined, lines removed: 235
 - async function getYandexOCRRecognition(operationId: string): Promise&lt;string&gt; {
 - 	const config = aiConfig.yandexOCR;
 - 	const endpoint = config.getRecognitionEndpoint || 
-- 		&#39;https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition&#39;;
+- 		'https://ocr.api.cloud.yandex.net/ocr/v1/textRecognitionAsync/getRecognition';
 - 
-- 	logger.debug(&#39;Получение результатов распознавания через GetRecognition&#39;, {
+- 	logger.debug('Получение результатов распознавания через GetRecognition', {
 - 		externalOperationId: operationId,
 - 		endpoint
 - 	});
 - 
 - 	try {
 - 		const response = await fetch(&#96;${endpoint}?operationId=${operationId}&#96;, {
-- 			method: &#39;GET&#39;,
+- 			method: 'GET',
 - 			headers: {
 - 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-- 				&#39;Content-Type&#39;: &#39;application/json&#39;
+- 				'Content-Type': 'application/json'
 - 			}
 - 		});
 - 
 - 		if (!response.ok) {
 - 			const errorText = await response.text();
-- 			logger.error(&#39;YandexOCR GetRecognition API вернул ошибку&#39;, {
+- 			logger.error('YandexOCR GetRecognition API вернул ошибку', {
 - 				externalOperationId: operationId,
 - 				status: response.status,
 - 				statusText: response.statusText,
@@ -2522,24 +2522,24 @@ Lines added: undefined, lines removed: 235
 - 				if (block.lines) {
 - 					for (const line of block.lines) {
 - 						if (line.words) {
-- 							const words = line.words.map((w: { text: string }) =&gt; w.text).join(&#39; &#39;);
+- 							const words = line.words.map((w: { text: string }) =&gt; w.text).join(' ');
 - 							textBlocks.push(words);
 - 						}
 - 					}
 - 				}
 - 			}
-- 			text = textBlocks.join(&#39;\n&#39;);
+- 			text = textBlocks.join('\n');
 - 		}
 - 
 - 		if (!text) {
-- 			logger.error(&#39;Не удалось извлечь текст из ответа GetRecognition&#39;, {
+- 			logger.error('Не удалось извлечь текст из ответа GetRecognition', {
 - 				externalOperationId: operationId,
 - 				responseStructure: JSON.stringify(result).substring(0, 200)
 - 			});
-- 			throw new OCRError(&#39;Не удалось извлечь текст из ответа GetRecognition&#39;);
+- 			throw new OCRError('Не удалось извлечь текст из ответа GetRecognition');
 - 		}
 - 
-- 		logger.info(&#39;Текст успешно получен через GetRecognition&#39;, {
+- 		logger.info('Текст успешно получен через GetRecognition', {
 - 			externalOperationId: operationId,
 - 			textLength: text.length
 - 		});
@@ -2547,19 +2547,19 @@ Lines added: undefined, lines removed: 235
 - 		return text;
 - 	} catch (error) {
 - 		if (error instanceof OCRError) {
-- 			logger.error(&#39;Ошибка OCRError при получении результатов&#39;, {
+- 			logger.error('Ошибка OCRError при получении результатов', {
 - 				externalOperationId: operationId,
 - 				message: error.message,
 - 				stack: error.stack
 - 			});
 - 			throw error;
 - 		}
-- 		logger.error(&#39;Неожиданная ошибка при получении результатов GetRecognition&#39;, {
+- 		logger.error('Неожиданная ошибка при получении результатов GetRecognition', {
 - 			externalOperationId: operationId,
 - 			error: error instanceof Error ? error.message : String(error),
 - 			stack: error instanceof Error ? error.stack : undefined
 - 		});
-- 		throw new OCRError(&#39;Ошибка при получении результатов GetRecognition&#39;, error as Error);
+- 		throw new OCRError('Ошибка при получении результатов GetRecognition', error as Error);
 - 	}
 - }
 - 
@@ -2573,17 +2573,17 @@ Lines added: undefined, lines removed: 235
 - }&gt; {
 - 	const config = aiConfig.yandexOCR;
 - 	const baseEndpoint =
-- 		config.operationEndpoint || &#39;https://operation.api.cloud.yandex.net/operations&#39;;
+- 		config.operationEndpoint || 'https://operation.api.cloud.yandex.net/operations';
 - 	const operationEndpoint = &#96;${baseEndpoint}/${operationId}&#96;;
 - 
-- 	logger.debug(&#39;Проверка статуса YandexOCR операции&#39;, {
+- 	logger.debug('Проверка статуса YandexOCR операции', {
 - 		externalOperationId: operationId,
 - 		operationEndpoint
 - 	});
 - 
 - 	try {
 - 		const response = await fetch(operationEndpoint, {
-- 			method: &#39;GET&#39;,
+- 			method: 'GET',
 - 			headers: {
 - 				Authorization: &#96;Api-Key ${config.apiKey}&#96;
 - 			}
@@ -2591,7 +2591,7 @@ Lines added: undefined, lines removed: 235
 - 
 - 		if (!response.ok) {
 - 			const errorText = await response.text();
-- 			logger.error(&#39;YandexOCR Operation API вернул ошибку&#39;, {
+- 			logger.error('YandexOCR Operation API вернул ошибку', {
 - 				externalOperationId: operationId,
 - 				status: response.status,
 - 				statusText: response.statusText,
@@ -2606,13 +2606,13 @@ Lines added: undefined, lines removed: 235
 - 
 - 		if (result.done === true) {
 - 			// Операция завершена, получаем результаты через GetRecognition
-- 			logger.debug(&#39;Операция завершена, получаем результаты через GetRecognition&#39;, {
+- 			logger.debug('Операция завершена, получаем результаты через GetRecognition', {
 - 				externalOperationId: operationId
 - 			});
 - 
 - 			try {
 - 				const text = await getYandexOCRRecognition(operationId);
-- 				logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
+- 				logger.info('YandexOCR операция завершена успешно', {
 - 					externalOperationId: operationId,
 - 					textLength: text.length
 - 				});
@@ -2622,7 +2622,7 @@ Lines added: undefined, lines removed: 235
 - 					text
 - 				};
 - 			} catch (error) {
-- 				logger.error(&#39;Ошибка при получении результатов через GetRecognition&#39;, {
+- 				logger.error('Ошибка при получении результатов через GetRecognition', {
 - 					externalOperationId: operationId,
 - 					error: error instanceof Error ? error.message : String(error)
 - 				});
@@ -2641,17 +2641,17 @@ Lines added: undefined, lines removed: 235
 - 							if (block.lines) {
 - 								for (const line of block.lines) {
 - 									if (line.words) {
-- 										const words = line.words.map((w: { text: string }) =&gt; w.text).join(&#39; &#39;);
+- 										const words = line.words.map((w: { text: string }) =&gt; w.text).join(' ');
 - 										textBlocks.push(words);
 - 									}
 - 								}
 - 							}
 - 						}
-- 						text = textBlocks.join(&#39;\n&#39;);
+- 						text = textBlocks.join('\n');
 - 					}
 - 
 - 					if (text) {
-- 						logger.info(&#39;Использован fallback: текст извлечен из Operation.Get ответа&#39;, {
+- 						logger.info('Использован fallback: текст извлечен из Operation.Get ответа', {
 - 							externalOperationId: operationId,
 - 							textLength: text.length
 - 						});
@@ -2664,24 +2664,24 @@ Lines added: undefined, lines removed: 235
 - 				// Если не удалось получить текст, возвращаем ошибку
 - 				return {
 - 					done: true,
-- 					error: error instanceof Error ? error.message : &#39;Ошибка при получении результатов&#39;
+- 					error: error instanceof Error ? error.message : 'Ошибка при получении результатов'
 - 				};
 - 			}
 - 		}
 - 
 - 		if (result.error) {
-- 			logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
+- 			logger.error('YandexOCR операция завершена с ошибкой', {
 - 				externalOperationId: operationId,
-- 				error: result.error.message || &#39;Unknown error&#39;
+- 				error: result.error.message || 'Unknown error'
 - 			});
 - 			return {
 - 				done: true,
-- 				error: result.error.message || &#39;Unknown error&#39;
+- 				error: result.error.message || 'Unknown error'
 - 			};
 - 		}
 - 
 - 		// Операция еще выполняется
-- 		logger.debug(&#39;YandexOCR операция еще выполняется&#39;, {
+- 		logger.debug('YandexOCR операция еще выполняется', {
 - 			externalOperationId: operationId
 - 		});
 - 		return {
@@ -2689,19 +2689,19 @@ Lines added: undefined, lines removed: 235
 - 		};
 - 	} catch (error) {
 - 		if (error instanceof OCRError) {
-- 			logger.error(&#39;Ошибка OCRError при проверке статуса&#39;, {
+- 			logger.error('Ошибка OCRError при проверке статуса', {
 - 				externalOperationId: operationId,
 - 				message: error.message,
 - 				stack: error.stack
 - 			});
 - 			throw error;
 - 		}
-- 		logger.error(&#39;Неожиданная ошибка при проверке статуса операции YandexOCR&#39;, {
+- 		logger.error('Неожиданная ошибка при проверке статуса операции YandexOCR', {
 - 			externalOperationId: operationId,
 - 			error: error instanceof Error ? error.message : String(error),
 - 			stack: error instanceof Error ? error.stack : undefined
 - 		});
-- 		throw new OCRError(&#39;Ошибка при проверке статуса операции YandexOCR&#39;, error as Error);
+- 		throw new OCRError('Ошибка при проверке статуса операции YandexOCR', error as Error);
 - 	}
 - }
   
@@ -2726,14 +2726,14 @@ Lines added: 2, lines removed: 6
 ```diff
 @@ -579,10 +134,6 @@
   			applicationId,
-  			&#39;ocr&#39;,
-- 			&#39;local&#39;, // Для локального извлечения текста
+  			'ocr',
+- 			'local', // Для локального извлечения текста
 - 			{
-- 				endpoint: &#39;local&#39;,
-- 				method: &#39;POST&#39;
+- 				endpoint: 'local',
+- 				method: 'POST'
 - 			},
-- 			&#39;pending&#39;
-+ 			&#39;local&#39;,
+- 			'pending'
++ 			'local',
 + 			{} // providerData пустой для локальных операций
   		);
   
@@ -2748,20 +2748,20 @@ Lines added: 2, lines removed: 12
   
 - 		// Определяем endpoint в зависимости от количества страниц
 - 		const endpoint =
-- 			fileType === &#39;pdf&#39; &amp;&amp; pageCount &gt; 1 &amp;&amp; config.asyncEndpoint
+- 			fileType === 'pdf' &amp;&amp; pageCount &gt; 1 &amp;&amp; config.asyncEndpoint
 - 				? config.asyncEndpoint
 - 				: config.endpoint;
 - 
   		// Создаем операцию перед вызовом
   		const operation = createOrUpdateOperation(
   			applicationId,
-  			&#39;ocr&#39;,
-  			&#39;yandex&#39;,
+  			'ocr',
+  			'yandex',
 - 			{
 - 				endpoint: endpoint!,
-- 				method: &#39;POST&#39;
+- 				method: 'POST'
 - 			},
-- 			&#39;running&#39;
+- 			'running'
 + 			{} // providerData будет заполнено после вызова API
   		);
   
@@ -2771,7 +2771,7 @@ Lines added: 2, lines removed: 12
 - 			if (ocrResult.isAsync &amp;&amp; ocrResult.operationId) {
 + 			if (ocrResult.operationId) {
   				// Асинхронная операция
-  				logger.info(&#39;YandexOCR операция асинхронная&#39;, {
+  				logger.info('YandexOCR операция асинхронная', {
 ```
 
 **Chunk 7**
@@ -2780,7 +2780,7 @@ Lines added: 1, lines removed: 1
 ```diff
 @@ -662,5 +203,5 @@
   				});
-  				updateOperationStatus(operation.id, &#39;running&#39;, {
+  				updateOperationStatus(operation.id, 'running', {
 - 					externalOperationId: ocrResult.operationId
 + 					providerData: { operationId: ocrResult.operationId }
   				});
@@ -2803,24 +2803,24 @@ Lines added: 87, lines removed: undefined
 +  * @returns Обновленная операция или null, если не найдена
 +  */
 + export async function checkOCROperation(operationId: string): Promise&lt;ProcessingOperation | null&gt; {
-+ 	logger.debug(&#39;Проверка статуса OCR операции&#39;, { operationId });
++ 	logger.debug('Проверка статуса OCR операции', { operationId });
 + 
 + 	const operation = getOperation(operationId);
 + 	if (!operation) {
-+ 		logger.warn(&#39;Операция не найдена&#39;, { operationId });
++ 		logger.warn('Операция не найдена', { operationId });
 + 		return null;
 + 	}
 + 
 + 	// Если операция уже завершена, возвращаем как есть
-+ 	if (operation.status === &#39;completed&#39; || operation.status === &#39;failed&#39;) {
++ 	if (operation.status === 'completed' || operation.status === 'failed') {
 + 		return operation;
 + 	}
 + 
 + 	// Проверяем статус в зависимости от провайдера
 + 	switch (operation.provider) {
-+ 		case &#39;yandex&#39;: {
++ 		case 'yandex': {
 + 			try {
-+ 				logger.debug(&#39;Проверка статуса YandexOCR операции&#39;, {
++ 				logger.debug('Проверка статуса YandexOCR операции', {
 + 					operationId,
 + 					providerData: operation.providerData
 + 				});
@@ -2830,20 +2830,20 @@ Lines added: 87, lines removed: undefined
 + 				if (checkResult.done) {
 + 					if (checkResult.text) {
 + 						// Операция завершена успешно
-+ 						logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
++ 						logger.info('YandexOCR операция завершена успешно', {
 + 							operationId,
 + 							textLength: checkResult.text.length
 + 						});
-+ 						updateOperationStatus(operationId, &#39;completed&#39;, {
++ 						updateOperationStatus(operationId, 'completed', {
 + 							result: { text: checkResult.text }
 + 						});
 + 					} else if (checkResult.error) {
 + 						// Операция завершена с ошибкой
-+ 						logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
++ 						logger.error('YandexOCR операция завершена с ошибкой', {
 + 							operationId,
 + 							error: checkResult.error
 + 						});
-+ 						updateOperationStatus(operationId, &#39;failed&#39;, {
++ 						updateOperationStatus(operationId, 'failed', {
 + 							error: { message: checkResult.error }
 + 						});
 + 					}
@@ -2853,14 +2853,14 @@ Lines added: 87, lines removed: undefined
 + 				return getOperation(operationId);
 + 			} catch (error) {
 + 				// Ошибка при проверке статуса
-+ 				logger.error(&#39;Ошибка при проверке статуса YandexOCR операции&#39;, {
++ 				logger.error('Ошибка при проверке статуса YandexOCR операции', {
 + 					operationId,
 + 					error: error instanceof Error ? error.message : String(error),
 + 					stack: error instanceof Error ? error.stack : undefined
 + 				});
-+ 				updateOperationStatus(operationId, &#39;failed&#39;, {
++ 				updateOperationStatus(operationId, 'failed', {
 + 					error: {
-+ 						message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 						message: error instanceof Error ? error.message : 'Unknown error',
 + 						details: error
 + 					}
 + 				});
@@ -2868,13 +2868,13 @@ Lines added: 87, lines removed: undefined
 + 			}
 + 		}
 + 
-+ 		case &#39;local&#39;: {
++ 		case 'local': {
 + 			// Локальные операции всегда синхронные, не требуют проверки
 + 			return operation;
 + 		}
 + 
 + 		default:
-+ 			logger.warn(&#39;Неизвестный провайдер OCR&#39;, {
++ 			logger.warn('Неизвестный провайдер OCR', {
 + 				operationId,
 + 				provider: operation.provider
 + 			});
@@ -2957,18 +2957,18 @@ Lint errors for `src/lib/ai/ocr.ts`
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -14,5 +14,5 @@
-  } from &#39;../storage/operationsRepository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
-- import { callYandexOCR, checkYandexOCROperation, YandexOCRError } from &#39;./yandex/ocr.js&#39;;
-+ import { callYandexOCR, checkYandexOCROperation } from &#39;./yandex/ocr.js&#39;;
-  import type { ProcessingOperation } from &#39;../storage/types.js&#39;;
+  } from '../storage/operationsRepository.js';
+  import { logger } from '../utils/logger.js';
+- import { callYandexOCR, checkYandexOCROperation, YandexOCRError } from './yandex/ocr.js';
++ import { callYandexOCR, checkYandexOCROperation } from './yandex/ocr.js';
+  import type { ProcessingOperation } from '../storage/types.js';
   
 ```
 
@@ -3007,7 +3007,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="write">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/llm.ts</summary>
+<details><summary>Tool use: **write** • Edit file: src/lib/ai/llm.ts</summary>
 
 **Chunk 1**
 Lines added: 8, lines removed: 4
@@ -3025,22 +3025,22 @@ Lines added: 8, lines removed: 4
    * - Настройку параметров модели (temperature, maxTokens и т.д.)
    */
   
-  import { z } from &#39;zod&#39;;
-- import { aiConfig } from &#39;./config.js&#39;;
-  import type { LLMOptions } from &#39;./types.js&#39;;
-+ import type { ProcessingOperationType } from &#39;../storage/types.js&#39;;
+  import { z } from 'zod';
+- import { aiConfig } from './config.js';
+  import type { LLMOptions } from './types.js';
++ import type { ProcessingOperationType } from '../storage/types.js';
   import {
   	createOrUpdateOperation,
   	updateOperationStatus,
   	getOperationByApplicationAndType
-  } from &#39;../storage/operationsRepository.js&#39;;
-- import type { ProcessingOperationType } from &#39;../storage/types.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
+  } from '../storage/operationsRepository.js';
+- import type { ProcessingOperationType } from '../storage/types.js';
+  import { logger } from '../utils/logger.js';
 + import {
 + 	callYandexGPT,
 + 	callYandexGPTStructured as callYandexGPTStructuredImpl,
 + 	YandexLLMError
-+ } from &#39;./yandex/llm.js&#39;;
++ } from './yandex/llm.js';
   
   export class LLMError extends Error {
 ```
@@ -3056,7 +3056,7 @@ Lines added: 3, lines removed: 1
 +  * Вызывает LLM API и возвращает текстовый ответ
 +  * Использует switch по провайдеру для вызова соответствующей функции
    *
-+  * @param provider - Провайдер LLM (&#39;yandex&#39;, и т.д.)
++  * @param provider - Провайдер LLM ('yandex', и т.д.)
    * @param prompt - Промпт для LLM
    * @param systemPrompt - Системный промпт (опционально)
 ```
@@ -3084,8 +3084,8 @@ Lines added: 2, lines removed: 3
   ): Promise&lt;string&gt; {
 - 	const config = aiConfig.yandexGPT;
 - 
-- 	logger.debug(&#39;Вызов YandexGPT&#39;, {
-+ 	logger.debug(&#39;Вызов LLM&#39;, {
+- 	logger.debug('Вызов YandexGPT', {
++ 	logger.debug('Вызов LLM', {
 + 		provider,
   		applicationId: operationConfig?.applicationId,
   		operationType: operationConfig?.type,
@@ -3098,17 +3098,17 @@ Lines added: 20, lines removed: 104
 @@ -62,116 +68,32 @@
   			operationConfig.applicationId,
   			operationConfig.type,
-- 			&#39;yandex&#39;,
+- 			'yandex',
 - 			{
 - 				endpoint: config.endpoint!,
-- 				method: &#39;POST&#39;
+- 				method: 'POST'
 - 			},
-- 			&#39;running&#39;
+- 			'running'
 + 			provider,
 + 			{} // providerData пустой для LLM операций
   		);
   		operationId = operation.id;
-  		logger.debug(&#39;Создана операция LLM&#39;, {
+  		logger.debug('Создана операция LLM', {
   			operationId,
   			applicationId: operationConfig.applicationId,
 - 			type: operationConfig.type
@@ -3120,7 +3120,7 @@ Lines added: 20, lines removed: 104
 - 
 - 	if (systemPrompt) {
 - 		messages.push({
-- 			role: &#39;system&#39;,
+- 			role: 'system',
 - 			text: systemPrompt
 + 			type: operationConfig.type,
 + 			provider
@@ -3128,7 +3128,7 @@ Lines added: 20, lines removed: 104
   	}
   
 - 	messages.push({
-- 		role: &#39;user&#39;,
+- 		role: 'user',
 - 		text: prompt
 - 	});
 - 
@@ -3142,7 +3142,7 @@ Lines added: 20, lines removed: 104
 - 	} = {
 - 		stream: false,
 - 		temperature: options?.temperature ?? 0.6,
-- 		maxTokens: options?.maxTokens ?? &#39;2000&#39;
+- 		maxTokens: options?.maxTokens ?? '2000'
 - 	};
 - 
 - 	// Добавляем дополнительные параметры, если указаны
@@ -3160,24 +3160,24 @@ Lines added: 20, lines removed: 104
 - 	};
 - 
 - 	try {
-- 		logger.debug(&#39;Отправка запроса в YandexGPT&#39;, {
+- 		logger.debug('Отправка запроса в YandexGPT', {
 - 			operationId,
 - 			endpoint: config.endpoint,
 - 			model: config.model
 - 		});
 - 
 - 		const response = await fetch(config.endpoint!, {
-- 			method: &#39;POST&#39;,
+- 			method: 'POST',
 - 			headers: {
 - 				Authorization: &#96;Api-Key ${config.apiKey}&#96;,
-- 				&#39;Content-Type&#39;: &#39;application/json&#39;
+- 				'Content-Type': 'application/json'
 - 			},
 - 			body: JSON.stringify(requestBody)
 - 		});
 - 
 - 		if (!response.ok) {
 - 			const errorText = await response.text();
-- 			logger.error(&#39;YandexGPT API вернул ошибку&#39;, {
+- 			logger.error('YandexGPT API вернул ошибку', {
 - 				operationId,
 - 				status: response.status,
 - 				statusText: response.statusText,
@@ -3200,26 +3200,26 @@ Lines added: 20, lines removed: 104
 - 		}
 - 
 - 		if (!text) {
-- 			const error = new LLMError(&#39;Не удалось извлечь текст из ответа YandexGPT&#39;);
-- 			logger.error(&#39;Не удалось извлечь текст из ответа YandexGPT&#39;, {
+- 			const error = new LLMError('Не удалось извлечь текст из ответа YandexGPT');
+- 			logger.error('Не удалось извлечь текст из ответа YandexGPT', {
 - 				operationId,
 - 				responseStructure: JSON.stringify(result).substring(0, 200)
 - 			});
 - 			if (operationId) {
-- 				updateOperationStatus(operationId, &#39;failed&#39;, {
+- 				updateOperationStatus(operationId, 'failed', {
 - 					error: { message: error.message }
 - 				});
 - 			}
 - 			throw error;
 - 		}
 - 
-- 		logger.info(&#39;YandexGPT успешно вернул ответ&#39;, {
+- 		logger.info('YandexGPT успешно вернул ответ', {
 + 	try {
 + 		let text: string;
 + 
 + 		// Switch по провайдеру
 + 		switch (provider) {
-+ 			case &#39;yandex&#39;: {
++ 			case 'yandex': {
 + 				text = await callYandexGPT(prompt, systemPrompt, options);
 + 				break;
 + 			}
@@ -3228,7 +3228,7 @@ Lines added: 20, lines removed: 104
 + 				throw new LLMError(&#96;Неизвестный провайдер LLM: ${provider}&#96;);
 + 		}
 + 
-+ 		logger.info(&#39;LLM успешно вернул ответ&#39;, {
++ 		logger.info('LLM успешно вернул ответ', {
 + 			provider,
   			operationId,
   			textLength: text.length
@@ -3241,8 +3241,8 @@ Lines added: 2, lines removed: 1
 @@ -187,5 +109,6 @@
   		return text;
   	} catch (error) {
-- 		logger.error(&#39;Ошибка при вызове YandexGPT&#39;, {
-+ 		logger.error(&#39;Ошибка при вызове LLM&#39;, {
+- 		logger.error('Ошибка при вызове YandexGPT', {
++ 		logger.error('Ошибка при вызове LLM', {
 + 			provider,
   			operationId,
   			error: error instanceof Error ? error.message : String(error),
@@ -3261,8 +3261,8 @@ Lines added: 142, lines removed: 2
   		if (error instanceof LLMError) {
   			throw error;
   		}
-- 		throw new LLMError(&#39;Ошибка при вызове YandexGPT API&#39;, error as Error);
-+ 		throw new LLMError(&#39;Ошибка при вызове LLM API&#39;, error as Error);
+- 		throw new LLMError('Ошибка при вызове YandexGPT API', error as Error);
++ 		throw new LLMError('Ошибка при вызове LLM API', error as Error);
   	}
   }
   
@@ -3274,7 +3274,7 @@ Lines added: 142, lines removed: 2
    * Парсит JSON из ответа LLM и валидирует его через Zod схему.
    * Если парсинг или валидация не удались, делает повторную попытку с более строгим промптом.
 +  *
-+  * @param provider - Провайдер LLM (&#39;yandex&#39;, и т.д.)
++  * @param provider - Провайдер LLM ('yandex', и т.д.)
 +  * @param prompt - Промпт для LLM (должен содержать инструкцию возвращать JSON)
 +  * @param schema - Zod схема для валидации ответа
 +  * @param systemPrompt - Системный промпт (опционально)
@@ -3295,7 +3295,7 @@ Lines added: 142, lines removed: 2
 + 		type: ProcessingOperationType;
 + 	}
 + ): Promise&lt;z.infer&lt;T&gt;&gt; {
-+ 	logger.debug(&#39;Вызов LLM с structured output&#39;, {
++ 	logger.debug('Вызов LLM с structured output', {
 + 		provider,
 + 		applicationId: operationConfig?.applicationId,
 + 		operationType: operationConfig?.type,
@@ -3312,7 +3312,7 @@ Lines added: 142, lines removed: 2
 + 			{} // providerData пустой для LLM операций
 + 		);
 + 		operationId = operation.id;
-+ 		logger.debug(&#39;Создана операция LLM&#39;, {
++ 		logger.debug('Создана операция LLM', {
 + 			operationId,
 + 			applicationId: operationConfig.applicationId,
 + 			type: operationConfig.type,
@@ -3325,7 +3325,7 @@ Lines added: 142, lines removed: 2
 + 
 + 		// Switch по провайдеру
 + 		switch (provider) {
-+ 			case &#39;yandex&#39;: {
++ 			case 'yandex': {
 + 				validated = await callYandexGPTStructuredImpl(
 + 					prompt,
 + 					schema,
@@ -3340,7 +3340,7 @@ Lines added: 142, lines removed: 2
 + 				throw new LLMError(&#96;Неизвестный провайдер LLM: ${provider}&#96;);
 + 		}
 + 
-+ 		logger.info(&#39;Structured output успешно получен и валидирован&#39;, {
++ 		logger.info('Structured output успешно получен и валидирован', {
 + 			provider,
 + 			operationId,
 + 			applicationId: operationConfig?.applicationId,
@@ -3349,14 +3349,14 @@ Lines added: 142, lines removed: 2
 + 
 + 		// Обновляем операцию с результатом (если она была создана)
 + 		if (operationId) {
-+ 			updateOperationStatus(operationId, &#39;completed&#39;, {
++ 			updateOperationStatus(operationId, 'completed', {
 + 				result: validated
 + 			});
 + 		}
 + 
 + 		return validated;
 + 	} catch (error) {
-+ 		logger.error(&#39;Ошибка при получении structured output&#39;, {
++ 		logger.error('Ошибка при получении structured output', {
 + 			provider,
 + 			operationId,
 + 			applicationId: operationConfig?.applicationId,
@@ -3366,9 +3366,9 @@ Lines added: 142, lines removed: 2
 + 		});
 + 
 + 		if (operationId) {
-+ 			updateOperationStatus(operationId, &#39;failed&#39;, {
++ 			updateOperationStatus(operationId, 'failed', {
 + 				error: {
-+ 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 					message: error instanceof Error ? error.message : 'Unknown error',
 + 					details: error
 + 				}
 + 			});
@@ -3380,7 +3380,7 @@ Lines added: 142, lines removed: 2
 + 		if (error instanceof LLMError) {
 + 			throw error;
 + 		}
-+ 		throw new LLMError(&#39;Ошибка при получении structured output&#39;, error as Error);
++ 		throw new LLMError('Ошибка при получении structured output', error as Error);
 + 	}
 + }
 + 
@@ -3403,7 +3403,7 @@ Lines added: 142, lines removed: 2
 + 		type: ProcessingOperationType;
 + 	}
 + ): Promise&lt;string&gt; {
-+ 	return callLLM(&#39;yandex&#39;, prompt, systemPrompt, options, operationConfig);
++ 	return callLLM('yandex', prompt, systemPrompt, options, operationConfig);
 + }
 + 
 + /**
@@ -3424,7 +3424,7 @@ Lines added: 8, lines removed: 107
 - 
 - 	for (let attempt = 0; attempt &lt;= maxRetries; attempt++) {
 - 		try {
-- 			logger.debug(&#39;Попытка получения structured output&#39;, {
+- 			logger.debug('Попытка получения structured output', {
 - 				attempt: attempt + 1,
 - 				maxRetries: maxRetries + 1,
 - 				applicationId: operationConfig?.applicationId,
@@ -3435,7 +3435,7 @@ Lines added: 8, lines removed: 107
 - 			let enhancedPrompt = prompt;
 - 			if (attempt &gt; 0) {
 - 				enhancedPrompt = &#96;${prompt}\n\nВАЖНО: Верни ТОЛЬКО валидный JSON без дополнительного текста, комментариев или markdown разметки.&#96;;
-- 				logger.debug(&#39;Повторная попытка с усиленным промптом&#39;, {
+- 				logger.debug('Повторная попытка с усиленным промптом', {
 - 					attempt: attempt + 1,
 - 					applicationId: operationConfig?.applicationId
 - 				});
@@ -3447,15 +3447,15 @@ Lines added: 8, lines removed: 107
 - 			let jsonText = response.trim();
 - 
 - 			// Удаляем markdown код блоки, если они есть
-- 			if (jsonText.startsWith(&#39;&#96;&#96;&#96;&#39;)) {
-- 				const lines = jsonText.split(&#39;\n&#39;);
+- 			if (jsonText.startsWith('&#96;&#96;&#96;')) {
+- 				const lines = jsonText.split('\n');
 - 				// Удаляем первую строку (&#96;&#96;&#96;json или &#96;&#96;&#96;)
 - 				lines.shift();
 - 				// Удаляем последнюю строку (&#96;&#96;&#96;)
-- 				if (lines.length &gt; 0 &amp;&amp; lines[lines.length - 1].trim() === &#39;&#96;&#96;&#96;&#39;) {
+- 				if (lines.length &gt; 0 &amp;&amp; lines[lines.length - 1].trim() === '&#96;&#96;&#96;') {
 - 					lines.pop();
 - 				}
-- 				jsonText = lines.join(&#39;\n&#39;);
+- 				jsonText = lines.join('\n');
 - 			}
 - 
 - 			// Парсим JSON
@@ -3463,7 +3463,7 @@ Lines added: 8, lines removed: 107
 - 			try {
 - 				parsed = JSON.parse(jsonText);
 - 			} catch (parseError) {
-- 				logger.warn(&#39;Ошибка парсинга JSON из ответа LLM&#39;, {
+- 				logger.warn('Ошибка парсинга JSON из ответа LLM', {
 - 					attempt: attempt + 1,
 - 					applicationId: operationConfig?.applicationId,
 - 					error: (parseError as Error).message,
@@ -3477,7 +3477,7 @@ Lines added: 8, lines removed: 107
 - 			// Валидируем через Zod схему
 - 			const validated = schema.parse(parsed);
 - 
-- 			logger.info(&#39;Structured output успешно получен и валидирован&#39;, {
+- 			logger.info('Structured output успешно получен и валидирован', {
 - 				attempt: attempt + 1,
 - 				applicationId: operationConfig?.applicationId,
 - 				operationType: operationConfig?.type
@@ -3490,7 +3490,7 @@ Lines added: 8, lines removed: 107
 - 					operationConfig.type
 - 				);
 - 				if (operation) {
-- 					updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 					updateOperationStatus(operation.id, 'completed', {
 - 						result: validated
 - 					});
 - 				}
@@ -3500,7 +3500,7 @@ Lines added: 8, lines removed: 107
 - 		} catch (error) {
 - 			lastError = error as Error;
 - 
-- 			logger.warn(&#39;Ошибка при получении structured output&#39;, {
+- 			logger.warn('Ошибка при получении structured output', {
 - 				attempt: attempt + 1,
 - 				maxRetries: maxRetries + 1,
 - 				applicationId: operationConfig?.applicationId,
@@ -3518,7 +3518,7 @@ Lines added: 8, lines removed: 107
 - 	}
 - 
 - 	// Если все попытки не удались, выбрасываем последнюю ошибку
-- 	logger.error(&#39;Не удалось получить валидный structured output после всех попыток&#39;, {
+- 	logger.error('Не удалось получить валидный structured output после всех попыток', {
 - 		maxRetries: maxRetries + 1,
 - 		applicationId: operationConfig?.applicationId,
 - 		operationType: operationConfig?.type,
@@ -3528,7 +3528,7 @@ Lines added: 8, lines removed: 107
 - 		&#96;Не удалось получить валидный structured output после ${maxRetries + 1} попыток&#96;,
 - 		lastError || undefined
 + 	return callLLMStructured(
-+ 		&#39;yandex&#39;,
++ 		'yandex',
 + 		prompt,
 + 		schema,
 + 		systemPrompt,
@@ -3634,7 +3634,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -3646,7 +3646,7 @@ Lines added: 1, lines removed: 1
 - 	checkYandexOCROperation,
 + 	checkOCROperation,
   	OCRError
-  } from &#39;../ai/index.js&#39;;
+  } from '../ai/index.js';
 ```
 
 </details>
@@ -3657,7 +3657,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 2
@@ -3681,7 +3681,7 @@ Lines added: 1, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 2
@@ -3705,7 +3705,7 @@ Lines added: 1, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 6
@@ -3716,14 +3716,14 @@ Lines added: 2, lines removed: 6
   
 - 	// Если операция уже завершена или не имеет externalOperationId, возвращаем как есть
 - 	if (
-- 		operation.status === &#39;completed&#39; ||
-- 		operation.status === &#39;failed&#39; ||
+- 		operation.status === 'completed' ||
+- 		operation.status === 'failed' ||
 - 		!operation.externalOperationId
 - 	) {
 + 	// Если операция уже завершена, возвращаем как есть
-+ 	if (operation.status === &#39;completed&#39; || operation.status === &#39;failed&#39;) {
++ 	if (operation.status === 'completed' || operation.status === 'failed') {
   		// Синхронизируем результат с заявкой, если операция завершена
-  		if (operation.status === &#39;completed&#39;) {
+  		if (operation.status === 'completed') {
 ```
 
 **Chunk 2**
@@ -3735,12 +3735,12 @@ Lines added: 11, lines removed: 62
   
 - 	// Проверяем статус только для OCR операций от Yandex
 - 	if (
-- 		operation.type === &#39;ocr&#39; &amp;&amp;
-- 		operation.provider === &#39;yandex&#39; &amp;&amp;
+- 		operation.type === 'ocr' &amp;&amp;
+- 		operation.provider === 'yandex' &amp;&amp;
 - 		operation.externalOperationId
 - 	) {
 - 		try {
-- 			logger.debug(&#39;Проверка статуса YandexOCR операции&#39;, {
+- 			logger.debug('Проверка статуса YandexOCR операции', {
 - 				operationId,
 - 				externalOperationId: operation.externalOperationId
 - 			});
@@ -3750,25 +3750,25 @@ Lines added: 11, lines removed: 62
 - 			if (checkResult.done) {
 - 				if (checkResult.text) {
 - 					// Операция завершена успешно
-- 					logger.info(&#39;YandexOCR операция завершена успешно&#39;, {
+- 					logger.info('YandexOCR операция завершена успешно', {
 - 						operationId,
 - 						textLength: checkResult.text.length
 - 					});
-- 					updateOperationStatus(operationId, &#39;completed&#39;, {
+- 					updateOperationStatus(operationId, 'completed', {
 - 						result: { text: checkResult.text }
 - 					});
 - 				} else if (checkResult.error) {
 - 					// Операция завершена с ошибкой
-- 					logger.error(&#39;YandexOCR операция завершена с ошибкой&#39;, {
+- 					logger.error('YandexOCR операция завершена с ошибкой', {
 - 						operationId,
 - 						error: checkResult.error
 - 					});
-- 					updateOperationStatus(operationId, &#39;failed&#39;, {
+- 					updateOperationStatus(operationId, 'failed', {
 - 						error: { message: checkResult.error }
 - 					});
 - 				}
 - 			} else {
-- 				logger.debug(&#39;YandexOCR операция еще выполняется&#39;, { operationId });
+- 				logger.debug('YandexOCR операция еще выполняется', { operationId });
 - 			}
 - 			// Если done === false, операция еще выполняется, статус не меняем
 - 
@@ -3780,14 +3780,14 @@ Lines added: 11, lines removed: 62
 - 			return updatedOperation;
 - 		} catch (error) {
 - 			// Ошибка при проверке статуса
-- 			logger.error(&#39;Ошибка при проверке статуса YandexOCR операции&#39;, {
+- 			logger.error('Ошибка при проверке статуса YandexOCR операции', {
 - 				operationId,
 - 				error: error instanceof Error ? error.message : String(error),
 - 				stack: error instanceof Error ? error.stack : undefined
 - 			});
-- 			updateOperationStatus(operationId, &#39;failed&#39;, {
+- 			updateOperationStatus(operationId, 'failed', {
 - 				error: {
-- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 					message: error instanceof Error ? error.message : 'Unknown error',
 - 					details: error
 - 				}
 - 			});
@@ -3796,10 +3796,10 @@ Lines added: 11, lines removed: 62
 - 	}
 - 
 + 	// Проверяем статус только для OCR операций
-+ 	if (operation.type === &#39;ocr&#39;) {
++ 	if (operation.type === 'ocr') {
 + 		const updatedOperation = await checkOCROperation(operationId);
 + 		// Синхронизируем результат с заявкой, если операция завершена
-+ 		if (updatedOperation &amp;&amp; updatedOperation.status === &#39;completed&#39;) {
++ 		if (updatedOperation &amp;&amp; updatedOperation.status === 'completed') {
 + 			syncOperationToApplication(updatedOperation);
 + 		}
 + 		return updatedOperation;
@@ -3853,7 +3853,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/index.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/index.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 2
@@ -3865,10 +3865,10 @@ Lines added: 1, lines removed: 2
 - 	checkYandexOCROperation,
 + 	checkOCROperation,
   	OCRError
-  } from &#39;./ocr.js&#39;;
-- export type { YandexOCRResult } from &#39;./ocr.js&#39;;
-  export { callYandexGPT, callYandexGPTStructured, LLMError } from &#39;./llm.js&#39;;
-  export type { AIConfig, YandexOCRConfig, YandexGPTConfig, LLMOptions } from &#39;./types.js&#39;;
+  } from './ocr.js';
+- export type { YandexOCRResult } from './ocr.js';
+  export { callYandexGPT, callYandexGPTStructured, LLMError } from './llm.js';
+  export type { AIConfig, YandexOCRConfig, YandexGPTConfig, LLMOptions } from './types.js';
 ```
 
 </details>
@@ -4053,7 +4053,7 @@ Directory: **c:\workroot\Разработка\ИПЦ\oprosnii-list-processing** 
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/STORAGE.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
 
 **Chunk 1**
 Lines added: 11, lines removed: 17
@@ -4066,9 +4066,9 @@ Lines added: 11, lines removed: 17
 - | ----------------------- | ---------------- | ----------------------------------------------------------- |
 - | &#96;id&#96;                    | TEXT PRIMARY KEY | UUID операции                                               |
 - | &#96;application_id&#96;        | TEXT NOT NULL    | GUID заявки (FK)                                            |
-- | &#96;type&#96;                  | TEXT NOT NULL    | Тип операции: &#39;ocr&#39;, &#39;llm_product_type&#39;, &#39;llm_abbreviation&#39; |
-- | &#96;provider&#96;              | TEXT NOT NULL    | Провайдер сервиса: &#39;yandex&#39;, &#39;local&#39; и т.д.                 |
-- | &#96;status&#96;                | TEXT NOT NULL    | Статус: &#39;pending&#39;, &#39;running&#39;, &#39;completed&#39;, &#39;failed&#39;         |
+- | &#96;type&#96;                  | TEXT NOT NULL    | Тип операции: 'ocr', 'llm_product_type', 'llm_abbreviation' |
+- | &#96;provider&#96;              | TEXT NOT NULL    | Провайдер сервиса: 'yandex', 'local' и т.д.                 |
+- | &#96;status&#96;                | TEXT NOT NULL    | Статус: 'pending', 'running', 'completed', 'failed'         |
 - | &#96;external_operation_id&#96; | TEXT             | ID операции у внешнего сервиса (для асинхронных)            |
 - | &#96;request_data&#96;          | TEXT (JSON)      | Минимальные данные запроса (endpoint, method)               |
 - | &#96;result&#96;                | TEXT (JSON)      | Результат операции                                          |
@@ -4083,11 +4083,11 @@ Lines added: 11, lines removed: 17
 + | ---------------- | ---------------- | ----------------------------------------------------------- |
 + | &#96;id&#96;             | TEXT PRIMARY KEY | UUID операции                                               |
 + | &#96;application_id&#96; | TEXT NOT NULL    | GUID заявки (FK)                                            |
-+ | &#96;type&#96;           | TEXT NOT NULL    | Тип операции: &#39;ocr&#39;, &#39;llm_product_type&#39;, &#39;llm_abbreviation&#39; |
-+ | &#96;provider&#96;       | TEXT NOT NULL    | Провайдер сервиса: &#39;yandex&#39;, &#39;local&#39; и т.д.                 |
-+ | &#96;status&#96;         | TEXT NOT NULL    | Статус: &#39;running&#39;, &#39;completed&#39;, &#39;failed&#39;                    |
++ | &#96;type&#96;           | TEXT NOT NULL    | Тип операции: 'ocr', 'llm_product_type', 'llm_abbreviation' |
++ | &#96;provider&#96;       | TEXT NOT NULL    | Провайдер сервиса: 'yandex', 'local' и т.д.                 |
++ | &#96;status&#96;         | TEXT NOT NULL    | Статус: 'running', 'completed', 'failed'                    |
 + | &#96;provider_data&#96;  | TEXT (JSON)      | Данные провайдера (например, operationId для Yandex)        |
-+ | &#96;result&#96;         | TEXT (JSON)      | Результат операции (включая ошибки при status=&#39;failed&#39;)     |
++ | &#96;result&#96;         | TEXT (JSON)      | Результат операции (включая ошибки при status='failed')     |
 + | &#96;created_at&#96;     | TEXT (DATETIME)  | Дата создания операции                                      |
 + | &#96;completed_at&#96;   | TEXT (DATETIME)  | Дата завершения (null если еще выполняется)                 |
   
@@ -4102,7 +4102,7 @@ Lines added: 11, lines removed: 17
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/STORAGE.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -4122,15 +4122,15 @@ Lines added: 2, lines removed: 5
 
 ```diff
 @@ -250,9 +250,6 @@
-  	&#39;ocr&#39;,
-  	&#39;yandex&#39;,
+  	'ocr',
+  	'yandex',
 - 	{
-- 		endpoint: &#39;https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText&#39;,
-- 		method: &#39;POST&#39;
+- 		endpoint: 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText',
+- 		method: 'POST'
 - 	},
-- 	&#39;pending&#39;
-+ 	{ operationId: &#39;external-operation-id&#39; }, // providerData
-+ 	&#39;running&#39; // status
+- 	'pending'
++ 	{ operationId: 'external-operation-id' }, // providerData
++ 	'running' // status
   );
   &#96;&#96;&#96;
 ```
@@ -4179,22 +4179,22 @@ Lines added: 2, lines removed: 5
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/STORAGE.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
 
 **Chunk 1**
 Lines added: 6, lines removed: undefined
 
 ```diff
 @@ -355,5 +355,11 @@
-  	error: { message: &#39;Error message&#39;, code: &#39;ERROR_CODE&#39; }
+  	error: { message: 'Error message', code: 'ERROR_CODE' }
   });
 + 
-+ updateOperationStatus(&#39;operation-id&#39;, &#39;running&#39;, {
-+ 	providerData: { operationId: &#39;external-operation-id&#39; }
++ updateOperationStatus('operation-id', 'running', {
++ 	providerData: { operationId: 'external-operation-id' }
 + });
   &#96;&#96;&#96;
 + 
-+ **Примечание:** При статусе &#39;failed&#39; ошибка автоматически добавляется в поле &#96;result&#96; в формате &#96;{ error: { message, code?, details? } }&#96;.
++ **Примечание:** При статусе 'failed' ошибка автоматически добавляется в поле &#96;result&#96; в формате &#96;{ error: { message, code?, details? } }&#96;.
   
   ### Утилиты БД (&#96;db.ts&#96;)
 ```
@@ -4207,28 +4207,28 @@ Lines added: 6, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/storage/STORAGE.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/STORAGE.md</summary>
 
 **Chunk 1**
 Lines added: 13, lines removed: 1
 
 ```diff
 @@ -443,5 +443,17 @@
-  	type: &#39;ocr&#39; | &#39;llm_product_type&#39; | &#39;llm_abbreviation&#39;;
-  	provider: string; // &#39;yandex&#39;, &#39;local&#39; и т.д.
-- 	status: &#39;pending&#39; | &#39;running&#39; | &#39;completed&#39; | &#39;failed&#39;;
-+ 	status: &#39;running&#39; | &#39;completed&#39; | &#39;failed&#39;;
+  	type: 'ocr' | 'llm_product_type' | 'llm_abbreviation';
+  	provider: string; // 'yandex', 'local' и т.д.
+- 	status: 'pending' | 'running' | 'completed' | 'failed';
++ 	status: 'running' | 'completed' | 'failed';
 + 	providerData: Record&lt;string, unknown&gt;; // Данные провайдера (например, { operationId: string } для Yandex)
-+ 	result: Record&lt;string, unknown&gt; | null; // Результат операции (включая ошибки при status=&#39;failed&#39;)
++ 	result: Record&lt;string, unknown&gt; | null; // Результат операции (включая ошибки при status='failed')
 + 	createdAt: string; // ISO datetime string
 + 	completedAt: string | null; // ISO datetime string (null если еще выполняется)
 + }
 + &#96;&#96;&#96;
 + 
 + **Примечания:**
-+ - Если &#96;status === &#39;running&#39;&#96;, операция асинхронная и еще выполняется
-+ - Если &#96;status === &#39;completed&#39; || status === &#39;failed&#39;&#96;, операция завершена
-+ - При &#96;status === &#39;failed&#39;&#96; ошибка находится в &#96;result.error&#96;
++ - Если &#96;status === 'running'&#96;, операция асинхронная и еще выполняется
++ - Если &#96;status === 'completed' || status === 'failed'&#96;, операция завершена
++ - При &#96;status === 'failed'&#96; ошибка находится в &#96;result.error&#96;
 + - &#96;providerData&#96; содержит специфичные для провайдера данные (например, &#96;operationId&#96; для Yandex OCR)
   	externalOperationId?: string | null; // ID операции у внешнего сервиса
   	requestData: {
@@ -4278,7 +4278,7 @@ Lines added: 13, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 2
@@ -4307,7 +4307,7 @@ Lines added: 4, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 8, lines removed: 7
@@ -4337,8 +4337,8 @@ Lines added: 8, lines removed: 7
   **Особенности:**
   
 - - После завершения операции (&#96;done: true&#96;) автоматически вызывается &#96;GetRecognition&#96; endpoint для получения полных результатов распознавания
-+ - Для провайдера &#39;yandex&#39; проверяет статус через Yandex OCR API
-+ - Для провайдера &#39;local&#39; возвращает операцию как есть (локальные операции всегда синхронные)
++ - Для провайдера 'yandex' проверяет статус через Yandex OCR API
++ - Для провайдера 'local' возвращает операцию как есть (локальные операции всегда синхронные)
 + - Автоматически обновляет статус операции в БД при завершении
 + - После завершения операции автоматически вызывается &#96;GetRecognition&#96; endpoint для получения полных результатов распознавания
   - Используется &#96;YANDEX_OCR_GET_RECOGNITION_ENDPOINT&#96; из конфигурации или значение по умолчанию
@@ -4353,7 +4353,7 @@ Lines added: 8, lines removed: 7
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -4364,7 +4364,7 @@ Lines added: 1, lines removed: 1
   	extractTextFromFileWithOperation,
 - 	checkYandexOCROperation
 + 	checkOCROperation
-  } from &#39;$lib/ai&#39;;
+  } from '$lib/ai';
   
 ```
 
@@ -4379,7 +4379,7 @@ Lines added: 4, lines removed: 3
 - 	if (status.done &amp;&amp; status.text) {
 - 		console.log(status.text);
 + 	const operation = await checkOCROperation(result.operationId);
-+ 	if (operation &amp;&amp; operation.status === &#39;completed&#39; &amp;&amp; operation.result) {
++ 	if (operation &amp;&amp; operation.status === 'completed' &amp;&amp; operation.result) {
 + 		const text = (operation.result as { text: string }).text;
 + 		console.log(text);
   	}
@@ -4394,7 +4394,7 @@ Lines added: 4, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 22, lines removed: 1
@@ -4402,13 +4402,13 @@ Lines added: 22, lines removed: 1
 ```diff
 @@ -311,9 +311,30 @@
   - **OCR операции**: Создаются автоматически при вызове &#96;extractTextFromFileWithOperation()&#96;
-    - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу &#96;status=&#39;completed&#39;&#96;
--   - Асинхронные операции (многостраничные PDF): &#96;status=&#39;running&#39;&#96; с &#96;externalOperationId&#96;
-+   - Асинхронные операции (многостраничные PDF): &#96;status=&#39;running&#39;&#96; с &#96;providerData.operationId&#96;
-+   - Провайдеры: &#39;yandex&#39; (для изображений и PDF), &#39;local&#39; (для DOCX и XLSX)
+    - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу &#96;status='completed'&#96;
+-   - Асинхронные операции (многостраничные PDF): &#96;status='running'&#96; с &#96;externalOperationId&#96;
++   - Асинхронные операции (многостраничные PDF): &#96;status='running'&#96; с &#96;providerData.operationId&#96;
++   - Провайдеры: 'yandex' (для изображений и PDF), 'local' (для DOCX и XLSX)
   - **LLM операции**: Создаются автоматически при вызове &#96;callYandexGPT()&#96; или &#96;callYandexGPTStructured()&#96; с &#96;operationConfig&#96;
-    - Все LLM операции синхронные: сразу &#96;status=&#39;completed&#39;&#96;
-+   - Провайдеры: &#39;yandex&#39; (для YandexGPT)
+    - Все LLM операции синхронные: сразу &#96;status='completed'&#96;
++   - Провайдеры: 'yandex' (для YandexGPT)
   
   Операции хранятся в БД и позволяют отслеживать статус обработки. Подробнее см. [&#96;../storage/STORAGE.md&#96;](../storage/STORAGE.md).
 + 
@@ -4442,7 +4442,7 @@ Lines added: 22, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="write">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/README.md</summary>
+<details><summary>Tool use: **write** • Edit file: src/lib/ai/yandex/README.md</summary>
 
 **Chunk 1**
 Lines added: 83, lines removed: 1
@@ -4777,80 +4777,80 @@ Parameters:
 
 ```json
 {
-  &quot;questions&quot;: [
+  "questions": [
     {
-      &quot;id&quot;: &quot;function_signature&quot;,
-      &quot;prompt&quot;: &quot;Как должна выглядеть новая корневая функция извлечения текста? Должна ли она принимать applicationId для создания операций, или операции должны создаваться отдельно?&quot;,
-      &quot;options&quot;: [
+      "id": "function_signature",
+      "prompt": "Как должна выглядеть новая корневая функция извлечения текста? Должна ли она принимать applicationId для создания операций, или операции должны создаваться отдельно?",
+      "options": [
         {
-          &quot;id&quot;: &quot;with_app_id&quot;,
-          &quot;label&quot;: &quot;Принимает applicationId, но операции создаются отдельной функцией-оберткой&quot;
+          "id": "with_app_id",
+          "label": "Принимает applicationId, но операции создаются отдельной функцией-оберткой"
         },
         {
-          &quot;id&quot;: &quot;no_app_id&quot;,
-          &quot;label&quot;: &quot;Не принимает applicationId, только fileInfo - операции создаются вызывающим кодом&quot;
+          "id": "no_app_id",
+          "label": "Не принимает applicationId, только fileInfo - операции создаются вызывающим кодом"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;result_type&quot;,
-      &quot;prompt&quot;: &quot;Какой формат результата предпочтителен для явного типа?&quot;,
-      &quot;options&quot;: [
+      "id": "result_type",
+      "prompt": "Какой формат результата предпочтителен для явного типа?",
+      "options": [
         {
-          &quot;id&quot;: &quot;discriminated_union&quot;,
-          &quot;label&quot;: &quot;Discriminated union: { type: &#39;text&#39; | &#39;processing&#39; | &#39;error&#39;, ... }&quot;
+          "id": "discriminated_union",
+          "label": "Discriminated union: { type: 'text' | 'processing' | 'error', ... }"
         },
         {
-          &quot;id&quot;: &quot;success_flag&quot;,
-          &quot;label&quot;: &quot;С флагом success: { success: true, text } | { success: true, processing: true, operationId } | { success: false, error }&quot;
+          "id": "success_flag",
+          "label": "С флагом success: { success: true, text } | { success: true, processing: true, operationId } | { success: false, error }"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;operation_management&quot;,
-      &quot;prompt&quot;: &quot;Где должна создаваться и управляться операция OCR?&quot;,
-      &quot;options&quot;: [
+      "id": "operation_management",
+      "prompt": "Где должна создаваться и управляться операция OCR?",
+      "options": [
         {
-          &quot;id&quot;: &quot;separate_wrapper&quot;,
-          &quot;label&quot;: &quot;Отдельная функция-обертка, которая вызывает extractText и создает/обновляет операции&quot;
+          "id": "separate_wrapper",
+          "label": "Отдельная функция-обертка, которая вызывает extractText и создает/обновляет операции"
         },
         {
-          &quot;id&quot;: &quot;caller_responsibility&quot;,
-          &quot;label&quot;: &quot;Вызывающий код (processing.ts) создает операции до/после вызова extractText&quot;
+          "id": "caller_responsibility",
+          "label": "Вызывающий код (processing.ts) создает операции до/после вызова extractText"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;apply_similar_logic&quot;,
-      &quot;prompt&quot;: &quot;Где еще применить схожую логику с явным типом результата?&quot;,
-      &quot;options&quot;: [
+      "id": "apply_similar_logic",
+      "prompt": "Где еще применить схожую логику с явным типом результата?",
+      "options": [
         {
-          &quot;id&quot;: &quot;llm_functions&quot;,
-          &quot;label&quot;: &quot;LLM функции (callYandexGPT, callYandexGPTStructured) - возвращать результат или флаг обработки&quot;
+          "id": "llm_functions",
+          "label": "LLM функции (callYandexGPT, callYandexGPTStructured) - возвращать результат или флаг обработки"
         },
         {
-          &quot;id&quot;: &quot;business_processing&quot;,
-          &quot;label&quot;: &quot;Бизнес-функции в processing.ts (detectProductType, generateAbbreviation)&quot;
+          "id": "business_processing",
+          "label": "Бизнес-функции в processing.ts (detectProductType, generateAbbreviation)"
         },
         {
-          &quot;id&quot;: &quot;both&quot;,
-          &quot;label&quot;: &quot;И LLM, и бизнес-функции&quot;
+          "id": "both",
+          "label": "И LLM, и бизнес-функции"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     }
@@ -4861,16 +4861,16 @@ Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;submitted&quot;,
-  &quot;currentSelections&quot;: {
-    &quot;function_signature&quot;: [
-      &quot;with_app_id&quot;
+  "status": "submitted",
+  "currentSelections": {
+    "function_signature": [
+      "with_app_id"
     ],
-    &quot;result_type&quot;: [
-      &quot;discretion&quot;
+    "result_type": [
+      "discretion"
     ],
-    &quot;operation_management&quot;: [],
-    &quot;apply_similar_logic&quot;: []
+    "operation_management": [],
+    "apply_similar_logic": []
   }
 }
 ```
@@ -4878,24 +4878,24 @@ Result:
 
 ```json
 {
-  &quot;answers&quot;: [
+  "answers": [
     {
-      &quot;questionId&quot;: &quot;function_signature&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;with_app_id&quot;
+      "questionId": "function_signature",
+      "selectedOptionIds": [
+        "with_app_id"
       ]
     },
     {
-      &quot;questionId&quot;: &quot;result_type&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;discretion&quot;
+      "questionId": "result_type",
+      "selectedOptionIds": [
+        "discretion"
       ]
     },
     {
-      &quot;questionId&quot;: &quot;operation_management&quot;
+      "questionId": "operation_management"
     },
     {
-      &quot;questionId&quot;: &quot;apply_similar_logic&quot;
+      "questionId": "apply_similar_logic"
     }
   ]
 }
@@ -4937,58 +4937,58 @@ Parameters:
 
 ```json
 {
-  &quot;questions&quot;: [
+  "questions": [
     {
-      &quot;id&quot;: &quot;operation_creation_location&quot;,
-      &quot;prompt&quot;: &quot;Где именно в yandex/ocr.ts должна создаваться операция? В callYandexOCR или в отдельной функции-обертке?&quot;,
-      &quot;options&quot;: [
+      "id": "operation_creation_location",
+      "prompt": "Где именно в yandex/ocr.ts должна создаваться операция? В callYandexOCR или в отдельной функции-обертке?",
+      "options": [
         {
-          &quot;id&quot;: &quot;in_callYandexOCR&quot;,
-          &quot;label&quot;: &quot;Внутри callYandexOCR (принимает applicationId и создает операцию)&quot;
+          "id": "in_callYandexOCR",
+          "label": "Внутри callYandexOCR (принимает applicationId и создает операцию)"
         },
         {
-          &quot;id&quot;: &quot;separate_wrapper&quot;,
-          &quot;label&quot;: &quot;Отдельная функция-обертка, которая вызывает callYandexOCR и создает операцию&quot;
+          "id": "separate_wrapper",
+          "label": "Отдельная функция-обертка, которая вызывает callYandexOCR и создает операцию"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;extract_text_signature&quot;,
-      &quot;prompt&quot;: &quot;Корневая функция extractText должна принимать applicationId или только fileInfo?&quot;,
-      &quot;options&quot;: [
+      "id": "extract_text_signature",
+      "prompt": "Корневая функция extractText должна принимать applicationId или только fileInfo?",
+      "options": [
         {
-          &quot;id&quot;: &quot;with_app_id&quot;,
-          &quot;label&quot;: &quot;Принимает applicationId (для передачи в yandex/ocr.ts)&quot;
+          "id": "with_app_id",
+          "label": "Принимает applicationId (для передачи в yandex/ocr.ts)"
         },
         {
-          &quot;id&quot;: &quot;no_app_id&quot;,
-          &quot;label&quot;: &quot;Не принимает applicationId (только fileInfo, операции создаются отдельно)&quot;
+          "id": "no_app_id",
+          "label": "Не принимает applicationId (только fileInfo, операции создаются отдельно)"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     },
     {
-      &quot;id&quot;: &quot;local_files_operations&quot;,
-      &quot;prompt&quot;: &quot;Для локальных файлов (DOCX, XLSX) тоже нужны операции или только для Yandex OCR?&quot;,
-      &quot;options&quot;: [
+      "id": "local_files_operations",
+      "prompt": "Для локальных файлов (DOCX, XLSX) тоже нужны операции или только для Yandex OCR?",
+      "options": [
         {
-          &quot;id&quot;: &quot;all_need_operations&quot;,
-          &quot;label&quot;: &quot;Все типы файлов должны создавать операции&quot;
+          "id": "all_need_operations",
+          "label": "Все типы файлов должны создавать операции"
         },
         {
-          &quot;id&quot;: &quot;only_yandex&quot;,
-          &quot;label&quot;: &quot;Только Yandex OCR создает операции, локальные файлы возвращают текст напрямую&quot;
+          "id": "only_yandex",
+          "label": "Только Yandex OCR создает операции, локальные файлы возвращают текст напрямую"
         },
         {
-          &quot;id&quot;: &quot;discretion&quot;,
-          &quot;label&quot;: &quot;На твоё усмотрение&quot;
+          "id": "discretion",
+          "label": "На твоё усмотрение"
         }
       ]
     }
@@ -4999,13 +4999,13 @@ Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;submitted&quot;,
-  &quot;currentSelections&quot;: {
-    &quot;operation_creation_location&quot;: [
-      &quot;in_callYandexOCR&quot;
+  "status": "submitted",
+  "currentSelections": {
+    "operation_creation_location": [
+      "in_callYandexOCR"
     ],
-    &quot;extract_text_signature&quot;: [],
-    &quot;local_files_operations&quot;: []
+    "extract_text_signature": [],
+    "local_files_operations": []
   }
 }
 ```
@@ -5013,18 +5013,18 @@ Result:
 
 ```json
 {
-  &quot;answers&quot;: [
+  "answers": [
     {
-      &quot;questionId&quot;: &quot;operation_creation_location&quot;,
-      &quot;selectedOptionIds&quot;: [
-        &quot;in_callYandexOCR&quot;
+      "questionId": "operation_creation_location",
+      "selectedOptionIds": [
+        "in_callYandexOCR"
       ]
     },
     {
-      &quot;questionId&quot;: &quot;extract_text_signature&quot;
+      "questionId": "extract_text_signature"
     },
     {
-      &quot;questionId&quot;: &quot;local_files_operations&quot;
+      "questionId": "local_files_operations"
     }
   ]
 }
@@ -5070,18 +5070,18 @@ Parameters:
 
 ```json
 {
-  &quot;plan&quot;: &quot;# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения&quot;
+  "plan": "# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения"
 }
 ```
 Additional data:
 
 ```json
 {
-  &quot;status&quot;: &quot;accepted&quot;,
-  &quot;reviewData&quot;: {
-    &quot;status&quot;: &quot;Requested&quot;,
-    &quot;selectedOption&quot;: &quot;edit&quot;,
-    &quot;isShowingInput&quot;: false
+  "status": "accepted",
+  "reviewData": {
+    "status": "Requested",
+    "selectedOption": "edit",
+    "isShowingInput": false
   }
 }
 ```
@@ -5089,79 +5089,79 @@ Result:
 
 ```json
 {
-  &quot;modified&quot;: {
-    &quot;newPlan&quot;: &quot;# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения&quot;,
-    &quot;finalTodos&quot;: [
+  "modified": {
+    "newPlan": "# Рефакторинг функций извлечения текста с явным типом результата\n\n## Цель\n\nУпростить и сделать более явной логику извлечения текста:\n- Корневая функция &#96;extractText&#96; возвращает явный тип результата (текст, флаг обработки или ошибка)\n- Функция не управляет операциями - только извлекает текст\n- Операции создаются только в yandex/ocr.ts там, где требуется сервис\n- Для локальных файлов операции не создаются\n\n## Изменения",
+    "finalTodos": [
       {
-        &quot;content&quot;: &quot;Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;update-types&quot;
+        "content": "Обновить ProcessingOperationSchema и типы в types.ts (убрать лишние поля, добавить providerData)",
+        "status": "completed",
+        "id": "update-types"
       },
       {
-        &quot;content&quot;: &quot;Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;migrate-db&quot;,
-        &quot;dependencies&quot;: [
-          &quot;update-types&quot;
+        "content": "Обновить схему БД и маппинг в db.ts (добавить provider_data, убрать лишние колонки)",
+        "status": "completed",
+        "id": "migrate-db",
+        "dependencies": [
+          "update-types"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить operationsRepository.ts для работы с новой структурой&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;update-repository&quot;,
-        &quot;dependencies&quot;: [
-          &quot;migrate-db&quot;
+        "content": "Обновить operationsRepository.ts для работы с новой структурой",
+        "status": "completed",
+        "id": "update-repository",
+        "dependencies": [
+          "migrate-db"
         ]
       },
       {
-        &quot;content&quot;: &quot;Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;create-yandex-ocr&quot;
+        "content": "Создать модуль ai/yandex/ocr.ts с функциями для Yandex OCR",
+        "status": "completed",
+        "id": "create-yandex-ocr"
       },
       {
-        &quot;content&quot;: &quot;Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;create-yandex-llm&quot;
+        "content": "Создать модуль ai/yandex/llm.ts с функциями для Yandex LLM",
+        "status": "completed",
+        "id": "create-yandex-llm"
       },
       {
-        &quot;content&quot;: &quot;Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;refactor-ocr&quot;,
-        &quot;dependencies&quot;: [
-          &quot;create-yandex-ocr&quot;,
-          &quot;update-repository&quot;
+        "content": "Рефакторинг ocr.ts: использовать switch по провайдеру, вызывать функции из yandex/ocr.ts",
+        "status": "completed",
+        "id": "refactor-ocr",
+        "dependencies": [
+          "create-yandex-ocr",
+          "update-repository"
         ]
       },
       {
-        &quot;content&quot;: &quot;Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;refactor-llm&quot;,
-        &quot;dependencies&quot;: [
-          &quot;create-yandex-llm&quot;,
-          &quot;update-repository&quot;
+        "content": "Рефакторинг llm.ts: использовать switch по провайдеру, вызывать функции из yandex/llm.ts",
+        "status": "completed",
+        "id": "refactor-llm",
+        "dependencies": [
+          "create-yandex-llm",
+          "update-repository"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить processing.ts для работы с новой структурой операций&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;update-business-logic&quot;,
-        &quot;dependencies&quot;: [
-          &quot;refactor-ocr&quot;,
-          &quot;refactor-llm&quot;
+        "content": "Обновить processing.ts для работы с новой структурой операций",
+        "status": "completed",
+        "id": "update-business-logic",
+        "dependencies": [
+          "refactor-ocr",
+          "refactor-llm"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;update-docs&quot;,
-        &quot;dependencies&quot;: [
-          &quot;update-business-logic&quot;
+        "content": "Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)",
+        "status": "completed",
+        "id": "update-docs",
+        "dependencies": [
+          "update-business-logic"
         ]
       },
       {
-        &quot;content&quot;: &quot;Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)&quot;,
-        &quot;status&quot;: &quot;completed&quot;,
-        &quot;id&quot;: &quot;todo-1764609127308-ffbgfzrwc&quot;
+        "content": "Обновить документацию (STORAGE.md, AI.md, добавить документацию для yandex модулей)",
+        "status": "completed",
+        "id": "todo-1764609127308-ffbgfzrwc"
       }
     ]
   }
@@ -5269,7 +5269,7 @@ Could not find file 'processingoperation.plan.md' in the workspace.
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 2
@@ -5281,7 +5281,7 @@ Lines added: undefined, lines removed: 2
 - 	createOrUpdateOperation,
 - 	updateOperationStatus,
   	getOperation
-  } from &#39;../storage/operationsRepository.js&#39;;
+  } from '../storage/operationsRepository.js';
 ```
 
 **Chunk 2**
@@ -5295,8 +5295,8 @@ Lines added: 7, lines removed: undefined
 +  * Результат извлечения текста из файла
 +  */
 + export type ExtractTextResult =
-+ 	| { type: &#39;text&#39;; text: string } // Текст извлечен синхронно
-+ 	| { type: &#39;processing&#39;; operationId: string }; // Текст обрабатывается асинхронно
++ 	| { type: 'text'; text: string } // Текст извлечен синхронно
++ 	| { type: 'processing'; operationId: string }; // Текст обрабатывается асинхронно
 + 
   /**
    * Определяет тип файла по MIME типу
@@ -5367,20 +5367,20 @@ Lines added: 7, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 5, lines removed: undefined
 
 ```diff
 @@ -11,4 +11,9 @@
-  import { logger } from &#39;../../utils/logger.js&#39;;
-  import type { ProcessingOperation } from &#39;../../storage/types.js&#39;;
+  import { logger } from '../../utils/logger.js';
+  import type { ProcessingOperation } from '../../storage/types.js';
 + import {
 + 	createOrUpdateOperation,
 + 	updateOperationStatus
-+ } from &#39;../../storage/operationsRepository.js&#39;;
-+ import type { ExtractTextResult } from &#39;../ocr.js&#39;;
++ } from '../../storage/operationsRepository.js';
++ import type { ExtractTextResult } from '../ocr.js';
   
   export class YandexOCRError extends Error {
 ```
@@ -5393,7 +5393,7 @@ Lines added: 5, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 5, lines removed: 3
@@ -5431,7 +5431,7 @@ Lines added: 5, lines removed: 3
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 1
@@ -5440,8 +5440,8 @@ Lines added: 2, lines removed: 1
 @@ -113,5 +113,6 @@
   	const endpoint = isMultiPagePDF &amp;&amp; config.asyncEndpoint ? config.asyncEndpoint : config.endpoint;
   
-- 	logger.debug(&#39;Вызов YandexOCR&#39;, {
-+ 	logger.info(&#39;Извлечение текста через YandexOCR&#39;, {
+- 	logger.debug('Вызов YandexOCR', {
++ 	logger.info('Извлечение текста через YandexOCR', {
 + 		applicationId,
   		mimeType,
   		fileSize: fileBuffer.length,
@@ -5458,8 +5458,8 @@ Lines added: 8, lines removed: undefined
 + 	// Создаем операцию перед вызовом API
 + 	const operation = createOrUpdateOperation(
 + 		applicationId,
-+ 		&#39;ocr&#39;,
-+ 		&#39;yandex&#39;,
++ 		'ocr',
++ 		'yandex',
 + 		{} // providerData будет заполнено после вызова API
 + 	);
   
@@ -5474,7 +5474,7 @@ Lines added: 8, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 13, lines removed: 2
@@ -5482,31 +5482,31 @@ Lines added: 13, lines removed: 2
 ```diff
 @@ -167,14 +167,25 @@
   			if (result.done === false &amp;&amp; result.id) {
-  				logger.info(&#39;YandexOCR async операция создана&#39;, {
+  				logger.info('YandexOCR async операция создана', {
 - 					operationId: result.id
 + 					applicationId,
 + 					operationId: operation.id,
 + 					externalOperationId: result.id
 + 				});
-+ 				updateOperationStatus(operation.id, &#39;running&#39;, {
++ 				updateOperationStatus(operation.id, 'running', {
 + 					providerData: { operationId: result.id }
   				});
   				return {
 - 					operationId: result.id
-+ 					type: &#39;processing&#39;,
++ 					type: 'processing',
 + 					operationId: operation.id
   				};
   			}
   			// Если async endpoint вернул что-то неожиданное
-  			logger.error(&#39;Неожиданный ответ от async endpoint&#39;, {
+  			logger.error('Неожиданный ответ от async endpoint', {
 + 				applicationId,
 + 				operationId: operation.id,
   				responseStructure: JSON.stringify(result).substring(0, 200)
   			});
-+ 			updateOperationStatus(operation.id, &#39;failed&#39;, {
-+ 				error: { message: &#39;Неожиданный ответ от async endpoint YandexOCR&#39; }
++ 			updateOperationStatus(operation.id, 'failed', {
++ 				error: { message: 'Неожиданный ответ от async endpoint YandexOCR' }
 + 			});
-  			throw new YandexOCRError(&#39;Неожиданный ответ от async endpoint YandexOCR&#39;);
+  			throw new YandexOCRError('Неожиданный ответ от async endpoint YandexOCR');
   		}
 ```
 
@@ -5516,16 +5516,16 @@ Lines added: 6, lines removed: 1
 ```diff
 @@ -185,7 +196,12 @@
   			if (text) {
-  				logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция завершена)&#39;, {
+  				logger.info('YandexOCR успешно извлек текст (синхронная операция завершена)', {
 + 					applicationId,
 + 					operationId: operation.id,
   					textLength: text.length
   				});
 - 				return { text };
-+ 				updateOperationStatus(operation.id, &#39;completed&#39;, {
++ 				updateOperationStatus(operation.id, 'completed', {
 + 					result: { text }
 + 				});
-+ 				return { type: &#39;text&#39;, text };
++ 				return { type: 'text', text };
   			}
   		}
 ```
@@ -5536,27 +5536,27 @@ Lines added: 11, lines removed: 1
 ```diff
 @@ -195,12 +211,22 @@
   		if (text) {
-  			logger.info(&#39;YandexOCR успешно извлек текст (синхронная операция)&#39;, {
+  			logger.info('YandexOCR успешно извлек текст (синхронная операция)', {
 + 				applicationId,
 + 				operationId: operation.id,
   				textLength: text.length
   			});
 - 			return { text };
-+ 			updateOperationStatus(operation.id, &#39;completed&#39;, {
++ 			updateOperationStatus(operation.id, 'completed', {
 + 				result: { text }
 + 			});
-+ 			return { type: &#39;text&#39;, text };
++ 			return { type: 'text', text };
   		}
   
-  		logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
+  		logger.error('Не удалось извлечь текст из ответа YandexOCR', {
 + 			applicationId,
 + 			operationId: operation.id,
   			responseStructure: JSON.stringify(result).substring(0, 200)
   		});
-+ 		updateOperationStatus(operation.id, &#39;failed&#39;, {
-+ 			error: { message: &#39;Не удалось извлечь текст из ответа YandexOCR&#39; }
++ 		updateOperationStatus(operation.id, 'failed', {
++ 			error: { message: 'Не удалось извлечь текст из ответа YandexOCR' }
 + 		});
-  		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+  		throw new YandexOCRError('Не удалось извлечь текст из ответа YandexOCR');
   	} catch (error) {
 ```
 
@@ -5568,32 +5568,32 @@ Lines added: 11, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 13, lines removed: 8
 
 ```diff
 @@ -231,15 +231,20 @@
-  		throw new YandexOCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+  		throw new YandexOCRError('Не удалось извлечь текст из ответа YandexOCR');
   	} catch (error) {
 - 		if (error instanceof YandexOCRError) {
-- 			logger.error(&#39;Ошибка YandexOCRError&#39;, {
+- 			logger.error('Ошибка YandexOCRError', {
 - 				message: error.message,
 - 				stack: error.stack
 - 			});
 - 			throw error;
 - 		}
-- 		logger.error(&#39;Неожиданная ошибка при вызове YandexOCR&#39;, {
-+ 		logger.error(&#39;Ошибка при извлечении текста через YandexOCR&#39;, {
+- 		logger.error('Неожиданная ошибка при вызове YandexOCR', {
++ 		logger.error('Ошибка при извлечении текста через YandexOCR', {
 + 			applicationId,
 + 			operationId: operation.id,
   			error: error instanceof Error ? error.message : String(error),
   			stack: error instanceof Error ? error.stack : undefined
   		});
-+ 		updateOperationStatus(operation.id, &#39;failed&#39;, {
++ 		updateOperationStatus(operation.id, 'failed', {
 + 			error: {
-+ 				message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
++ 				message: error instanceof Error ? error.message : 'Unknown error',
 + 				details: error
 + 			}
 + 		});
@@ -5601,7 +5601,7 @@ Lines added: 13, lines removed: 8
 + 		if (error instanceof YandexOCRError) {
 + 			throw error;
 + 		}
-  		throw new YandexOCRError(&#39;Ошибка при вызове YandexOCR API&#39;, error as Error);
+  		throw new YandexOCRError('Ошибка при вызове YandexOCR API', error as Error);
   	}
 ```
 
@@ -5659,7 +5659,7 @@ Lint errors for `src/lib/ai/yandex/ocr.ts`
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/yandex/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 10, lines removed: 6
@@ -5749,7 +5749,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 4, lines removed: 3
@@ -5786,8 +5786,8 @@ Lines added: 2, lines removed: 2
   
 - 	// Для файлов, не требующих OCR, создаем синхронную операцию
 + 	// Для локальных файлов (DOCX, XLSX) - извлекаем текст напрямую, операции не создаем
-  	if (fileType === &#39;docx&#39; || fileType === &#39;xlsx&#39;) {
-  		logger.info(&#39;Извлечение текста из файла (локальное)&#39;, {
+  	if (fileType === 'docx' || fileType === 'xlsx') {
+  		logger.info('Извлечение текста из файла (локальное)', {
 ```
 
 **Chunk 3**
@@ -5800,8 +5800,8 @@ Lines added: undefined, lines removed: 7
 - 
 - 		const operation = createOrUpdateOperation(
 - 			applicationId,
-- 			&#39;ocr&#39;,
-- 			&#39;local&#39;,
+- 			'ocr',
+- 			'local',
 - 			{} // providerData пустой для локальных операций
 - 		);
   
@@ -5813,30 +5813,30 @@ Lines added: 2, lines removed: 13
 
 ```diff
 @@ -153,32 +147,21 @@
-  			logger.info(&#39;Текст успешно извлечен из файла (локальное)&#39;, {
+  			logger.info('Текст успешно извлечен из файла (локальное)', {
   				applicationId,
 - 				operationId: operation.id,
   				fileType,
   				textLength: text.length
   			});
   
-- 			updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 			updateOperationStatus(operation.id, 'completed', {
 - 				result: { text }
 - 			});
 - 
 - 			return { text };
-+ 			return { type: &#39;text&#39;, text };
++ 			return { type: 'text', text };
   		} catch (error) {
-  			logger.error(&#39;Ошибка при локальном извлечении текста&#39;, {
+  			logger.error('Ошибка при локальном извлечении текста', {
   				applicationId,
 - 				operationId: operation.id,
   				fileType,
   				error: error instanceof Error ? error.message : String(error),
   				stack: error instanceof Error ? error.stack : undefined
   			});
-- 			updateOperationStatus(operation.id, &#39;failed&#39;, {
+- 			updateOperationStatus(operation.id, 'failed', {
 - 				error: {
-- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;
+- 					message: error instanceof Error ? error.message : 'Unknown error'
 - 				}
 - 			});
   			throw error;
@@ -5845,8 +5845,8 @@ Lines added: 2, lines removed: 13
   
 - 	// Для изображений и PDF используем YandexOCR
 + 	// Для изображений и PDF используем YandexOCR (операция создается внутри callYandexOCR)
-  	if (fileType === &#39;image&#39; || fileType === &#39;pdf&#39;) {
-  		logger.info(&#39;Извлечение текста через YandexOCR&#39;, {
+  	if (fileType === 'image' || fileType === 'pdf') {
+  		logger.info('Извлечение текста через YandexOCR', {
 ```
 
 **Chunk 5**
@@ -5859,8 +5859,8 @@ Lines added: 4, lines removed: 49
 - 		// Создаем операцию перед вызовом
 - 		const operation = createOrUpdateOperation(
 - 			applicationId,
-- 			&#39;ocr&#39;,
-- 			&#39;yandex&#39;,
+- 			'ocr',
+- 			'yandex',
 - 			{} // providerData будет заполнено после вызова API
 - 		);
 - 
@@ -5869,49 +5869,49 @@ Lines added: 4, lines removed: 49
 - 
 - 			if (ocrResult.operationId) {
 - 				// Асинхронная операция
-- 				logger.info(&#39;YandexOCR операция асинхронная&#39;, {
+- 				logger.info('YandexOCR операция асинхронная', {
 - 					applicationId,
 - 					operationId: operation.id,
 - 					externalOperationId: ocrResult.operationId
 - 				});
-- 				updateOperationStatus(operation.id, &#39;running&#39;, {
+- 				updateOperationStatus(operation.id, 'running', {
 - 					providerData: { operationId: ocrResult.operationId }
 - 				});
 - 
 - 				return { operationId: operation.id };
 - 			} else if (ocrResult.text) {
 - 				// Синхронная операция завершена
-- 				logger.info(&#39;YandexOCR операция завершена синхронно&#39;, {
+- 				logger.info('YandexOCR операция завершена синхронно', {
 - 					applicationId,
 - 					operationId: operation.id,
 - 					textLength: ocrResult.text.length
 - 				});
-- 				updateOperationStatus(operation.id, &#39;completed&#39;, {
+- 				updateOperationStatus(operation.id, 'completed', {
 - 					result: { text: ocrResult.text }
 - 				});
 - 
 - 				return { text: ocrResult.text };
 - 			} else {
-- 				logger.error(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;, {
+- 				logger.error('Не удалось извлечь текст из ответа YandexOCR', {
 - 					applicationId,
 - 					operationId: operation.id
 - 				});
-- 				throw new OCRError(&#39;Не удалось извлечь текст из ответа YandexOCR&#39;);
+- 				throw new OCRError('Не удалось извлечь текст из ответа YandexOCR');
 - 			}
 + 		try {
 + 			const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
 + 			// callYandexOCR возвращает ExtractTextResult и сам создает/обновляет операцию
 + 			return result;
   		} catch (error) {
-  			logger.error(&#39;Ошибка при извлечении текста через YandexOCR&#39;, {
+  			logger.error('Ошибка при извлечении текста через YandexOCR', {
   				applicationId,
 - 				operationId: operation.id,
   				error: error instanceof Error ? error.message : String(error),
   				stack: error instanceof Error ? error.stack : undefined
   			});
-- 			updateOperationStatus(operation.id, &#39;failed&#39;, {
+- 			updateOperationStatus(operation.id, 'failed', {
 - 				error: {
-- 					message: error instanceof Error ? error.message : &#39;Unknown error&#39;,
+- 					message: error instanceof Error ? error.message : 'Unknown error',
 - 					details: error
 - 				}
 - 			});
@@ -5940,14 +5940,14 @@ Lines added: 27, lines removed: undefined
 + 	fileInfo: {
 + 		buffer: Buffer;
 + 		mimeType: string;
-+ 		fileType: &#39;image&#39; | &#39;pdf&#39; | &#39;docx&#39; | &#39;xlsx&#39; | &#39;unknown&#39;;
++ 		fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
 + 		pageCount: number;
 + 		filename?: string;
 + 	}
 + ): Promise&lt;{ text?: string; operationId?: string }&gt; {
 + 	const result = await extractText(applicationId, fileInfo);
 + 
-+ 	if (result.type === &#39;text&#39;) {
++ 	if (result.type === 'text') {
 + 		return { text: result.text };
 + 	} else {
 + 		return { operationId: result.operationId };
@@ -5965,7 +5965,7 @@ Lines added: 27, lines removed: undefined
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: undefined
@@ -5984,21 +5984,21 @@ Lines added: 6, lines removed: 4
 
 ```diff
 @@ -326,11 +327,13 @@
-  		case &#39;image&#39;:
-  		case &#39;pdf&#39;: {
+  		case 'image':
+  		case 'pdf': {
 - 			// Используем YandexOCR для изображений и PDF
 - 			const result = await callYandexOCR(fileBuffer, mimeType);
 - 			if (result.text) {
 + 			// Для обратной совместимости создаем временный applicationId
 + 			// В реальном использовании лучше использовать extractText с applicationId
-+ 			const tempApplicationId = &#39;temp-&#39; + Date.now().toString();
++ 			const tempApplicationId = 'temp-' + Date.now().toString();
 + 			const result = await callYandexOCR(tempApplicationId, fileBuffer, mimeType);
-+ 			if (result.type === &#39;text&#39;) {
++ 			if (result.type === 'text') {
   				return result.text;
   			}
   			throw new OCRError(
-- 				&#39;Операция OCR асинхронная. Используйте extractTextFromFileWithOperation для работы с операциями.&#39;
-+ 				&#39;Операция OCR асинхронная. Используйте extractText с applicationId для работы с операциями.&#39;
+- 				'Операция OCR асинхронная. Используйте extractTextFromFileWithOperation для работы с операциями.'
++ 				'Операция OCR асинхронная. Используйте extractText с applicationId для работы с операциями.'
   			);
   		}
 ```
@@ -6011,7 +6011,7 @@ Lines added: 6, lines removed: 4
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: 1
@@ -6023,8 +6023,8 @@ Lines added: 2, lines removed: 1
 - 	getOperation
 + 	getOperation,
 + 	updateOperationStatus
-  } from &#39;../storage/operationsRepository.js&#39;;
-  import { logger } from &#39;../utils/logger.js&#39;;
+  } from '../storage/operationsRepository.js';
+  import { logger } from '../utils/logger.js';
 ```
 
 </details>
@@ -6095,7 +6095,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 3, lines removed: 1
@@ -6110,8 +6110,8 @@ Lines added: 3, lines removed: 1
 - 	OCRError
 + 	OCRError,
 + 	type ExtractTextResult
-  } from &#39;../ai/index.js&#39;;
-  import { callYandexGPTStructured, LLMError } from &#39;../ai/index.js&#39;;
+  } from '../ai/index.js';
+  import { callYandexGPTStructured, LLMError } from '../ai/index.js';
 ```
 
 </details>
@@ -6122,14 +6122,14 @@ Lines added: 3, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -117,5 +117,5 @@
-  		logger.info(&#39;Извлечение текста из файла&#39;, { applicationId });
+  		logger.info('Извлечение текста из файла', { applicationId });
   		try {
 - 			const ocrResult = await extractTextFromFileWithOperation(applicationId, {
 + 			const ocrResult = await extractText(applicationId, {
@@ -6147,12 +6147,12 @@ Lines added: 1, lines removed: 8
 - 			if (ocrResult.operationId) {
 - 				// Асинхронная операция - возвращаем ID операции
 - 				ocrOperationId = ocrResult.operationId;
-- 				logger.info(&#39;OCR операция асинхронная&#39;, { applicationId, ocrOperationId });
+- 				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
 - 				// Возвращаем результат с operationId, не выбрасываем ошибку
 - 				// Функция вернет результат с ocrOperationId, но без extractedText
 - 				// API endpoint должен обработать это и вернуть HTTP 202
 - 			} else if (ocrResult.text) {
-+ 			if (ocrResult.type === &#39;text&#39;) {
++ 			if (ocrResult.type === 'text') {
   				// Синхронная операция завершена
   				extractedText = ocrResult.text;
 ```
@@ -6165,12 +6165,12 @@ Lines added: 7, lines removed: 3
   					textLength: extractedText.length
   				});
 - 			} else {
-- 				logger.error(&#39;Не удалось извлечь текст из файла&#39;, { applicationId });
-- 				throw new ProcessingError(&#39;Не удалось извлечь текст из файла&#39;);
-+ 			} else if (ocrResult.type === &#39;processing&#39;) {
+- 				logger.error('Не удалось извлечь текст из файла', { applicationId });
+- 				throw new ProcessingError('Не удалось извлечь текст из файла');
++ 			} else if (ocrResult.type === 'processing') {
 + 				// Асинхронная операция - возвращаем ID операции
 + 				ocrOperationId = ocrResult.operationId;
-+ 				logger.info(&#39;OCR операция асинхронная&#39;, { applicationId, ocrOperationId });
++ 				logger.info('OCR операция асинхронная', { applicationId, ocrOperationId });
 + 				// Возвращаем результат с operationId, не выбрасываем ошибку
 + 				// Функция вернет результат с ocrOperationId, но без extractedText
 + 				// API endpoint должен обработать это и вернуть HTTP 202
@@ -6265,24 +6265,24 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/index.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/index.ts</summary>
 
 **Chunk 1**
 Lines added: 2, lines removed: undefined
 
 ```diff
 @@ -5,9 +5,11 @@
-  export { aiConfig, validateAIConfig } from &#39;./config.js&#39;;
+  export { aiConfig, validateAIConfig } from './config.js';
   export {
 + 	extractText,
   	extractTextFromFile,
   	extractTextFromFileWithOperation,
   	checkOCROperation,
   	OCRError
-  } from &#39;./ocr.js&#39;;
-+ export type { ExtractTextResult } from &#39;./ocr.js&#39;;
-  export { callYandexGPT, callYandexGPTStructured, LLMError } from &#39;./llm.js&#39;;
-  export type { AIConfig, YandexOCRConfig, YandexGPTConfig, LLMOptions } from &#39;./types.js&#39;;
+  } from './ocr.js';
++ export type { ExtractTextResult } from './ocr.js';
+  export { callYandexGPT, callYandexGPTStructured, LLMError } from './llm.js';
+  export type { AIConfig, YandexOCRConfig, YandexGPTConfig, LLMOptions } from './types.js';
 ```
 
 </details>
@@ -6379,7 +6379,7 @@ Lint errors for `src/lib/business/processing.ts`
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 2
@@ -6391,8 +6391,8 @@ Lines added: 1, lines removed: 2
 - 	OCRError,
 - 	type ExtractTextResult
 + 	OCRError
-  } from &#39;../ai/index.js&#39;;
-  import { callYandexGPTStructured, LLMError } from &#39;../ai/index.js&#39;;
+  } from '../ai/index.js';
+  import { callYandexGPTStructured, LLMError } from '../ai/index.js';
 ```
 
 </details>
@@ -6403,7 +6403,7 @@ Lines added: 1, lines removed: 2
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 1
@@ -6414,7 +6414,7 @@ Lines added: undefined, lines removed: 1
   	getOperationByApplicationAndTypeWithSync,
 - 	updateOperationStatus,
   	syncOperationToApplication
-  } from &#39;../storage/index.js&#39;;
+  } from '../storage/index.js';
 ```
 
 </details>
@@ -6460,7 +6460,7 @@ Lint results
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 16, lines removed: 25
@@ -6478,8 +6478,8 @@ Lines added: 16, lines removed: 25
 + 
 + &#96;&#96;&#96;typescript
 + type ExtractTextResult =
-+   | { type: &#39;text&#39;; text: string }                    // Текст извлечен синхронно
-+   | { type: &#39;processing&#39;; operationId: string };      // Текст обрабатывается асинхронно
++   | { type: 'text'; text: string }                    // Текст извлечен синхронно
++   | { type: 'processing'; operationId: string };      // Текст обрабатывается асинхронно
 + &#96;&#96;&#96;
 + 
 + Использование discriminated union позволяет явно понимать, что может быть возвращено из функции.
@@ -6512,7 +6512,7 @@ Lines added: 16, lines removed: 25
 - 
 - #### &#96;extractTextFromFileWithOperation(applicationId: string, fileInfo: FileInfo): Promise&lt;{ text?: string; operationId?: string }&gt;&#96;
 - 
-- Извлекает текст из файла с созданием операции обработки. Создает операцию типа &#39;ocr&#39; в БД.
+- Извлекает текст из файла с созданием операции обработки. Создает операцию типа 'ocr' в БД.
 + Корневая функция извлечения текста из файла. Возвращает явный тип результата.
   
   **Параметры:**
@@ -6527,8 +6527,8 @@ Lines added: 49, lines removed: 5
   
 - - &#96;{ text: string }&#96; - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
 - - &#96;{ operationId: string }&#96; - для асинхронных операций (многостраничные PDF)
-+ - &#96;{ type: &#39;text&#39;, text: string }&#96; - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
-+ - &#96;{ type: &#39;processing&#39;, operationId: string }&#96; - для асинхронных операций (многостраничные PDF)
++ - &#96;{ type: 'text', text: string }&#96; - для синхронных операций (изображения, одностраничные PDF, DOCX, XLSX)
++ - &#96;{ type: 'processing', operationId: string }&#96; - для асинхронных операций (многостраничные PDF)
   
   **Особенности:**
   
@@ -6549,13 +6549,13 @@ Lines added: 49, lines removed: 5
 + &#96;&#96;&#96;typescript
 + const result = await extractText(applicationId, fileInfo);
 + 
-+ if (result.type === &#39;text&#39;) {
++ if (result.type === 'text') {
 +   // Используем result.text сразу
 +   console.log(result.text);
-+ } else if (result.type === &#39;processing&#39;) {
++ } else if (result.type === 'processing') {
 +   // Текст обрабатывается асинхронно
 +   // Клиент позже сам вызовет checkOCROperation(result.operationId)
-+   console.log(&#39;Операция в процессе:&#39;, result.operationId);
++   console.log('Операция в процессе:', result.operationId);
 + }
 + &#96;&#96;&#96;
 + 
@@ -6598,7 +6598,7 @@ Lines added: 49, lines removed: 5
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 3, lines removed: 7
@@ -6611,20 +6611,20 @@ Lines added: 3, lines removed: 7
   	extractTextFromFile,
 - 	extractTextFromFileWithOperation,
   	checkOCROperation
-  } from &#39;$lib/ai&#39;;
+  } from '$lib/ai';
   
 - // Старый способ (для обратной совместимости)
 - const fileBuffer = Buffer.from(/* ... */);
-- const text = await extractTextFromFile(fileBuffer, &#39;application/pdf&#39;, &#39;document.pdf&#39;);
+- const text = await extractTextFromFile(fileBuffer, 'application/pdf', 'document.pdf');
 - 
 - // Новый способ с операциями (рекомендуется использовать getFileInfo)
 + // Рекомендуемый способ с явным типом результата
-  import { getFileInfo } from &#39;$lib/storage&#39;;
+  import { getFileInfo } from '$lib/storage';
   
-  const fileInfo = await getFileInfo(&#39;application-id&#39;);
+  const fileInfo = await getFileInfo('application-id');
   if (fileInfo) {
-- 	const result = await extractTextFromFileWithOperation(&#39;application-id&#39;, {
-+ 	const result = await extractText(&#39;application-id&#39;, {
+- 	const result = await extractTextFromFileWithOperation('application-id', {
++ 	const result = await extractText('application-id', {
   		buffer: fileInfo.buffer,
   		mimeType: fileInfo.mimeType,
 ```
@@ -6639,21 +6639,21 @@ Lines added: 16, lines removed: 10
 - if (result.operationId) {
 - 	// Асинхронная операция - проверяем статус
 - 	const operation = await checkOCROperation(result.operationId);
-- 	if (operation &amp;&amp; operation.status === &#39;completed&#39; &amp;&amp; operation.result) {
+- 	if (operation &amp;&amp; operation.status === 'completed' &amp;&amp; operation.result) {
 - 		const text = (operation.result as { text: string }).text;
 - 		console.log(text);
 - 	}
 - } else if (result.text) {
 - 	// Синхронная операция завершена
 - 	console.log(result.text);
-+ 	if (result.type === &#39;text&#39;) {
++ 	if (result.type === 'text') {
 + 		// Синхронная операция завершена - используем текст сразу
 + 		console.log(result.text);
-+ 	} else if (result.type === &#39;processing&#39;) {
++ 	} else if (result.type === 'processing') {
 + 		// Асинхронная операция - проверяем статус позже
 + 		// Клиент сам решает, когда проверять статус операции
 + 		const operation = await checkOCROperation(result.operationId);
-+ 		if (operation &amp;&amp; operation.status === &#39;completed&#39; &amp;&amp; operation.result) {
++ 		if (operation &amp;&amp; operation.status === 'completed' &amp;&amp; operation.result) {
 + 			const text = (operation.result as { text: string }).text;
 + 			console.log(text);
 + 		}
@@ -6662,7 +6662,7 @@ Lines added: 16, lines removed: 10
 + 
 + // Старый способ (для обратной совместимости)
 + const fileBuffer = Buffer.from(/* ... */);
-+ const text = await extractTextFromFile(fileBuffer, &#39;application/pdf&#39;);
++ const text = await extractTextFromFile(fileBuffer, 'application/pdf');
   &#96;&#96;&#96;
   
 ```
@@ -6675,7 +6675,7 @@ Lines added: 16, lines removed: 10
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: 6, lines removed: 3
@@ -6685,16 +6685,16 @@ Lines added: 6, lines removed: 3
   Модуль AI интегрирован с системой операций обработки (&#96;ProcessingOperation&#96;):
   
 - - **OCR операции**: Создаются автоматически при вызове &#96;extractTextFromFileWithOperation()&#96;
--   - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу &#96;status=&#39;completed&#39;&#96;
+-   - Синхронные операции (изображения, одностраничные PDF, DOCX, XLSX): сразу &#96;status='completed'&#96;
 + - **OCR операции**: Создаются автоматически внутри &#96;callYandexOCR&#96; в &#96;yandex/ocr.ts&#96; при вызове &#96;extractText()&#96;
-+   - Синхронные операции (изображения, одностраничные PDF): сразу &#96;status=&#39;completed&#39;&#96; с результатом
-    - Асинхронные операции (многостраничные PDF): &#96;status=&#39;running&#39;&#96; с &#96;providerData.operationId&#96;
--   - Провайдеры: &#39;yandex&#39; (для изображений и PDF), &#39;local&#39; (для DOCX и XLSX)
-+   - Провайдер: &#39;yandex&#39; (только для изображений и PDF)
++   - Синхронные операции (изображения, одностраничные PDF): сразу &#96;status='completed'&#96; с результатом
+    - Асинхронные операции (многостраничные PDF): &#96;status='running'&#96; с &#96;providerData.operationId&#96;
+-   - Провайдеры: 'yandex' (для изображений и PDF), 'local' (для DOCX и XLSX)
++   - Провайдер: 'yandex' (только для изображений и PDF)
 +   - Локальные файлы (DOCX, XLSX): операции НЕ создаются, текст извлекается сразу
   - **LLM операции**: Создаются автоматически при вызове &#96;callYandexGPT()&#96; или &#96;callYandexGPTStructured()&#96; с &#96;operationConfig&#96;
-    - Все LLM операции синхронные: сразу &#96;status=&#39;completed&#39;&#96;
-    - Провайдеры: &#39;yandex&#39; (для YandexGPT)
+    - Все LLM операции синхронные: сразу &#96;status='completed'&#96;
+    - Провайдеры: 'yandex' (для YandexGPT)
   
 + **Важно**: Функция &#96;extractText&#96; не отслеживает дальнейшую судьбу операции после возврата &#96;processing&#96;. Клиент сам отвечает за проверку статуса операции через &#96;checkOCROperation&#96; когда это необходимо.
 + 
@@ -6879,7 +6879,7 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/ocr.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/ocr.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 27
@@ -6902,14 +6902,14 @@ Lines added: undefined, lines removed: 27
 - 	fileInfo: {
 - 		buffer: Buffer;
 - 		mimeType: string;
-- 		fileType: &#39;image&#39; | &#39;pdf&#39; | &#39;docx&#39; | &#39;xlsx&#39; | &#39;unknown&#39;;
+- 		fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
 - 		pageCount: number;
 - 		filename?: string;
 - 	}
 - ): Promise&lt;{ text?: string; operationId?: string }&gt; {
 - 	const result = await extractText(applicationId, fileInfo);
 - 
-- 	if (result.type === &#39;text&#39;) {
+- 	if (result.type === 'text') {
 - 		return { text: result.text };
 - 	} else {
 - 		return { operationId: result.operationId };
@@ -6927,7 +6927,7 @@ Lines added: undefined, lines removed: 27
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/index.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/index.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 1
@@ -6949,7 +6949,7 @@ Lines added: undefined, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 1
@@ -7043,14 +7043,14 @@ Output mode: content
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/processing.ts</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
 
 ```diff
 @@ -299,5 +299,5 @@
-  	logger.info(&#39;Извлечение текста из файла для формирования аббревиатуры&#39;, { applicationId });
+  	logger.info('Извлечение текста из файла для формирования аббревиатуры', { applicationId });
   	try {
 - 		const ocrResult = await extractTextFromFileWithOperation(applicationId, {
 + 		const ocrResult = await extractText(applicationId, {
@@ -7066,7 +7066,7 @@ Lines added: 1, lines removed: 1
   		});
   
 - 		if (ocrResult.operationId) {
-+ 		if (ocrResult.type === &#39;processing&#39;) {
++ 		if (ocrResult.type === 'processing') {
   			// Асинхронная операция
   			ocrOperationId = ocrResult.operationId;
 ```
@@ -7076,10 +7076,10 @@ Lines added: 1, lines removed: 1
 
 ```diff
 @@ -314,5 +314,5 @@
-  				&#39;OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.&#39;
+  				'OCR операция асинхронная. Используйте checkAndUpdateOperation для проверки статуса.'
   			);
 - 		} else if (ocrResult.text) {
-+ 		} else if (ocrResult.type === &#39;text&#39;) {
++ 		} else if (ocrResult.type === 'text') {
   			// Синхронная операция завершена
   			extractedText = ocrResult.text;
 ```
@@ -7092,7 +7092,7 @@ Lines added: 1, lines removed: 1
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/ai/AI.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/AI.md</summary>
 
 **Chunk 1**
 Lines added: undefined, lines removed: 11
@@ -7124,7 +7124,7 @@ Lines added: undefined, lines removed: 11
 
 <tool-use data-tool-type="write" data-tool-name="search_replace">
 
-<details><summary>Tool use: **code_edit** • Edit file: src/lib/business/BUSINESS.md</summary>
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/BUSINESS.md</summary>
 
 **Chunk 1**
 Lines added: 1, lines removed: 1
@@ -7145,12 +7145,82 @@ Lines added: 1, lines removed: 1
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **read_lints**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src`
 
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю, что все упоминания удалены:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "extractTextFromFileWithOperation" in "src" • 0 matches</summary>
+
+Output mode: content
+
+
+_No matches found_
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Функция `extractTextFromFileWithOperation` удалена из кода. Проверяю документацию:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "extractTextFromFileWithOperation" in "." • 0 matches</summary>
+
+Output mode: content
+
+
+_No matches found_
 
 </details>
 </tool-use>
@@ -7162,50 +7232,18 @@ Status: **loading**
 ---
 
 
+Функция `extractTextFromFileWithOperation` удалена из кода.
 
----
+## Выполненные изменения:
 
-<tool-use data-tool-type="unknown" data-tool-name="grep">
-<details>
-<summary>Tool use: **grep**</summary>
+1. Удалена функция из `src/lib/ai/ocr.ts`
+2. Удален экспорт из `src/lib/ai/index.ts`
+3. Обновлено использование в `src/lib/business/processing.ts` — заменено на `extractText` с обработкой `ExtractTextResult`
+4. Обновлена документация:
+   - Удалено описание из `src/lib/ai/AI.md`
+   - Обновлено упоминание в `src/lib/business/BUSINESS.md`
 
-Status: **loading**
-
-
-</details>
-</tool-use>
-
----
-
-
-
----
-
-
-
----
-
-
-
----
-
-<tool-use data-tool-type="unknown" data-tool-name="grep">
-<details>
-<summary>Tool use: **grep**</summary>
-
-Status: **loading**
-
-
-</details>
-</tool-use>
-
----
-
-
-
----
-
-
+Теперь используется только `extractText`, которая возвращает явный тип `ExtractTextResult`. Ошибок компиляции и линтера нет.
 
 ---
 
