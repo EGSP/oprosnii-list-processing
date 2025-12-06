@@ -7,7 +7,7 @@ import type {
 	ApplicationFilters,
 	CreateApplicationResponse,
 	TechnicalSpec
-} from '$lib/storage/types.js';
+} from '$lib/business/types.js';
 import type { ApiError } from './types.js';
 
 /**
@@ -116,9 +116,9 @@ export async function processApplication(id: string, technicalSpecId: string): P
 /**
  * Получение списка операций для заявки
  */
-export async function getOperations(id: string): Promise<import('$lib/storage/types.js').ProcessingOperation[]> {
+export async function getOperations(id: string): Promise<import('$lib/business/types.js').ProcessingOperation[]> {
 	const response = await fetch(`${API_BASE}/applications/${id}/operations`);
-	return handleResponse<import('$lib/storage/types.js').ProcessingOperation[]>(response);
+	return handleResponse<import('$lib/business/types.js').ProcessingOperation[]>(response);
 }
 
 /**

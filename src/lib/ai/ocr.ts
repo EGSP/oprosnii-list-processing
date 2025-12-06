@@ -9,10 +9,10 @@
 
 import {
 	getOperation
-} from '../storage/operationsRepository.js';
+} from '../storage/processingOperations.js';
 import { logger } from '../utils/logger.js';
 import { callYandexOCR, checkYandexOCROperation } from './yandex/api-ocr.js';
-import type { ProcessingOperation } from '../storage/types.js';
+import type { ProcessingOperation } from '../business/types.js';
 import { ok, Result, err } from 'neverthrow';
 
 export class OCRError extends Error {

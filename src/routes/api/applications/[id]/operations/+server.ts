@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplication, getOperationsByApplication } from '$lib/storage/index.js';
+import { getApplication, findOperations } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/index.js';
-import type { ProcessingOperationType } from '$lib/storage/types.js';
+import type { ProcessingOperationTask } from '$lib/business/types.js';
 
 /**
  * GET /api/applications/:id/operations - Список операций заявки
@@ -28,12 +28,12 @@ export const GET: RequestHandler = async ({ params, url }) => {
 
 		// Получаем тип из query параметров (опционально)
 		const typeParam = url.searchParams.get('type');
-		const type: ProcessingOperationType | undefined = typeParam
-			? (typeParam as ProcessingOperationType)
+		const type: ProcessingOperationTask | undefined = typeParam
+			? (typeParam as ProcessingOperationTask)
 			: undefined;
 
 		// Получаем список id операций
-		const operationIds = getOperationsByApplication(id, type);
+		const operationIds = findOperations(id, type);
 
 		// Возвращаем результат (массив id)
 		return json(operationIds);

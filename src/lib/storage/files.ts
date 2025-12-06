@@ -11,9 +11,9 @@ import {
 } from 'fs';
 import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
-import { getOperationByApplicationAndType } from './operationsRepository.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
+import { findOperations, getOperation } from './processingOperations.js';
 
 
 /**
@@ -240,16 +240,16 @@ export async function getFileInfo(applicationId: string): Promise<{
 
 	// Проверяем существующую OCR операцию для получения текста
 	let extractedText: string | undefined;
-	const ocrOperation = getOperationByApplicationAndType(applicationId, 'ocr');
-	if (
-		ocrOperation &&
-		ocrOperation.status === 'completed' &&
-		ocrOperation.result
-	) {
-		const result = ocrOperation.result as { text?: string };
-		if (result.text) {
-			extractedText = result.text;
-		}
+	const textExtractionOperations = findOperations(applicationId, 'extractText');
+	
+	if (textExtractionOperations.isOk()) {
+		extractedText = textExtractionOperations.value.map((operationId) => {
+			const operation = getOperation(operationId);
+			if (operation.isOk()) {
+				return operation.value.data?.result as string;
+			}
+			return '';
+		}).join('\n');
 	}
 
 	return {

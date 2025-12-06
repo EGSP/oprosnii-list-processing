@@ -27,7 +27,7 @@ import {
 	getOperation,
 	getOperationByApplicationAndType
 } from '../storage/index.js';
-import type { ProcessingOperation, TechnicalSpec } from '../storage/types.js';
+import type { ProcessingOperation, TechnicalSpec } from './types.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
@@ -72,18 +72,12 @@ export async function detectProductType(applicationId: string): Promise<{
 	logger.info('Начало определения типа изделия', { applicationId });
 
 	// Получаем заявку
-	const application = getApplication(applicationId);
-	if (!application) {
-		logger.error('Заявка не найдена при определении типа изделия', { applicationId });
+	const applicationResult = getApplication(applicationId);
+	if (applicationResult.isErr()) {
+		logger.error('Заявка не найдена при определении типа изделия', { applicationId, error: applicationResult.error });
 		throw new ProcessingError(`Заявка ${applicationId} не найдена`);
 	}
-
-	// Устанавливаем дату начала обработки
-	if (!application.processingStartDate) {
-		updateApplication(applicationId, {
-			processingStartDate: new Date().toISOString()
-		});
-	}
+	const application = applicationResult.value;
 
 	let extractedText: string | undefined;
 	let ocrOperationId: string | undefined;
@@ -234,10 +228,12 @@ ${limitedText}
 		});
 
 		// Сохраняем результат в БД заявки (для обратной совместимости)
-		updateApplication(applicationId, {
-			productType: productTypeResult.type,
-			llmProductTypeResult: productTypeResult
+		const updateResult = updateApplication(applicationId, {
+			productType: productTypeResult
 		});
+		if (updateResult.isErr()) {
+			logger.error('Ошибка при обновлении заявки', { applicationId, error: updateResult.error });
+		}
 
 		return {
 			result: productTypeResult,
@@ -495,10 +491,12 @@ function saveAbbreviationResult(
 		generatedAt: new Date().toISOString()
 	};
 
-	updateApplication(applicationId, {
-		llmAbbreviationResult: dbResult,
-		processingEndDate: new Date().toISOString()
+	const updateResult = updateApplication(applicationId, {
+		abbreviation: dbResult
 	});
+	if (updateResult.isErr()) {
+		logger.error('Ошибка при обновлении заявки', { applicationId, error: updateResult.error });
+	}
 
 	logger.info('Результат формирования аббревиатуры сохранен в БД', {
 		applicationId,
@@ -534,11 +532,12 @@ export async function generateAbbreviation(
 	logger.info('Начало формирования аббревиатуры', { applicationId, technicalSpecId });
 
 	// Валидация: проверяем существование заявки
-	const application = getApplication(applicationId);
-	if (!application) {
-		logger.error('Заявка не найдена при формировании аббревиатуры', { applicationId });
+	const applicationResult = getApplication(applicationId);
+	if (applicationResult.isErr()) {
+		logger.error('Заявка не найдена при формировании аббревиатуры', { applicationId, error: applicationResult.error });
 		throw new ProcessingError(`Заявка ${applicationId} не найдена`);
 	}
+	const application = applicationResult.value;
 
 	// Валидация: проверяем существование ТУ
 	const technicalSpec = getTechnicalSpec(technicalSpecId);

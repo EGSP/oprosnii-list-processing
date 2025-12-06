@@ -57,7 +57,7 @@ export const POST: RequestHandler = async ({ params }) => {
 			applicationId: id,
 			operationId,
 			status: updatedOperation.status,
-			type: updatedOperation.type
+			type: updatedOperation.task
 		});
 
 		// Возвращаем обновленный статус

@@ -9,13 +9,13 @@
 
 import { z } from 'zod';
 import type { LLMOptions } from './types.js';
-import type { ProcessingOperationType } from '../storage/types.js';
+import type { ProcessingOperationTask } from '../business/types.js';
 import {
 	createOperation,
 	updateOperation,
 	getOperation,
 	getOperationByApplicationAndType
-} from '../storage/operationsRepository.js';
+} from '../storage/processingOperations.js';
 import { OperationAlreadyExistsError } from '../storage/errors.js';
 import { logger } from '../utils/logger.js';
 import {
@@ -52,7 +52,7 @@ export async function callLLM(
 	options?: LLMOptions,
 	operationConfig?: {
 		applicationId: string;
-		type: ProcessingOperationType;
+		type: ProcessingOperationTask;
 	}
 ): Promise<string> {
 	logger.debug('Вызов LLM', {
@@ -129,7 +129,7 @@ export async function callLLM(
 					...current,
 					status: 'completed',
 					result: { text },
-					completedAt: new Date().toISOString()
+					finishDate: new Date().toISOString()
 				});
 			}
 		}
@@ -155,7 +155,7 @@ export async function callLLM(
 							details: error
 						}
 					},
-					completedAt: new Date().toISOString()
+					finishDate: new Date().toISOString()
 				});
 			}
 		}
@@ -195,7 +195,7 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 	maxRetries: number = 2,
 	operationConfig?: {
 		applicationId: string;
-		type: ProcessingOperationType;
+		type: ProcessingOperationTask;
 	}
 ): Promise<z.infer<T>> {
 	logger.debug('Вызов LLM с structured output', {
@@ -278,7 +278,7 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 					...current,
 					status: 'completed',
 					result: validated,
-					completedAt: new Date().toISOString()
+					finishDate: new Date().toISOString()
 				});
 			}
 		}
@@ -306,7 +306,7 @@ export async function callLLMStructured<T extends z.ZodTypeAny>(
 							details: error
 						}
 					},
-					completedAt: new Date().toISOString()
+					finishDate: new Date().toISOString()
 				});
 			}
 		}
@@ -337,7 +337,7 @@ export async function callYandexGPT(
 	options?: LLMOptions,
 	operationConfig?: {
 		applicationId: string;
-		type: ProcessingOperationType;
+		type: ProcessingOperationTask;
 	}
 ): Promise<string> {
 	return callLLM('yandex', prompt, systemPrompt, options, operationConfig);
@@ -363,7 +363,7 @@ export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
 	maxRetries: number = 2,
 	operationConfig?: {
 		applicationId: string;
-		type: ProcessingOperationType;
+		type: ProcessingOperationTask;
 	}
 ): Promise<z.infer<T>> {
 	return callLLMStructured(
