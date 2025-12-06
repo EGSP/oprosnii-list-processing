@@ -232,6 +232,16 @@ export type CompletionResponse = z.infer<typeof CompletionResponseSchema>;
 
 
 /**
+ * Получение URI модели
+ * @param catalogId - ID каталога
+ * @param model - Модель
+ * @returns URI модели
+ */
+export function getModelUri(catalogId: string, model: 'yandexgpt-lite' | 'yandexgpt/latest') {
+	return `gpt://${catalogId}/${model}`;
+}
+
+/**
  * Выполнение запроса completion
  * @param apiKey - API ключ
  * @param request - Запрос completion
