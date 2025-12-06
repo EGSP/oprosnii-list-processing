@@ -8,256 +8,222 @@
  */
 
 import { z } from 'zod';
-import { aiConfig } from '../config.js';
-import type { LLMOptions } from '../types.js';
-import { logger } from '../../utils/logger.js';
-import { fetchStable } from '../../utils/fetchStable.js';
 
-export class YandexLLMError extends Error {
+export const COMPLETION_ENDPOINT = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion';
+
+export class YandexLLMAPIError extends Error {
 	constructor(
 		message: string,
 		public cause?: Error
 	) {
 		super(message);
-		this.name = 'YandexLLMError';
+		this.name = 'YandexLLMAPIError';
 	}
 }
+
+// ============================================================================
+// Zod схемы для запроса completion
+// ============================================================================
 
 /**
- * Вызывает YandexGPT API и возвращает текстовый ответ
- *
- * @param prompt - Промпт для LLM
- * @param systemPrompt - Системный промпт (опционально)
- * @param options - Параметры модели (temperature, maxTokens и т.д.)
- * @returns Текстовый ответ от LLM
+ * Схема для режима рассуждения
  */
-export async function callYandexGPT(
-	prompt: string,
-	systemPrompt?: string,
-	options?: LLMOptions
-): Promise<string> {
-	const config = aiConfig.yandexGPT;
-
-	logger.debug('Вызов YandexGPT', {
-		promptLength: prompt.length,
-		hasSystemPrompt: !!systemPrompt
-	});
-
-	// Формируем сообщения для API
-	const messages: Array<{ role: string; text: string }> = [];
-
-	if (systemPrompt) {
-		messages.push({
-			role: 'system',
-			text: systemPrompt
-		});
-	}
-
-	messages.push({
-		role: 'user',
-		text: prompt
-	});
-
-	// Формируем тело запроса
-	const completionOptions: {
-		stream: boolean;
-		temperature: number;
-		maxTokens: string | number;
-		topP?: number;
-		topK?: number;
-	} = {
-		stream: false,
-		temperature: options?.temperature ?? 0.6,
-		maxTokens: options?.maxTokens ?? '2000'
-	};
-
-	// Добавляем дополнительные параметры, если указаны
-	if (options?.topP !== undefined) {
-		completionOptions.topP = options.topP;
-	}
-	if (options?.topK !== undefined) {
-		completionOptions.topK = options.topK;
-	}
-
-	const requestBody: Record<string, unknown> = {
-		modelUri: config.folderId ? `gpt://${config.folderId}/${config.model}` : config.model,
-		completionOptions,
-		messages
-	};
-
-	try {
-		logger.debug('Отправка запроса в YandexGPT', {
-			endpoint: config.endpoint,
-			model: config.model
-		});
-
-		const response = await fetchStable(
-			config.endpoint!,
-			{
-				method: 'POST',
-				headers: {
-					Authorization: `Api-Key ${config.apiKey}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(requestBody)
-			},
-			60000, // timeout: 60 секунд для LLM запросов
-			2 // maxRetries: 2 попытки при сетевых ошибках
-		);
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			logger.error('YandexGPT API вернул ошибку', {
-				status: response.status,
-				statusText: response.statusText,
-				errorText
-			});
-			throw new YandexLLMError(
-				`YandexGPT API вернул ошибку: ${response.status} ${response.statusText}. ${errorText}`
-			);
-		}
-
-		const result = await response.json();
-
-		// Извлекаем текст из ответа
-		// Структура ответа: { result: { alternatives: [{ message: { text: string } }] } }
-		let text: string | undefined;
-		if (result.result?.alternatives?.[0]?.message?.text) {
-			text = result.result.alternatives[0].message.text;
-		} else if (result.alternatives?.[0]?.message?.text) {
-			text = result.alternatives[0].message.text;
-		}
-
-		if (!text) {
-			logger.error('Не удалось извлечь текст из ответа YandexGPT', {
-				responseStructure: JSON.stringify(result).substring(0, 200)
-			});
-			throw new YandexLLMError('Не удалось извлечь текст из ответа YandexGPT');
-		}
-
-		logger.info('YandexGPT успешно вернул ответ', {
-			textLength: text.length
-		});
-
-		return text;
-	} catch (error) {
-		logger.error('Ошибка при вызове YandexGPT', {
-			error: error instanceof Error ? error.message : String(error),
-			stack: error instanceof Error ? error.stack : undefined
-		});
-
-		if (error instanceof YandexLLMError) {
-			throw error;
-		}
-		throw new YandexLLMError('Ошибка при вызове YandexGPT API', error as Error);
-	}
-}
+export const ReasoningModeSchema = z.enum([
+	'REASONING_MODE_UNSPECIFIED',
+	'DISABLED',
+	'ENABLED_HIDDEN'
+]);
 
 /**
- * Вызывает YandexGPT с structured output через Zod схему
- *
- * Парсит JSON из ответа LLM и валидирует его через Zod схему.
- * Если парсинг или валидация не удались, делает повторную попытку с более строгим промптом.
- *
- * @param prompt - Промпт для LLM (должен содержать инструкцию возвращать JSON)
- * @param schema - Zod схема для валидации ответа
- * @param systemPrompt - Системный промпт (опционально)
- * @param options - Параметры модели
- * @param maxRetries - Максимальное количество попыток (по умолчанию 2)
- * @returns Валидированный объект, соответствующий схеме
+ * Схема для опций рассуждения
  */
-export async function callYandexGPTStructured<T extends z.ZodTypeAny>(
-	prompt: string,
-	schema: T,
-	systemPrompt?: string,
-	options?: LLMOptions,
-	maxRetries: number = 2
-): Promise<z.infer<T>> {
-	let lastError: Error | null = null;
+export const ReasoningOptionsSchema = z.object({
+	mode: ReasoningModeSchema
+});
 
-	for (let attempt = 0; attempt <= maxRetries; attempt++) {
-		try {
-			logger.debug('Попытка получения structured output', {
-				attempt: attempt + 1,
-				maxRetries: maxRetries + 1
-			});
+/**
+ * Схема для опций завершения
+ */
+export const CompletionOptionsSchema = z.object({
+	stream: z.boolean().optional(),
+	temperature: z.number().min(0).max(1).optional(),
+	maxTokens: z.string().optional(),
+	reasoningOptions: ReasoningOptionsSchema.optional()
+});
 
-			// Добавляем инструкцию о формате JSON в промпт (если это не первая попытка)
-			let enhancedPrompt = prompt;
-			if (attempt > 0) {
-				enhancedPrompt = `${prompt}\n\nВАЖНО: Верни ТОЛЬКО валидный JSON без дополнительного текста, комментариев или markdown разметки.`;
-				logger.debug('Повторная попытка с усиленным промптом', {
-					attempt: attempt + 1
-				});
-			}
+/**
+ * Схема для вызова функции
+ */
+export const FunctionCallSchema = z.object({
+	name: z.string(),
+	arguments: z.string() // JSON строка
+});
 
-			const response = await callYandexGPT(enhancedPrompt, systemPrompt, options);
+/**
+ * Схема для вызова инструмента
+ */
+export const ToolCallSchema = z.object({
+	functionCall: FunctionCallSchema
+});
 
-			// Пытаемся извлечь JSON из ответа
-			let jsonText = response.trim();
+/**
+ * Схема для списка вызовов инструментов
+ */
+export const ToolCallListSchema = z.array(ToolCallSchema);
 
-			// Удаляем markdown код блоки, если они есть
-			if (jsonText.startsWith('```')) {
-				const lines = jsonText.split('\n');
-				// Удаляем первую строку (```json или ```)
-				lines.shift();
-				// Удаляем последнюю строку (```)
-				if (lines.length > 0 && lines[lines.length - 1].trim() === '```') {
-					lines.pop();
-				}
-				jsonText = lines.join('\n');
-			}
+/**
+ * Схема для результата функции
+ */
+export const FunctionResultSchema = z.object({
+	name: z.string(),
+	result: z.string() // JSON строка
+});
 
-			// Парсим JSON
-			let parsed: unknown;
-			try {
-				parsed = JSON.parse(jsonText);
-			} catch (parseError) {
-				logger.warn('Ошибка парсинга JSON из ответа LLM', {
-					attempt: attempt + 1,
-					error: (parseError as Error).message,
-					jsonPreview: jsonText.substring(0, 200)
-				});
-				throw new YandexLLMError(
-					`Не удалось распарсить JSON из ответа LLM: ${(parseError as Error).message}. Ответ: ${jsonText.substring(0, 200)}`
-				);
-			}
+/**
+ * Схема для результата инструмента
+ */
+export const ToolResultSchema = z.object({
+	functionResult: FunctionResultSchema
+});
 
-			// Валидируем через Zod схему
-			const validated = schema.parse(parsed);
+/**
+ * Схема для списка результатов инструментов
+ */
+export const ToolResultListSchema = z.array(ToolResultSchema);
 
-			logger.info('Structured output успешно получен и валидирован', {
-				attempt: attempt + 1
-			});
+/**
+ * Схема для роли сообщения
+ */
+export const MessageRoleSchema = z.enum(['system', 'user', 'assistant']);
 
-			return validated;
-		} catch (error) {
-			lastError = error as Error;
+/**
+ * Схема для сообщения в диалоге
+ */
+export const MessageSchema = z.object({
+	role: MessageRoleSchema,
+	text: z.string().optional(),
+	toolCallList: ToolCallListSchema.optional(),
+	toolResultList: ToolResultListSchema.optional()
+});
 
-			logger.warn('Ошибка при получении structured output', {
-				attempt: attempt + 1,
-				maxRetries: maxRetries + 1,
-				error: error instanceof Error ? error.message : String(error)
-			});
+/**
+ * Схема для инструмента функции
+ */
+export const FunctionToolSchema = z.object({
+	name: z.string(),
+	description: z.string().optional(),
+	parameters: z.record(z.unknown()).optional(),
+	strict: z.boolean().optional()
+});
 
-			// Если это последняя попытка, выбрасываем ошибку
-			if (attempt === maxRetries) {
-				break;
-			}
+/**
+ * Схема для инструмента
+ */
+export const ToolSchema = z.object({
+	functionTool: FunctionToolSchema
+});
 
-			// Иначе продолжаем попытки
-			continue;
-		}
-	}
+/**
+ * Схема для выбора инструмента
+ */
+export const ToolChoiceSchema = z.union([
+	z.enum(['TOOL_CHOICE_UNSPECIFIED', 'NONE', 'AUTO', 'ANY']),
+	z.object({
+		functionName: z.string()
+	})
+]);
 
-	// Если все попытки не удались, выбрасываем последнюю ошибку
-	logger.error('Не удалось получить валидный structured output после всех попыток', {
-		maxRetries: maxRetries + 1,
-		lastError: lastError?.message
-	});
-	throw new YandexLLMError(
-		`Не удалось получить валидный structured output после ${maxRetries + 1} попыток`,
-		lastError || undefined
-	);
-}
+/**
+ * Схема для запроса completion
+ */
+export const CompletionRequestSchema = z.object({
+	modelUri: z.string(),
+	completionOptions: CompletionOptionsSchema.optional(),
+	messages: z.array(MessageSchema),
+	tools: z.array(ToolSchema).optional(),
+	toolChoice: ToolChoiceSchema.optional(),
+	jsonObject: z.boolean().optional(),
+	jsonSchema: z.record(z.unknown()).optional(),
+	parallelToolCalls: z.boolean().optional()
+});
 
+// ============================================================================
+// Zod схемы для ответа completion
+// ============================================================================
+
+/**
+ * Схема для деталей токенов completion
+ */
+export const CompletionTokensDetailsSchema = z.object({
+	completionTokens: z.string(),
+	reasoningTokens: z.string().optional(),
+	totalTokens: z.string()
+});
+
+/**
+ * Схема для статистики использования контента
+ */
+export const ContentUsageSchema = z.object({
+	inputTextTokens: z.string(),
+	completionTokens: z.string(),
+	totalTokens: z.string()
+});
+
+/**
+ * Схема для статистики использования токенов
+ * Может быть либо ContentUsage, либо CompletionTokensDetails
+ */
+export const UsageSchema = z.union([
+	ContentUsageSchema,
+	CompletionTokensDetailsSchema
+]);
+
+/**
+ * Схема для альтернативного ответа
+ */
+export const AlternativeSchema = z.object({
+	message: MessageSchema,
+	status: z.string().optional()
+});
+
+/**
+ * Схема для результата completion
+ */
+export const CompletionResultSchema = z.object({
+	alternatives: z.array(AlternativeSchema),
+	usage: UsageSchema,
+	modelVersion: z.string()
+});
+
+/**
+ * Схема для ответа completion
+ */
+export const CompletionResponseSchema = z.object({
+	result: CompletionResultSchema
+});
+
+// ============================================================================
+// TypeScript типы (выведенные из Zod схем)
+// ============================================================================
+
+export type ReasoningMode = z.infer<typeof ReasoningModeSchema>;
+export type ReasoningOptions = z.infer<typeof ReasoningOptionsSchema>;
+export type CompletionOptions = z.infer<typeof CompletionOptionsSchema>;
+export type FunctionCall = z.infer<typeof FunctionCallSchema>;
+export type ToolCall = z.infer<typeof ToolCallSchema>;
+export type ToolCallList = z.infer<typeof ToolCallListSchema>;
+export type FunctionResult = z.infer<typeof FunctionResultSchema>;
+export type ToolResult = z.infer<typeof ToolResultSchema>;
+export type ToolResultList = z.infer<typeof ToolResultListSchema>;
+export type MessageRole = z.infer<typeof MessageRoleSchema>;
+export type Message = z.infer<typeof MessageSchema>;
+export type FunctionTool = z.infer<typeof FunctionToolSchema>;
+export type Tool = z.infer<typeof ToolSchema>;
+export type ToolChoice = z.infer<typeof ToolChoiceSchema>;
+export type CompletionRequest = z.infer<typeof CompletionRequestSchema>;
+export type CompletionTokensDetails = z.infer<typeof CompletionTokensDetailsSchema>;
+export type ContentUsage = z.infer<typeof ContentUsageSchema>;
+export type Usage = z.infer<typeof UsageSchema>;
+export type Alternative = z.infer<typeof AlternativeSchema>;
+export type CompletionResult = z.infer<typeof CompletionResultSchema>;
+export type CompletionResponse = z.infer<typeof CompletionResponseSchema>;
