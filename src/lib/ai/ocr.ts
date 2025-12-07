@@ -32,66 +32,6 @@ export type ExtractTextResult =
 	| { type: 'text'; text: string } // Текст извлечен синхронно
 	| { type: 'processing'; operationId: string }; // Текст обрабатывается асинхронно
 
-
-
-/**
- * Извлекает текст из DOCX файла
- */
-async function extractTextFromDOCX(fileBuffer: Buffer): Promise<string> {
-	try {
-		// Динамический импорт для избежания проблем при отсутствии библиотеки
-		const mammoth = await import('mammoth');
-		const result = await mammoth.extractRawText({ buffer: fileBuffer });
-		return result.value;
-	} catch (error) {
-		if ((error as Error).message?.includes('Cannot find module')) {
-			throw new OCRError(
-				'Библиотека mammoth не установлена. Установите: npm install mammoth',
-				error as Error
-			);
-		}
-		throw new OCRError('Ошибка при извлечении текста из DOCX', error as Error);
-	}
-}
-
-/**
- * Извлекает текст из XLSX файла
- */
-async function extractTextFromXLSX(fileBuffer: Buffer): Promise<string> {
-	try {
-		// Динамический импорт для избежания проблем при отсутствии библиотеки
-		const XLSX = await import('xlsx');
-		const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-		const textParts: string[] = [];
-
-		// Извлекаем текст из всех листов
-		for (const sheetName of workbook.SheetNames) {
-			const sheet = workbook.Sheets[sheetName];
-			const sheetData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
-			// Преобразуем данные листа в текст
-			for (const row of sheetData) {
-				if (Array.isArray(row)) {
-					const rowText = row.filter((cell) => cell !== '').join(' ');
-					if (rowText.trim()) {
-						textParts.push(rowText);
-					}
-				}
-			}
-		}
-
-		return textParts.join('\n');
-	} catch (error) {
-		if ((error as Error).message?.includes('Cannot find module')) {
-			throw new OCRError(
-				'Библиотека xlsx не установлена. Установите: npm install xlsx',
-				error as Error
-			);
-		}
-		throw new OCRError('Ошибка при извлечении текста из XLSX', error as Error);
-	}
-}
-
 /**
  * Извлекает текст из файла
  * Возвращает явный тип результата: либо текст, либо флаг обработки

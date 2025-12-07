@@ -4,10 +4,7 @@ import {
 	writeFileSync,
 	readFileSync,
 	existsSync,
-	unlinkSync,
-	statSync,
-	readdirSync,
-	rmdirSync
+	readdirSync
 } from 'fs';
 import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
@@ -18,7 +15,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 
 
-export type FileType = 'pdf' | 'docx' | 'xlsx' | 'image' | 'unknown';
+export type FileType = 'pdf' | 'document' | 'spreadsheet' | 'image' | 'unknown';
 /**
  * Тип информации о файле (без buffer)
  */
@@ -95,13 +92,13 @@ function getFileType(path: string): FileType {
 		case 'pdf':
 			return 'pdf';
 		case 'docx':
-			return 'docx';
+		case 'doc':
+			return 'document';
 		case 'xlsx':
-			return 'xlsx';
+		case 'xls':
+			return 'spreadsheet';
 		case 'jpeg':
-			return 'image';
 		case 'jpg':
-			return 'image';
 		case 'png':
 			return 'image';
 		default:
