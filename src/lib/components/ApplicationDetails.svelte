@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplication, getTechnicalSpecs, processApplication, getOperations, getFileInfo, type FileInfo } from '$lib/api/client.js';
+	import { getApplication, getTechnicalSpecs, processApplication, getOperations, getFileInfo, type FileInfo } from '$lib/business/rest.js';
 	import type { Application, TechnicalSpec, ProcessingOperation } from '$lib/storage/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';

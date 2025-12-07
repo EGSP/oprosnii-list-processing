@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getApplications, uploadApplication, getApplication } from '$lib/api/client.js';
-	import type { Application } from '$lib/storage/types.js';
+	import { getApplications, uploadApplication, getApplication } from '$lib/business/rest.js';
+	import type { Application } from '$lib/business/types.js';
 	import FileUpload from './FileUpload.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import { createEventDispatcher } from 'svelte';
@@ -28,7 +28,7 @@
 			applications = await getApplications();
 			// Сортируем по дате загрузки (сверху самая поздняя)
 			applications.sort(
-				(a, b) => new Date(b.arrivalDate).getTime() - new Date(a.arrivalDate).getTime()
+				(a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
 			);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявок';
