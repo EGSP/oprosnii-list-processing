@@ -2604,28 +2604,169 @@ Lint errors for `src/lib/components/ApplicationList.svelte`
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -4,5 +4,4 @@
+  		getApplications,
+  		uploadApplication,
+- 		getApplication,
+  		getApplicationStatusInfo
+  	} from '$lib/business/rest.js';
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -11,5 +10,5 @@
+  	import EmptyState from './EmptyState.svelte';
+  	import { createEventDispatcher } from 'svelte';
+- 	import { Err, ok, type Result } from 'neverthrow';
++ 	import { Err, type Result } from 'neverthrow';
+  
+  	const dispatch = createEventDispatcher&lt;{
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **search_replace**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/components/ApplicationList.svelte`
+
+Lint results
 
 
-Parameters:
+**No lint errors found**
+</details>
+</tool-use>
 
-```json
-{
-  "relativeWorkspacePath": "src/lib/components/ApplicationList.svelte"
-}
+---
+
+
+
+---
+
+
+Удаляю неиспользуемую переменную `index`:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -46,6 +46,6 @@
+  		// Загружаем статус для каждой заявки параллельно
+  		const statusInfoResults = await Promise.all(
+- 			applicationsResult.value.map((app, index) =&gt; 
+- 				getApplicationStatusInfo(app.id).then(result =&gt; ({ result, index, app }))
++ 			applicationsResult.value.map((app) =&gt; 
++ 				getApplicationStatusInfo(app.id).then(result =&gt; ({ result, app }))
+  			)
+  		);
 ```
-Additional data:
 
-```json
-{
-  "codeblockId": "9f2ec54e-1b5f-4a10-827b-b02af5130e73"
-}
-```
-User decision: **accepted**
+</details>
 
-Status: **loading**
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/components/ApplicationList.svelte`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Компонент переведен на использование `applicationsStatusInfo`.
+
+**Что изменено:**
+
+1. Убрана переменная `applications` — используется только `applicationsStatusInfo[]`
+2. В `loadApplications()` статусы загружаются параллельно для всех заявок через `getApplicationStatusInfo()`
+3. Шаблон обновлен:
+   - `{#each applicationsStatusInfo as statusInfo ...}`
+   - Используется `statusInfo.application` для данных заявки
+   - Используется `statusInfo.status` для статуса
+4. Добавлена функция `getStatusText()` для отображения статуса
+5. Добавлена поддержка статуса `'failed'` с соответствующими стилями
+6. Убраны неиспользуемые импорты (`getApplication`, `ok`)
+
+Теперь компонент использует единый источник данных — `ApplicationStatusInfo`, который содержит заявку, статус обработки и операции. Это упрощает код и делает его более структурированным.
+
+---
+
+_**User (2025-12-07 15:45Z)**_
+
+@src/lib/components/ApplicationDetails.svelte этот код пусть тоже работает с ApplicationStatusInfo
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Перевожу компонент на использование `ApplicationStatusInfo`. Проверяю текущую структуру и вношу изменения:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationDetails.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "getApplicationStatusInfo" in "src/lib/business/rest.ts" • 1 match</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/business/rest.ts` | `export async function getApplicationStatusInfo(id: string): Promise<Result<ApplicationStatusInfo, Error>> \{` | L158 |
 
 
 </details>
@@ -2638,18 +2779,597 @@ Status: **loading**
 ---
 
 
-
----
-
+Обновляю компонент для работы с `ApplicationStatusInfo`:
 
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: 4
+
+```diff
+@@ -1,18 +1,19 @@
+  &lt;script lang="ts"&gt;
+  	import { onMount, onDestroy } from 'svelte';
+- 	import { getApplication, getTechnicalSpecs, processApplication, getOperations, getFileInfo, type FileInfo } from '$lib/business/rest.js';
+- 	import type { Application, TechnicalSpec, ProcessingOperation } from '$lib/storage/types.js';
++ 	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, type FileInfo } from '$lib/business/rest.js';
++ 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
++ 	import type { TechnicalSpec } from '$lib/storage/types.js';
+  	import EmptyState from './EmptyState.svelte';
+  	import OperationStatusBadge from './OperationStatusBadge.svelte';
++ 	import { Err, type Result } from 'neverthrow';
+  
+  	export let applicationId: string | null = null;
+  
+- 	let application: Application | null = null;
++ 	let statusInfo: ApplicationStatusInfo | null = null;
+  	let technicalSpecs: TechnicalSpec[] = [];
+  	let selectedTechnicalSpecId: string = '';
+  	let isProcessing = false;
+  	let isLoading = false;
+  	let error: string | null = null;
+- 	let operations: ProcessingOperation[] = [];
+  	let operationsUpdateInterval: ReturnType&lt;typeof setInterval&gt; | null = null;
+  	let fileInfo: FileInfo | null = null;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -23,6 +23,5 @@
+  		loadApplication();
+  	} else {
+- 		application = null;
+- 		operations = [];
++ 		statusInfo = null;
+  		stopOperationsUpdate();
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 8, lines removed: 7
+
+```diff
+@@ -40,11 +40,12 @@
+  
+  	async function loadTechnicalSpecs() {
+- 		try {
+- 			technicalSpecs = await getTechnicalSpecs();
+- 			if (technicalSpecs.length &gt; 0 &amp;&amp; !selectedTechnicalSpecId) {
+- 				selectedTechnicalSpecId = technicalSpecs[0].id;
+- 			}
+- 		} catch (err) {
+- 			error = err instanceof Error ? err.message : 'Ошибка загрузки ТУ';
++ 		const result = await getTechnicalSpecs();
++ 		if (result.isErr()) {
++ 			error = result.error.message;
++ 			return;
++ 		}
++ 		technicalSpecs = result.value as TechnicalSpec[];
++ 		if (technicalSpecs.length &gt; 0 &amp;&amp; !selectedTechnicalSpecId) {
++ 			selectedTechnicalSpecId = technicalSpecs[0].id;
+  		}
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 10, lines removed: 11
+
+```diff
+@@ -56,18 +56,17 @@
+  		isLoading = true;
+  		error = null;
+- 		try {
+- 			application = await getApplication(applicationId);
+- 			// Загружаем операции для заявки
+- 			await loadOperations();
+- 			// Загружаем информацию о файле
+- 			await loadFileInfo();
+- 		} catch (err) {
+- 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
+- 			application = null;
+- 			operations = [];
++ 		const statusInfoResult = await getApplicationStatusInfo(applicationId);
++ 		if (statusInfoResult.isErr()) {
++ 			error = statusInfoResult.error.message;
++ 			statusInfo = null;
+  			fileInfo = null;
+- 		} finally {
+  			isLoading = false;
++ 			return;
+  		}
++ 
++ 		statusInfo = statusInfoResult.value;
++ 		// Загружаем информацию о файле
++ 		await loadFileInfo();
++ 		isLoading = false;
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 4
+
+```diff
+@@ -77,10 +77,12 @@
+  		if (!applicationId) return;
+  
+- 		try {
+- 			application = await getApplication(applicationId);
+- 		} catch (err) {
++ 		const statusInfoResult = await getApplicationStatusInfo(applicationId);
++ 		if (statusInfoResult.isErr()) {
+  			// Игнорируем ошибки при фоновом обновлении
+- 			console.warn('Не удалось обновить заявку:', err);
++ 			console.warn('Не удалось обновить заявку:', statusInfoResult.error);
++ 			return;
+  		}
++ 
++ 		statusInfo = statusInfoResult.value;
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 21
+
+```diff
+@@ -91,27 +91,13 @@
+  
+  		isLoadingFileInfo = true;
+- 		try {
+- 			fileInfo = await getFileInfo(applicationId);
+- 		} catch (err) {
++ 		const fileInfoResult = await getFileInfo(applicationId);
++ 		if (fileInfoResult.isErr()) {
+  			// Игнорируем ошибки загрузки информации о файле, чтобы не блокировать отображение заявки
+- 			console.warn('Не удалось загрузить информацию о файле:', err);
++ 			console.warn('Не удалось загрузить информацию о файле:', fileInfoResult.error);
+  			fileInfo = null;
+- 		} finally {
+- 			isLoadingFileInfo = false;
+- 		}
+- 	}
+- 
+- 	async function loadOperations() {
+- 		if (!applicationId) return;
+- 
+- 		try {
+- 			operations = await getOperations(applicationId);
+- 			// Запускаем периодическое обновление, если нужно
+- 			startOperationsUpdate();
+- 		} catch (err) {
+- 			// Игнорируем ошибки загрузки операций, чтобы не блокировать отображение заявки
+- 			console.warn('Не удалось загрузить операции:', err);
+- 			operations = [];
+- 		}
++ 		} else {
++ 			fileInfo = fileInfoResult.value;
++ 		}
++ 		isLoadingFileInfo = false;
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 13
+
+```diff
+@@ -106,19 +106,12 @@
+  	 */
+  	function shouldUpdate(): boolean {
+- 		// Если нет заявки - не обновляем
+- 		if (!application) return false;
++ 		// Если нет статуса - не обновляем
++ 		if (!statusInfo) return false;
+  
+- 		// Если есть аббревиатура (processingEndDate) - не обновляем
+- 		if (application.processingEndDate) return false;
++ 		// Если статус completed или failed - не обновляем
++ 		if (statusInfo.status === 'completed' || statusInfo.status === 'failed') return false;
+  
+- 		// Если есть операции в статусе "running" - обновляем
+- 		// Статусы операций: 'running', 'completed', 'failed' (pending убран)
+- 		// not_started - это placeholder для несуществующих операций, не проверяем
+- 		// Обновляем только если есть незавершенные операции (running)
+- 		const hasIncompleteOperations = operations.some(
+- 			(op) =&gt; op.status === 'running'
+- 		);
+- 
+- 		return hasIncompleteOperations;
++ 		// Если статус processing - обновляем
++ 		return statusInfo.status === 'processing';
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 8
+
+```diff
+@@ -137,12 +137,6 @@
+  			}
+  
+- 			// Обновляем и заявку (без показа индикатора загрузки), и операции
+- 			try {
+- 				await refreshApplication();
+- 				await loadOperations();
+- 			} catch (err) {
+- 				// Игнорируем ошибки, чтобы не прерывать polling
+- 				console.warn('Ошибка при обновлении данных:', err);
+- 			}
++ 			// Обновляем статус (без показа индикатора загрузки)
++ 			await refreshApplication();
+  		}, 3000);
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 11, lines removed: 11
+
+```diff
+@@ -157,15 +157,15 @@
+  		isProcessing = true;
+  		error = null;
+- 		try {
+- 			await processApplication(applicationId, selectedTechnicalSpecId);
+- 		} catch (err) {
+- 			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
+- 		} finally {
+- 			// Всегда обновляем данные после обработки, даже при ошибке
+- 			// Это обеспечит отображение частичных результатов
+- 			await loadApplication();
+- 			await loadOperations();
+- 			isProcessing = false;
+- 		}
++ 		const processResult = await processApplication(applicationId, selectedTechnicalSpecId);
++ 		if (processResult.isErr()) {
++ 			error = processResult.error.message;
++ 		}
++ 		
++ 		// Всегда обновляем данные после обработки, даже при ошибке
++ 		// Это обеспечит отображение частичных результатов
++ 		await loadApplication();
++ 		// Запускаем периодическое обновление, если нужно
++ 		startOperationsUpdate();
++ 		isProcessing = false;
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 11, lines removed: 8
+
+```diff
+@@ -189,13 +189,16 @@
+  	}
+  
+- 	function getStatus(): string {
+- 		if (!application) return '';
+- 		if (application.processingEndDate) {
+- 			return 'Обработана';
+- 		}
+- 		if (application.processingStartDate) {
+- 			return 'Обрабатывается';
++ 	function getStatusText(status: ApplicationStatusInfo['status']): string {
++ 		switch (status) {
++ 			case 'completed':
++ 				return 'Обработана';
++ 			case 'processing':
++ 				return 'Обрабатывается';
++ 			case 'failed':
++ 				return 'Ошибка';
++ 			case 'nothing':
++ 			default:
++ 				return 'Новая';
+  		}
+- 		return 'Новая';
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 9
+
+```diff
+@@ -204,21 +204,21 @@
+  
+  	function getFinalAbbreviation(): string | null {
+- 		if (!application?.llmAbbreviationResult) return null;
+- 		const result = application.llmAbbreviationResult;
+- 		return (result as { abbreviation?: string })?.abbreviation || null;
++ 		if (!statusInfo?.application?.abbreviation) return null;
++ 		return statusInfo.application.abbreviation.abbreviation || null;
+  	}
+  
+  	// Получаем все операции, включая те, которых еще нет
+- 	function getAllOperations(): Array&lt;ProcessingOperation | { type: ProcessingOperation['type']; status: 'not_started' }&gt; {
+- 		const operationTypes: ProcessingOperation['type'][] = ['ocr', 'llm_product_type', 'llm_abbreviation'];
+- 		const operationsMap = new Map(operations.map((op) =&gt; [op.type, op]));
++ 	function getAllOperations(): Array&lt;ProcessingOperation | { task: ProcessingOperation['task']; status: 'not_started' }&gt; {
++ 		const operationTasks: ProcessingOperation['task'][] = ['extractText', 'generateProductType', 'generateAbbreviation'];
++ 		const operations = statusInfo?.operations || [];
++ 		const operationsMap = new Map(operations.map((op) =&gt; [op.task, op]));
+  		
+- 		return operationTypes.map((type) =&gt; {
+- 			const existing = operationsMap.get(type);
++ 		return operationTasks.map((task) =&gt; {
++ 			const existing = operationsMap.get(task);
+  			if (existing) {
+  				return existing;
+  			}
+  			// Возвращаем "пустую" операцию для отображения
+- 			return { type, status: 'not_started' as const };
++ 			return { task, status: 'not_started' as const };
+  		});
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -230,7 +230,7 @@
+  	{:else if isLoading}
+  		&lt;div class="loading"&gt;Загрузка...&lt;/div&gt;
+- 	{:else if error &amp;&amp; !application}
++ 	{:else if error &amp;&amp; !statusInfo}
+  		&lt;div class="error"&gt;{error}&lt;/div&gt;
+- 	{:else if application}
++ 	{:else if statusInfo}
+  		&lt;div class="details-content"&gt;
+  			&lt;div class="header"&gt;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 6
+
+```diff
+@@ -244,22 +244,22 @@
+  			&lt;div class="section"&gt;
+  				&lt;h3&gt;Основная информация&lt;/h3&gt;
+- 				{#if application.productType}
++ 				{#if statusInfo.application.productType}
+  					&lt;div class="field"&gt;
+  						&lt;label for="product-type-display"&gt;Тип продукции:&lt;/label&gt;
+- 						&lt;span id="product-type-display"&gt;{application.productType}&lt;/span&gt;
++ 						&lt;span id="product-type-display"&gt;{statusInfo.application.productType.type}&lt;/span&gt;
+  					&lt;/div&gt;
+  				{/if}
+  				&lt;div class="field"&gt;
+  					&lt;label for="filename-display"&gt;Название файла:&lt;/label&gt;
+- 					&lt;span id="filename-display"&gt;{application.originalFilename}&lt;/span&gt;
++ 					&lt;span id="filename-display"&gt;{statusInfo.application.originalFilename}&lt;/span&gt;
+  				&lt;/div&gt;
+  				&lt;div class="field"&gt;
+  					&lt;label for="arrival-date-display"&gt;Дата загрузки:&lt;/label&gt;
+- 					&lt;span id="arrival-date-display"&gt;{formatDate(application.arrivalDate)}&lt;/span&gt;
++ 					&lt;span id="arrival-date-display"&gt;{formatDate(statusInfo.application.uploadDate)}&lt;/span&gt;
+  				&lt;/div&gt;
+  				&lt;div class="field"&gt;
+  					&lt;label for="status-display"&gt;Статус:&lt;/label&gt;
+- 					&lt;span id="status-display" class="status" class:processed={application.processingEndDate}&gt;
+- 						{getStatus()}
++ 					&lt;span id="status-display" class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}&gt;
++ 						{getStatusText(statusInfo.status)}
+  					&lt;/span&gt;
+  				&lt;/div&gt;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -322,5 +322,5 @@
+  						id="technical-spec-select"
+  						bind:value={selectedTechnicalSpecId}
+- 						disabled={isProcessing || !!application.processingEndDate}
++ 						disabled={isProcessing || statusInfo.status === 'completed'}
+  					&gt;
+  						{#each technicalSpecs as spec}
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -332,5 +332,5 @@
+  					class="process-button"
+  					on:click={handleProcess}
+- 					disabled={isProcessing || !selectedTechnicalSpecId || !!application.processingEndDate}
++ 					disabled={isProcessing || !selectedTechnicalSpecId || statusInfo.status === 'completed'}
+  				&gt;
+  					{isProcessing ? 'Обработка...' : 'Обработать заявку'}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -338,5 +338,5 @@
+  			&lt;/div&gt;
+  
+- 			{#if application.processingStartDate || application.processingEndDate}
++ 			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}
+  				&lt;div class="section"&gt;
+  					&lt;h3&gt;Результаты обработки&lt;/h3&gt;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **search_replace**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/components/ApplicationDetails.svelte`
+
+Lint results
+
+Lint errors for `src/lib/components/ApplicationDetails.svelte`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| A11y: A form label must be associated with a control. | 282:7-282:32 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 286:7-286:32 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 290:7-290:31 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 294:7-294:29 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 298:7-298:41 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 303:8-303:41 | DIAGNOSTIC_SEVERITY_WARNING |
+| All imports in import declaration are unused. | 8:2-8:48 | DIAGNOSTIC_SEVERITY_HINT |
+| Cannot find module '$lib/storage/types.js' or its corresponding type declarations. | 5:37-5:60 | DIAGNOSTIC_SEVERITY_ERROR |
 
 
 </details>
@@ -2662,10 +3382,211 @@ Status: **loading**
 ---
 
 
+Исправляю импорт `TechnicalSpec`:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "export.*TechnicalSpec|interface TechnicalSpec|type TechnicalSpec" • 6 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `.\src\lib\business\rest.ts` | `export async function getTechnicalSpecs(): Promise<Result<unknown[], Error>> \{` | L84 |
+| `.\src\lib\storage\STORAGE.md` | `interface TechnicalSpec \{` | L377 |
+| `.\src\lib\storage\STORAGE.md` | `interface TechnicalSpecRule \{` | L385 |
+| `.\src\lib\storage\errors.ts` | `export class TechnicalSpecNotFoundError extends StorageError \{` | L22 |
+| `.\src\lib\components\COMPONENTS.MD` | `interface TechnicalSpec \{` | L507 |
+| `.\src\lib\components\COMPONENTS.MD` | `interface TechnicalSpecRule \{` | L515 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationDetails.svelte</summary>
+
+</details>
+</tool-use>
 
 ---
 
 
+
+---
+
+
+Проверяю, где определен `TechnicalSpec`, и исправляю импорт:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "TechnicalSpec type definition export" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `PROJECT.md` | L27 |
+| `README.md` | L66 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `data/tu/example.json` | L18 |
+| `src/lib/config.ts` | L33 |
+| `PROJECT.md` | L24-63 |
+| `src/app.d.ts` | L11 |
+| `package.json` | L36 |
+| `tsconfig.json` | L16 |
+| `.eslintrc.cjs` | L29 |
+| `src/routes/+page.svelte` | L3 |
+| `vite.config.ts` | L11 |
+| `svelte.config.js` | L11 |
+| `.prettierrc` | L8 |
+| `src/routes/+layout.svelte` | L5 |
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationDetails.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Заменяю `TechnicalSpec` на локальный тип, так как он не экспортируется:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationDetails.svelte</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 1
+
+```diff
+@@ -3,8 +3,13 @@
+  	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, type FileInfo } from '$lib/business/rest.js';
+  	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
+- 	import type { TechnicalSpec } from '$lib/storage/types.js';
+  	import EmptyState from './EmptyState.svelte';
+  	import OperationStatusBadge from './OperationStatusBadge.svelte';
+  	import { Err, type Result } from 'neverthrow';
++ 
++ 	interface TechnicalSpec {
++ 		id: string;
++ 		name: string;
++ 		description?: string;
++ 	}
+  
+  	export let applicationId: string | null = null;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/components/ApplicationDetails.svelte`
+
+Lint results
+
+Lint errors for `src/lib/components/ApplicationDetails.svelte`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| A11y: A form label must be associated with a control. | 287:7-287:32 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 291:7-291:32 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 295:7-295:31 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 299:7-299:29 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 303:7-303:41 | DIAGNOSTIC_SEVERITY_WARNING |
+| A11y: A form label must be associated with a control. | 308:8-308:41 | DIAGNOSTIC_SEVERITY_WARNING |
+| All imports in import declaration are unused. | 7:2-7:48 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Остались только предупреждения A11y (не критично). Проверяю финальный результат:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationDetails.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Компонент переведен на использование `ApplicationStatusInfo`.
+
+**Что изменено:**
+
+1. Заменены переменные:
+   - `application: Application | null` → `statusInfo: ApplicationStatusInfo | null`
+   - Убрана `operations: ProcessingOperation[]` (используется `statusInfo.operations`)
+
+2. Обновлены функции загрузки:
+   - `loadApplication()` использует `getApplicationStatusInfo()` вместо отдельных вызовов
+   - Убрана `loadOperations()` — операции уже в `statusInfo`
+   - `refreshApplication()` обновлена для работы с `statusInfo`
+
+3. Обновлена логика обновления:
+   - `shouldUpdate()` использует `statusInfo.status` вместо проверки полей заявки
+   - `startOperationsUpdate()` упрощена
+
+4. Обновлен шаблон:
+   - `application` → `statusInfo.application`
+   - `operations` → `statusInfo.operations`
+   - Статус берется из `statusInfo.status`
+   - `getStatus()` → `getStatusText(statusInfo.status)`
+
+5. Обновлена функция `getAllOperations()`:
+   - Использует `statusInfo.operations`
+   - Исправлено: `type` → `task` (по схеме `ProcessingOperation`)
+
+6. Исправлены импорты:
+   - Добавлен локальный интерфейс `TechnicalSpec`
+   - Все функции используют `Result<T, Error>`
+
+Компонент теперь использует единый источник данных — `ApplicationStatusInfo`, что упрощает код и делает его более согласованным с `ApplicationList`.
 
 ---
 

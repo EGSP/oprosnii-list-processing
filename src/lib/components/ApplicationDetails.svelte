@@ -1,19 +1,25 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplication, getTechnicalSpecs, processApplication, getOperations, getFileInfo, type FileInfo } from '$lib/business/rest.js';
-	import type { Application, TechnicalSpec, ProcessingOperation } from '$lib/storage/types.js';
+	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, type FileInfo } from '$lib/business/rest.js';
+	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
+	import { Err, type Result } from 'neverthrow';
+
+	interface TechnicalSpec {
+		id: string;
+		name: string;
+		description?: string;
+	}
 
 	export let applicationId: string | null = null;
 
-	let application: Application | null = null;
+	let statusInfo: ApplicationStatusInfo | null = null;
 	let technicalSpecs: TechnicalSpec[] = [];
 	let selectedTechnicalSpecId: string = '';
 	let isProcessing = false;
 	let isLoading = false;
 	let error: string | null = null;
-	let operations: ProcessingOperation[] = [];
 	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 	let fileInfo: FileInfo | null = null;
 	let isLoadingFileInfo = false;
@@ -21,8 +27,7 @@
 	$: if (applicationId) {
 		loadApplication();
 	} else {
-		application = null;
-		operations = [];
+		statusInfo = null;
 		stopOperationsUpdate();
 	}
 
@@ -39,13 +44,14 @@
 	});
 
 	async function loadTechnicalSpecs() {
-		try {
-			technicalSpecs = await getTechnicalSpecs();
-			if (technicalSpecs.length > 0 && !selectedTechnicalSpecId) {
-				selectedTechnicalSpecId = technicalSpecs[0].id;
-			}
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки ТУ';
+		const result = await getTechnicalSpecs();
+		if (result.isErr()) {
+			error = result.error.message;
+			return;
+		}
+		technicalSpecs = result.value as TechnicalSpec[];
+		if (technicalSpecs.length > 0 && !selectedTechnicalSpecId) {
+			selectedTechnicalSpecId = technicalSpecs[0].id;
 		}
 	}
 
@@ -54,20 +60,19 @@
 
 		isLoading = true;
 		error = null;
-		try {
-			application = await getApplication(applicationId);
-			// Загружаем операции для заявки
-			await loadOperations();
-			// Загружаем информацию о файле
-			await loadFileInfo();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
-			application = null;
-			operations = [];
+		const statusInfoResult = await getApplicationStatusInfo(applicationId);
+		if (statusInfoResult.isErr()) {
+			error = statusInfoResult.error.message;
+			statusInfo = null;
 			fileInfo = null;
-		} finally {
 			isLoading = false;
+			return;
 		}
+
+		statusInfo = statusInfoResult.value;
+		// Загружаем информацию о файле
+		await loadFileInfo();
+		isLoading = false;
 	}
 
 	/**
@@ -76,62 +81,43 @@
 	async function refreshApplication() {
 		if (!applicationId) return;
 
-		try {
-			application = await getApplication(applicationId);
-		} catch (err) {
+		const statusInfoResult = await getApplicationStatusInfo(applicationId);
+		if (statusInfoResult.isErr()) {
 			// Игнорируем ошибки при фоновом обновлении
-			console.warn('Не удалось обновить заявку:', err);
+			console.warn('Не удалось обновить заявку:', statusInfoResult.error);
+			return;
 		}
+
+		statusInfo = statusInfoResult.value;
 	}
 
 	async function loadFileInfo() {
 		if (!applicationId) return;
 
 		isLoadingFileInfo = true;
-		try {
-			fileInfo = await getFileInfo(applicationId);
-		} catch (err) {
+		const fileInfoResult = await getFileInfo(applicationId);
+		if (fileInfoResult.isErr()) {
 			// Игнорируем ошибки загрузки информации о файле, чтобы не блокировать отображение заявки
-			console.warn('Не удалось загрузить информацию о файле:', err);
+			console.warn('Не удалось загрузить информацию о файле:', fileInfoResult.error);
 			fileInfo = null;
-		} finally {
-			isLoadingFileInfo = false;
+		} else {
+			fileInfo = fileInfoResult.value;
 		}
-	}
-
-	async function loadOperations() {
-		if (!applicationId) return;
-
-		try {
-			operations = await getOperations(applicationId);
-			// Запускаем периодическое обновление, если нужно
-			startOperationsUpdate();
-		} catch (err) {
-			// Игнорируем ошибки загрузки операций, чтобы не блокировать отображение заявки
-			console.warn('Не удалось загрузить операции:', err);
-			operations = [];
-		}
+		isLoadingFileInfo = false;
 	}
 
 	/**
 	 * Проверяет, нужно ли обновлять данные заявки и операций
 	 */
 	function shouldUpdate(): boolean {
-		// Если нет заявки - не обновляем
-		if (!application) return false;
+		// Если нет статуса - не обновляем
+		if (!statusInfo) return false;
 
-		// Если есть аббревиатура (processingEndDate) - не обновляем
-		if (application.processingEndDate) return false;
+		// Если статус completed или failed - не обновляем
+		if (statusInfo.status === 'completed' || statusInfo.status === 'failed') return false;
 
-		// Если есть операции в статусе "running" - обновляем
-		// Статусы операций: 'running', 'completed', 'failed' (pending убран)
-		// not_started - это placeholder для несуществующих операций, не проверяем
-		// Обновляем только если есть незавершенные операции (running)
-		const hasIncompleteOperations = operations.some(
-			(op) => op.status === 'running'
-		);
-
-		return hasIncompleteOperations;
+		// Если статус processing - обновляем
+		return statusInfo.status === 'processing';
 	}
 
 	function startOperationsUpdate() {
@@ -155,14 +141,8 @@
 				return;
 			}
 
-			// Обновляем и заявку (без показа индикатора загрузки), и операции
-			try {
-				await refreshApplication();
-				await loadOperations();
-			} catch (err) {
-				// Игнорируем ошибки, чтобы не прерывать polling
-				console.warn('Ошибка при обновлении данных:', err);
-			}
+			// Обновляем статус (без показа индикатора загрузки)
+			await refreshApplication();
 		}, 3000);
 	}
 
@@ -181,17 +161,17 @@
 
 		isProcessing = true;
 		error = null;
-		try {
-			await processApplication(applicationId, selectedTechnicalSpecId);
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
-		} finally {
-			// Всегда обновляем данные после обработки, даже при ошибке
-			// Это обеспечит отображение частичных результатов
-			await loadApplication();
-			await loadOperations();
-			isProcessing = false;
+		const processResult = await processApplication(applicationId, selectedTechnicalSpecId);
+		if (processResult.isErr()) {
+			error = processResult.error.message;
 		}
+		
+		// Всегда обновляем данные после обработки, даже при ошибке
+		// Это обеспечит отображение частичных результатов
+		await loadApplication();
+		// Запускаем периодическое обновление, если нужно
+		startOperationsUpdate();
+		isProcessing = false;
 	}
 
 	function formatDate(dateString: string): string {
@@ -213,35 +193,38 @@
 		return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 	}
 
-	function getStatus(): string {
-		if (!application) return '';
-		if (application.processingEndDate) {
-			return 'Обработана';
+	function getStatusText(status: ApplicationStatusInfo['status']): string {
+		switch (status) {
+			case 'completed':
+				return 'Обработана';
+			case 'processing':
+				return 'Обрабатывается';
+			case 'failed':
+				return 'Ошибка';
+			case 'nothing':
+			default:
+				return 'Новая';
 		}
-		if (application.processingStartDate) {
-			return 'Обрабатывается';
-		}
-		return 'Новая';
 	}
 
 	function getFinalAbbreviation(): string | null {
-		if (!application?.llmAbbreviationResult) return null;
-		const result = application.llmAbbreviationResult;
-		return (result as { abbreviation?: string })?.abbreviation || null;
+		if (!statusInfo?.application?.abbreviation) return null;
+		return statusInfo.application.abbreviation.abbreviation || null;
 	}
 
 	// Получаем все операции, включая те, которых еще нет
-	function getAllOperations(): Array<ProcessingOperation | { type: ProcessingOperation['type']; status: 'not_started' }> {
-		const operationTypes: ProcessingOperation['type'][] = ['ocr', 'llm_product_type', 'llm_abbreviation'];
-		const operationsMap = new Map(operations.map((op) => [op.type, op]));
+	function getAllOperations(): Array<ProcessingOperation | { task: ProcessingOperation['task']; status: 'not_started' }> {
+		const operationTasks: ProcessingOperation['task'][] = ['extractText', 'generateProductType', 'generateAbbreviation'];
+		const operations = statusInfo?.operations || [];
+		const operationsMap = new Map(operations.map((op) => [op.task, op]));
 		
-		return operationTypes.map((type) => {
-			const existing = operationsMap.get(type);
+		return operationTasks.map((task) => {
+			const existing = operationsMap.get(task);
 			if (existing) {
 				return existing;
 			}
 			// Возвращаем "пустую" операцию для отображения
-			return { type, status: 'not_started' as const };
+			return { task, status: 'not_started' as const };
 		});
 	}
 </script>
@@ -251,9 +234,9 @@
 		<EmptyState message="Выберите заявку для просмотра" />
 	{:else if isLoading}
 		<div class="loading">Загрузка...</div>
-	{:else if error && !application}
+	{:else if error && !statusInfo}
 		<div class="error">{error}</div>
-	{:else if application}
+	{:else if statusInfo}
 		<div class="details-content">
 			<div class="header">
 				<h2>Детали заявки</h2>
@@ -265,24 +248,24 @@
 
 			<div class="section">
 				<h3>Основная информация</h3>
-				{#if application.productType}
+				{#if statusInfo.application.productType}
 					<div class="field">
 						<label for="product-type-display">Тип продукции:</label>
-						<span id="product-type-display">{application.productType}</span>
+						<span id="product-type-display">{statusInfo.application.productType.type}</span>
 					</div>
 				{/if}
 				<div class="field">
 					<label for="filename-display">Название файла:</label>
-					<span id="filename-display">{application.originalFilename}</span>
+					<span id="filename-display">{statusInfo.application.originalFilename}</span>
 				</div>
 				<div class="field">
 					<label for="arrival-date-display">Дата загрузки:</label>
-					<span id="arrival-date-display">{formatDate(application.arrivalDate)}</span>
+					<span id="arrival-date-display">{formatDate(statusInfo.application.uploadDate)}</span>
 				</div>
 				<div class="field">
 					<label for="status-display">Статус:</label>
-					<span id="status-display" class="status" class:processed={application.processingEndDate}>
-						{getStatus()}
+					<span id="status-display" class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}>
+						{getStatusText(statusInfo.status)}
 					</span>
 				</div>
 				<div class="field operations-status">
@@ -343,7 +326,7 @@
 					<select
 						id="technical-spec-select"
 						bind:value={selectedTechnicalSpecId}
-						disabled={isProcessing || !!application.processingEndDate}
+						disabled={isProcessing || statusInfo.status === 'completed'}
 					>
 						{#each technicalSpecs as spec}
 							<option value={spec.id}>{spec.name}</option>
@@ -353,13 +336,13 @@
 				<button
 					class="process-button"
 					on:click={handleProcess}
-					disabled={isProcessing || !selectedTechnicalSpecId || !!application.processingEndDate}
+					disabled={isProcessing || !selectedTechnicalSpecId || statusInfo.status === 'completed'}
 				>
 					{isProcessing ? 'Обработка...' : 'Обработать заявку'}
 				</button>
 			</div>
 
-			{#if application.processingStartDate || application.processingEndDate}
+			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}
 				<div class="section">
 					<h3>Результаты обработки</h3>
 
