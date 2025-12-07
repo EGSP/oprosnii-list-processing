@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ApplicationList from '$lib/components/ApplicationList.svelte';
 	import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
-	import type { Application } from '$lib/storage/types.js';
+	import type { Application } from '$lib/business/types.js';
 
 	let selectedApplication: Application | null = null;
 
