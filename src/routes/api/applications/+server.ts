@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { createApplication, listApplications } from '$lib/storage/index.js';
-import { saveApplicationFile } from '$lib/storage/index.js';
+import { storeFile } from '$lib/storage/index.js';
 import {
 	handleStorageError,
 	parseApplicationFilters,
@@ -42,7 +42,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const buffer = Buffer.from(arrayBuffer);
 
 		// Сохраняем файл
-		saveApplicationFile(buffer, application.id, file.name);
+		storeFile(buffer, application.id, file.name);
 
 		// Возвращаем ответ
 		return json(

@@ -14,166 +14,119 @@ import { FileStorageError } from './errors.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 import { findOperations, getOperation } from './processingOperations.js';
+import { err, ok, type Result } from 'neverthrow';
 
+
+
+export type FileType = 'pdf' | 'docx' | 'xlsx' | 'image' | 'unknown';
+/**
+ * Тип информации о файле (без buffer)
+ */
+export type FileInfo = {
+	name: string;
+	type: FileType;
+	extension: string;
+	pageCount: number;
+	extractedText?: string;
+}
 
 /**
  * Сохраняет файл заявки в хранилище
  * @param fileBuffer - Buffer с содержимым файла
- * @param guid - GUID заявки
+ * @param applicationId - GUID заявки
  * @param originalFilename - Оригинальное имя файла (для сохранения расширения)
  * @returns Путь к сохраненному файлу
  */
-export function saveApplicationFile(
+export function storeFile(
 	fileBuffer: Buffer,
-	guid: string,
+	applicationId: string,
 	originalFilename: string
 ): string {
 	try {
 		// Создаем директорию для заявки
-		const applicationDir = join(process.cwd(), config.uploadsDirectory, guid);
+		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
 		mkdirSync(applicationDir, { recursive: true });
 
 		// Сохраняем оригинальное расширение
 		const extension = originalFilename.split('.').pop() || '';
-		const filename = `${guid}.${extension}`;
+		const filename = `${applicationId}.${extension}`;
 		const filePath = join(applicationDir, filename);
 
 		writeFileSync(filePath, fileBuffer);
 
 		return filePath;
 	} catch (error) {
-		throw new FileStorageError(`Failed to save file for application ${guid}`, error as Error);
+		throw new FileStorageError(`Failed to save file for application ${applicationId}`, error as Error);
 	}
 }
 
 /**
- * Получает путь к файлу заявки
+ * Получает путь к файлу заявки. Файл должен иметь GUID в имени. GUID - это ID заявки.
  */
-export function getApplicationFilePath(guid: string): string | null {
-	const applicationDir = join(process.cwd(), config.uploadsDirectory, guid);
+export function getFilePath(applicationId: string): Result<string, Error> {
+	const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
 
 	if (!existsSync(applicationDir)) {
-		return null;
+		return err(new Error(`Application directory not found for application ${applicationId}`));
 	}
 
 	// Ищем файл в директории заявки
 	// Файл может иметь GUID как имя, с любым расширением
 	const files = readdirSync(applicationDir);
-	const file = files.find((f: string) => f.startsWith(guid));
+	const file = files.find((f: string) => f.startsWith(applicationId));
 
 	if (!file) {
-		return null;
+		return err(new Error(`File not found for application ${applicationId}. Files: ${files.join(', ')}`));
 	}
 
-	return join(applicationDir, file);
+	return ok(join(applicationDir, file));
+}
+
+export function getFileNameWithoutExtension(path: string): string {
+	return path.split('.').slice(0, -1).join('.');
+}
+
+function getFileType(path: string): FileType {
+	const extension = path.split('.').pop()?.toLowerCase();
+	if (!extension) {
+		return 'unknown';
+	}
+	switch (extension) {
+		case 'pdf':
+			return 'pdf';
+		case 'docx':
+			return 'docx';
+		case 'xlsx':
+			return 'xlsx';
+		case 'jpeg':
+			return 'image';
+		case 'jpg':
+			return 'image';
+		case 'png':
+			return 'image';
+		default:
+			return 'unknown';
+	}
+}
+
+function getFileExtension(path: string): string {
+	const extension = path.split('.').pop()?.toLowerCase();
+	if (!extension) {
+		return '';
+	}
+	return extension;
 }
 
 /**
  * Читает файл заявки
  */
-export function getApplicationFile(guid: string): { buffer: Buffer; filename: string } | null {
-	const filePath = getApplicationFilePath(guid);
-
-	if (!filePath || !existsSync(filePath)) {
-		return null;
+export function readFile(path: string): Result<Buffer, Error> {
+	if (!path || !existsSync(path)) {
+		return err(new Error(`File not found for path ${path}`));
 	}
 
-	const buffer = readFileSync(filePath);
-	const filename = filePath.split(/[/\\]/).pop() || guid;
-
-	return { buffer, filename };
-}
-
-/**
- * Проверяет существование файла заявки
- */
-export function applicationFileExists(guid: string): boolean {
-	return getApplicationFilePath(guid) !== null;
-}
-
-/**
- * Удаляет файл заявки
- */
-export function deleteApplicationFile(guid: string): boolean {
-	const filePath = getApplicationFilePath(guid);
-
-	if (!filePath || !existsSync(filePath)) {
-		return false;
-	}
-
-	try {
-		unlinkSync(filePath);
-
-		// Удаляем директорию заявки, если она пуста
-		const applicationDir = join(process.cwd(), config.uploadsDirectory, guid);
-		const files = readdirSync(applicationDir);
-		if (files.length === 0) {
-			rmdirSync(applicationDir);
-		}
-
-		return true;
-	} catch (error) {
-		throw new FileStorageError(`Failed to delete file for application ${guid}`, error as Error);
-	}
-}
-
-/**
- * Получает информацию о файле (размер, дата изменения)
- */
-export function getApplicationFileInfo(guid: string): { size: number; modified: Date } | null {
-	const filePath = getApplicationFilePath(guid);
-
-	if (!filePath || !existsSync(filePath)) {
-		return null;
-	}
-
-	const stats = statSync(filePath);
-	return {
-		size: stats.size,
-		modified: stats.mtime
-	};
-}
-
-/**
- * Определяет MIME тип по расширению файла
- */
-function getMimeTypeFromFilename(filename: string): string {
-	const extension = filename.split('.').pop()?.toLowerCase();
-
-	switch (extension) {
-		case 'pdf':
-			return 'application/pdf';
-		case 'docx':
-			return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-		case 'xlsx':
-			return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-		case 'png':
-			return 'image/png';
-		case 'jpg':
-		case 'jpeg':
-			return 'image/jpeg';
-		default:
-			return 'application/octet-stream';
-	}
-}
-
-/**
- * Определяет тип файла по MIME типу
- */
-function getFileType(mimeType: string): 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown' {
-	if (mimeType.startsWith('image/')) {
-		return 'image';
-	}
-	if (mimeType === 'application/pdf') {
-		return 'pdf';
-	}
-	if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-		return 'docx';
-	}
-	if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-		return 'xlsx';
-	}
-	return 'unknown';
+	const buffer = readFileSync(path);
+	return ok(buffer);
 }
 
 /**
@@ -183,10 +136,10 @@ async function getPDFPageCount(buffer: Buffer): Promise<number> {
 	try {
 		// Конвертируем Buffer в Uint8Array для PDF-LIB
 		const uint8Array = new Uint8Array(buffer);
-		
+
 		// Загружаем PDF документ
 		const pdfDoc = await PDFDocument.load(uint8Array);
-		
+
 		// Получаем количество страниц
 		const pages = pdfDoc.getPages();
 		return pages.length;
@@ -199,6 +152,14 @@ async function getPDFPageCount(buffer: Buffer): Promise<number> {
 	}
 }
 
+async function getPageCount(fileType: FileType, buffer: Buffer): Promise<Result<number, Error>> {
+	if (fileType === 'pdf') {
+		const pageCountResult = await getPDFPageCount(buffer);
+		return ok(pageCountResult);
+	}
+	return ok(1);
+}	
+
 /**
  * Получает полную информацию о файле заявки
  *
@@ -209,39 +170,35 @@ async function getPDFPageCount(buffer: Buffer): Promise<number> {
  * @param applicationId - GUID заявки
  * @returns Информация о файле или null, если файл не найден
  */
-export async function getFileInfo(applicationId: string): Promise<{
-	buffer: Buffer;
-	filename: string;
-	mimeType: string;
-	fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
-	pageCount: number;
-	size: number;
-	extractedText?: string;
-} | null> {
-	const fileData = getApplicationFile(applicationId);
-	if (!fileData) {
-		return null;
+export async function getFileInfo(applicationId: string): Promise<Result<FileInfo, Error>> {
+	const filePathResult = getFilePath(applicationId);
+	if (filePathResult.isErr()) {
+		return err(filePathResult.error);
 	}
+	const filePath = filePathResult.value;
 
-	const { buffer, filename } = fileData;
-	const mimeType = getMimeTypeFromFilename(filename);
-	const fileType = getFileType(mimeType);
+	const name = getFileNameWithoutExtension(filePath);
 
-	// Получаем размер файла
-	const filePath = getApplicationFilePath(applicationId);
-	const stats = filePath ? statSync(filePath) : null;
-	const size = stats?.size || buffer.length;
+	const fileBufferResult = readFile(filePath);
+	if (fileBufferResult.isErr()) {
+		return err(fileBufferResult.error);
+	}
+	const buffer = fileBufferResult.value;
+
+	const type = getFileType(filePath);
+	const extension = getFileExtension(filePath);
 
 	// Определяем количество страниц
-	let pageCount = 1;
-	if (fileType === 'pdf') {
-		pageCount = await getPDFPageCount(buffer);
+	const pageCountResult = await getPageCount(type, buffer);
+	if (pageCountResult.isErr()) {
+		return err(pageCountResult.error);
 	}
+	const pageCount = pageCountResult.value;
 
 	// Проверяем существующую OCR операцию для получения текста
 	let extractedText: string | undefined;
 	const textExtractionOperations = findOperations(applicationId, 'extractText');
-	
+
 	if (textExtractionOperations.isOk()) {
 		extractedText = textExtractionOperations.value.map((operationId) => {
 			const operation = getOperation(operationId);
@@ -252,13 +209,11 @@ export async function getFileInfo(applicationId: string): Promise<{
 		}).join('\n');
 	}
 
-	return {
-		buffer,
-		filename,
-		mimeType,
-		fileType,
+	return ok({
+		name,
+		extension,
+		type,
 		pageCount,
-		size,
 		extractedText
-	};
+	});
 }

@@ -10,6 +10,7 @@ import type {
 import type { CreateApplicationResponse } from '$lib/api/types.js';
 import { Result, ok, err } from 'neverthrow';
 import { fetchStable } from '$lib/utils/fetchStable.js';
+import type { FileType } from '$lib/storage/files';
 
 /**
  * Базовый URL для API (в SvelteKit это относительные пути)
@@ -131,18 +132,6 @@ export async function processApplication(id: string, technicalSpecId: string): P
  */
 export async function getOperations(id: string): Promise<Result<import('$lib/business/types.js').ProcessingOperation[], Error>> {
 	return fetchStableJson<import('$lib/business/types.js').ProcessingOperation[]>(`${API_BASE}/applications/${id}/operations`);
-}
-
-/**
- * Тип информации о файле (без buffer)
- */
-export interface FileInfo {
-	filename: string;
-	mimeType: string;
-	fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
-	pageCount: number;
-	size: number;
-	extractedText?: string;
 }
 
 /**

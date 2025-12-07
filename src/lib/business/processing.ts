@@ -30,6 +30,7 @@ import {
 import type { ProcessingOperation, TechnicalSpec } from './types.js';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import { err } from 'neverthrow';
 
 export class ProcessingError extends Error {
 	constructor(
@@ -50,6 +51,20 @@ function truncateText(text: string, maxLength: number): string {
 		return text;
 	}
 	return text.substring(0, maxLength);
+}
+
+export async function extractText(applicationId: string): Promise<Result<ProcessingOperation, Error>> {
+
+	const applicationResult =await getApplication(applicationId);
+	if (applicationResult.isErr()) {
+		return err(applicationResult.error);
+	}
+	const application = applicationResult.value;
+
+	const fileInfoResult = await getFileInfo(applicationId);
+	if (fileInfoResult.isErr()) {
+		return err(fileInfoResult.error);
+	}
 }
 
 /**

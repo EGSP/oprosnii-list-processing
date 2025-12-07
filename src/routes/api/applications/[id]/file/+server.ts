@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { getApplicationFile, getApplication } from '$lib/storage/index.js';
+import { readFile, getApplication } from '$lib/storage/index.js';
 import {
 	requireValidUUID,
 	getContentTypeFromFilename,
@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ params }: { params: { id: string } }
 		}
 
 		// Получаем файл
-		const fileData = getApplicationFile(id);
+		const fileData = readFile(id);
 
 		if (!fileData) {
 			return error(404, { message: 'Файл заявки не найден' });
