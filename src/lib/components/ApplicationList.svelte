@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getApplications, uploadApplication, getApplication } from '$lib/business/rest.js';
-	import type { Application } from '$lib/business/types.js';
+	import {
+		getApplications,
+		uploadApplication,
+		getApplicationStatusInfo
+	} from '$lib/business/rest.js';
+	import type { Application, ApplicationStatusInfo } from '$lib/business/types.js';
 	import FileUpload from './FileUpload.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import { createEventDispatcher } from 'svelte';
+	import { Err, type Result } from 'neverthrow';
 
 	const dispatch = createEventDispatcher<{
 		select: { application: Application };
@@ -12,7 +17,7 @@
 		error: { message: string };
 	}>();
 
-	let applications: Application[] = [];
+	let applicationsStatusInfo: ApplicationStatusInfo[] = [];
 	let selectedId: string | null = null;
 	let isLoading = false;
 	let error: string | null = null;
@@ -21,20 +26,49 @@
 		loadApplications();
 	});
 
+	function hasErr<T>(result: Result<T, Error>): result is Err<T, Error> {
+		if (result.isErr()) {
+			error = result.error instanceof Error ? result.error.message : 'Ошибка загрузки заявок';
+			return true;
+		}
+		return false;
+	}
+
 	async function loadApplications() {
 		isLoading = true;
 		error = null;
-		try {
-			applications = await getApplications();
-			// Сортируем по дате загрузки (сверху самая поздняя)
-			applications.sort(
-				(a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-			);
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки заявок';
-		} finally {
+		const applicationsResult = await getApplications();
+		if (hasErr(applicationsResult)) {
 			isLoading = false;
+			return;
 		}
+
+		// Загружаем статус для каждой заявки параллельно
+		const statusInfoResults = await Promise.all(
+			applicationsResult.value.map((app) => 
+				getApplicationStatusInfo(app.id).then(result => ({ result, app }))
+			)
+		);
+
+		applicationsStatusInfo = statusInfoResults
+			.map(({ result, app }) => {
+				if (result.isErr()) {
+					// Если не удалось загрузить статус, создаем базовую информацию
+					return {
+						application: app,
+						status: 'nothing' as const,
+						operations: []
+					};
+				}
+				return result.value;
+			})
+			.filter((info): info is ApplicationStatusInfo => info !== null);
+
+		// Сортируем по дате загрузки (сверху самая поздняя)
+		applicationsStatusInfo.sort(
+			(a, b) => new Date(b.application.uploadDate).getTime() - new Date(a.application.uploadDate).getTime()
+		);
+		isLoading = false;
 	}
 
 	function handleUpload(event: CustomEvent<{ file: File }>) {
@@ -45,20 +79,22 @@
 	async function uploadFile(file: File) {
 		isLoading = true;
 		error = null;
-		try {
-			const newApplicationResponse = await uploadApplication(file);
-			// Обновляем список заявок
-			await loadApplications();
-			// Загружаем полную заявку
-			const fullApplication = await getApplication(newApplicationResponse.id);
-			selectApplication(fullApplication.id);
-			dispatch('upload', { application: fullApplication });
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки файла';
-			dispatch('error', { message: error });
-		} finally {
+		const newApplicationResponse = await uploadApplication(file);
+		if (hasErr(newApplicationResponse)) {
 			isLoading = false;
+			return;
 		}
+		// Обновляем список заявок
+		await loadApplications();
+		// Находим загруженную заявку в списке
+		const uploadedStatusInfo = applicationsStatusInfo.find(
+			(info) => info.application.id === newApplicationResponse.value.id
+		);
+		if (uploadedStatusInfo) {
+			selectApplication(uploadedStatusInfo.application.id);
+			dispatch('upload', { application: uploadedStatusInfo.application });
+		}
+		isLoading = false;
 	}
 
 	function handleError(event: CustomEvent<{ message: string }>) {
@@ -68,9 +104,9 @@
 
 	function selectApplication(id: string) {
 		selectedId = id;
-		const application = applications.find((app) => app.id === id);
-		if (application) {
-			dispatch('select', { application });
+		const statusInfo = applicationsStatusInfo.find((info) => info.application.id === id);
+		if (statusInfo) {
+			dispatch('select', { application: statusInfo.application });
 		}
 	}
 
@@ -85,14 +121,18 @@
 		});
 	}
 
-	function getStatus(application: Application): string {
-		if (application.processingEndDate) {
-			return 'Обработана';
+	function getStatusText(status: ApplicationStatusInfo['status']): string {
+		switch (status) {
+			case 'completed':
+				return 'Обработана';
+			case 'processing':
+				return 'Обрабатывается';
+			case 'failed':
+				return 'Ошибка';
+			case 'nothing':
+			default:
+				return 'Новая';
 		}
-		if (application.processingStartDate) {
-			return 'Обрабатывается';
-		}
-		return 'Новая';
 	}
 </script>
 
@@ -112,21 +152,23 @@
 	<div class="list-content">
 		{#if isLoading}
 			<div class="loading">Загрузка...</div>
-		{:else if applications.length === 0}
+		{:else if applicationsStatusInfo.length === 0}
 			<EmptyState message="Нет загруженных заявок" />
 		{:else}
 			<div class="applications">
-				{#each applications as application (application.id)}
+				{#each applicationsStatusInfo as statusInfo (statusInfo.application.id)}
 					<button
 						class="application-item"
-						class:selected={selectedId === application.id}
-						on:click={() => selectApplication(application.id)}
+						class:selected={selectedId === statusInfo.application.id}
+						class:processed={statusInfo.status === 'completed'}
+						class:failed={statusInfo.status === 'failed'}
+						on:click={() => selectApplication(statusInfo.application.id)}
 					>
-						<div class="application-name">{application.originalFilename}</div>
+						<div class="application-name">{statusInfo.application.originalFilename}</div>
 						<div class="application-meta">
-							<span class="date">{formatDate(application.arrivalDate)}</span>
-							<span class="status" class:processed={application.processingEndDate}>
-								{getStatus(application)}
+							<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
+							<span class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}>
+								{getStatusText(statusInfo.status)}
 							</span>
 						</div>
 					</button>
@@ -238,5 +280,14 @@
 
 	.status.processed {
 		background: var(--color-status-processed);
+	}
+
+	.status.failed {
+		background: var(--color-error-bg);
+		color: var(--color-error);
+	}
+
+	.application-item.failed {
+		border-left-color: var(--color-error);
 	}
 </style>

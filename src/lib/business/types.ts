@@ -105,3 +105,13 @@ export const ProcessingOperationSchema = z.object({
 export type ProcessingOperationUpdate = Partial<
 	Pick<ProcessingOperation, 'status' | 'data' | 'finishDate'>
 >;
+
+
+/// META TYPES
+
+export const ApplicationStatusInfoSchema = z.object({
+	application: ApplicationSchema,
+	status: z.enum(['nothing','processing', 'completed', 'failed']),
+	operations: z.array(ProcessingOperationSchema).optional()
+}).describe('Информация о статусе обработки заявки');
+export type ApplicationStatusInfo = z.infer<typeof ApplicationStatusInfoSchema>;

@@ -1869,6 +1869,741 @@ Lines added: undefined, lines removed: 14
 
 ---
 
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/rest.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 16
+
+```diff
+@@ -130,20 +130,5 @@
+   */
+  export async function getOperations(id: string): Promise&lt;Result&lt;import('$lib/business/types.js').ProcessingOperation[], Error&gt;&gt; {
+- 	const responseResult = await fetchStable(&#96;${API_BASE}/applications/${id}/operations&#96;, {});
+- 
+- 	if (responseResult.isErr()) {
+- 		return err(responseResult.error);
+- 	}
+- 
+- 	const response = responseResult.value;
+- 	if (!response.ok) {
+- 		const error: { error?: string } = await response.json().catch(() =&gt; ({
+- 			error: &#96;HTTP ${response.status}: ${response.statusText}&#96;
+- 		}));
+- 		return err(new Error(error.error || &#96;HTTP ${response.status}: ${response.statusText}&#96;));
+- 	}
+- 
+- 	const data = await response.json();
+- 	return ok(data);
++ 	return fetchStableJson&lt;import('$lib/business/types.js').ProcessingOperation[]&gt;(&#96;${API_BASE}/applications/${id}/operations&#96;);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/rest.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 16
+
+```diff
+@@ -149,20 +149,5 @@
+   */
+  export async function getFileInfo(id: string): Promise&lt;Result&lt;FileInfo, Error&gt;&gt; {
+- 	const responseResult = await fetchStable(&#96;${API_BASE}/applications/${id}/file-info&#96;, {});
+- 
+- 	if (responseResult.isErr()) {
+- 		return err(responseResult.error);
+- 	}
+- 
+- 	const response = responseResult.value;
+- 	if (!response.ok) {
+- 		const error: { error?: string } = await response.json().catch(() =&gt; ({
+- 			error: &#96;HTTP ${response.status}: ${response.statusText}&#96;
+- 		}));
+- 		return err(new Error(error.error || &#96;HTTP ${response.status}: ${response.statusText}&#96;));
+- 	}
+- 
+- 	const data = await response.json();
+- 	return ok(data);
++ 	return fetchStableJson&lt;FileInfo&gt;(&#96;${API_BASE}/applications/${id}/file-info&#96;);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю ошибки линтера и финальный результат:
+
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/rest.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/rest.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Готово. Бойлерплейт убран.
+
+**Что сделано:**
+
+1. Создана функция `fetchStableJson<T>` — обертка над `fetchStable`, которая:
+   - Обрабатывает сетевые ошибки
+   - Проверяет HTTP статус (`response.ok`)
+   - Парсит JSON
+   - Возвращает типизированный `Result<T, Error>`
+
+2. Все функции API упрощены — вместо 10–15 строк бойлерплейта теперь 1–3 строки.
+
+3. Код стал читабельнее — каждая функция делает только свою работу, без повторяющейся обработки ошибок.
+
+**Примеры изменений:**
+- `getApplication` — с 17 строк до 1 строки
+- `getApplications` — с 29 строк до 13 строк (включая построение URL)
+- `detectProductType` — с 18 строк до 4 строк
+
+Ошибок линтера нет. Код готов к использованию.
+
+---
+
+_**User (2025-12-07 15:45Z)**_
+
+@src/lib/components/ApplicationList.svelte:10-14 для чего в коде компонента используется dispatch
+
+---
+
+_**Agent (model default, mode Ask)**_
+
+
+
+---
+
+
+Проверяю использование `dispatch` в компоненте:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationList.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю, где используется компонент и кто обрабатывает эти события:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "ApplicationList|on:select|on:upload|on:error" in "src" • 16 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src\lib\components\ApplicationList.svelte` | `<FileUpload on:upload=\{handleUpload\} on:error=\{handleError\} />` | L106 |
+| `src\lib\components\COMPONENTS.MD` | `- **`ApplicationList.svelte`** - Левая панель со списком заявок` | L13 |
+| `src\lib\components\COMPONENTS.MD` | `- Левая панель: `ApplicationList` (фиксированная ширина ~350px)` | L29 |
+| `src\lib\components\COMPONENTS.MD` | `import ApplicationList from '$lib/components/ApplicationList.svelte';` | L40 |
+| `src\lib\components\COMPONENTS.MD` | `<ApplicationList on:select=\{handleSelect\} />` | L50 |
+| `src\lib\components\COMPONENTS.MD` | `on:upload=\{(e) => handleFileUpload(e.detail.file)\}` | L98 |
+| `src\lib\components\COMPONENTS.MD` | `on:error=\{(e) => showError(e.detail.message)\}` | L99 |
+| `src\lib\components\COMPONENTS.MD` | `### `ApplicationList.svelte`` | L118 |
+| `src\lib\components\COMPONENTS.MD` | `<ApplicationList` | L146 |
+| `src\lib\components\COMPONENTS.MD` | `on:select=\{(e) => handleSelect(e.detail.application)\}` | L147 |
+| `src\lib\components\COMPONENTS.MD` | `on:upload=\{(e) => handleUpload(e.detail.application)\}` | L148 |
+| `src\lib\components\COMPONENTS.MD` | `on:error=\{(e) => showError(e.detail.message)\}` | L149 |
+| `src\lib\components\COMPONENTS.MD` | `import ApplicationList from '$lib/components/ApplicationList.svelte';` | L540 |
+| `src\lib\components\COMPONENTS.MD` | `<ApplicationList on:select=\{handleSelect\} on:upload=\{handleUpload\} />` | L557 |
+| `src\routes\+page.svelte` | `import ApplicationList from '$lib/components/ApplicationList.svelte';` | L2 |
+| `src\routes\+page.svelte` | `<ApplicationList on:select=\{handleSelect\} on:upload=\{handleUpload\} />` | L19 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/routes/+page.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+`dispatch` используется для отправки событий от дочернего компонента родительскому.
+
+**Назначение `dispatch` в `ApplicationList.svelte`:**
+
+1. `select` (строка 74) — при выборе заявки из списка. Родитель (`+page.svelte`) получает выбранную заявку и передает её в `ApplicationDetails`.
+
+2. `upload` (строка 61) — после успешной загрузки нового файла. Родитель обновляет состояние, чтобы показать новую заявку в деталях.
+
+3. `error` (строка 67) — при ошибке. Родитель может показать уведомление или обработать ошибку.
+
+**Как это работает:**
+
+В `ApplicationList.svelte`:
+```typescript
+dispatch('select', { application }); // Отправка события
+```
+
+В родительском компоненте `+page.svelte`:
+```svelte
+<ApplicationList 
+  on:select={handleSelect} 
+  on:upload={handleUpload} 
+/>
+```
+
+Это паттерн Svelte для коммуникации между компонентами: дочерний компонент отправляет события, родитель их обрабатывает и обновляет состояние приложения.
+
+---
+
+_**User (2025-12-07 15:45Z)**_
+
+@src/lib/components/ApplicationList.svelte в этом компоненте переведи код на использование applicationsStatusInfo, т.к. оно содержит и операции и заявку и статус
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю структуру `ApplicationStatusInfo` и способы получения данных:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "ApplicationStatusInfo|getApplicationStatusInfo" • 10 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `.\src\lib\components\ApplicationList.svelte` | `getApplicationStatusInfo` | L7 |
+| `.\src\lib\components\ApplicationList.svelte` | `import type \{ Application, ApplicationStatusInfo \} from '$lib/business/types.js';` | L9 |
+| `.\src\lib\components\ApplicationList.svelte` | `let applicationsStatusInfo: ApplicationStatusInfo[] = [];` | L22 |
+| `.\src\lib\components\ApplicationList.svelte` | `async function getStatus(application: Application): Promise<Result<ApplicationStatusInfo, Error>> \{` | L96 |
+| `.\src\lib\components\ApplicationList.svelte` | `const statusInfo = await getApplicationStatusInfo(application.id);` | L97 |
+| `.\src\lib\business\rest.ts` | `ApplicationStatusInfo` | L8 |
+| `.\src\lib\business\rest.ts` | `export async function getApplicationStatusInfo(id: string): Promise<Result<ApplicationStatusInfo, Error>> \{` | L158 |
+| `.\src\lib\business\rest.ts` | `status: status as ApplicationStatusInfo['status'],` | L185 |
+| `.\src\lib\business\types.ts` | `export const ApplicationStatusInfoSchema = z.object(\{` | L112 |
+| `.\src\lib\business\types.ts` | `export type ApplicationStatusInfo = z.infer<typeof ApplicationStatusInfoSchema>;` | L117 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/types.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/rest.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю, есть ли API для получения списка статусов, или нужно загружать их отдельно:
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "applications.*status|status.*applications" in "src/routes/api" • 0 matches</summary>
+
+Output mode: content
+
+
+_No matches found_
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Перевожу компонент на использование `applicationsStatusInfo`: загружаю статусы для всех заявок и обновляю шаблон.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -11,5 +11,5 @@
+  	import EmptyState from './EmptyState.svelte';
+  	import { createEventDispatcher } from 'svelte';
+- 	import { Err, ok, Ok, type Result } from 'neverthrow';
++ 	import { Err, ok, type Result } from 'neverthrow';
+  
+  	const dispatch = createEventDispatcher&lt;{
+```
+
+**Chunk 2**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -19,5 +19,4 @@
+  	}&gt;();
+  
+- 	let applications: Application[] = [];
+  	let applicationsStatusInfo: ApplicationStatusInfo[] = [];
+  	let selectedId: string | null = null;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 27, lines removed: 4
+
+```diff
+@@ -40,10 +40,33 @@
+  		error = null;
+  		const applicationsResult = await getApplications();
+- 		if (hasErr(applicationsResult)) return;
+- 		applications = applicationsResult.value;
++ 		if (hasErr(applicationsResult)) {
++ 			isLoading = false;
++ 			return;
++ 		}
++ 
++ 		// Загружаем статус для каждой заявки параллельно
++ 		const statusInfoResults = await Promise.all(
++ 			applicationsResult.value.map((app) =&gt; getApplicationStatusInfo(app.id))
++ 		);
++ 
++ 		applicationsStatusInfo = statusInfoResults
++ 			.map((result) =&gt; {
++ 				if (result.isErr()) {
++ 					// Если не удалось загрузить статус, создаем базовую информацию
++ 					return {
++ 						application: applicationsResult.value.find((a) =&gt; a.id === result.error.message) || applicationsResult.value[0],
++ 						status: 'nothing' as const,
++ 						operations: []
++ 					};
++ 				}
++ 				return result.value;
++ 			})
++ 			.filter((info): info is ApplicationStatusInfo =&gt; info !== null);
++ 
+  		// Сортируем по дате загрузки (сверху самая поздняя)
+- 		applications.sort(
+- 			(a, b) =&gt; new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
++ 		applicationsStatusInfo.sort(
++ 			(a, b) =&gt; new Date(b.application.uploadDate).getTime() - new Date(a.application.uploadDate).getTime()
+  		);
++ 		isLoading = false;
+  	}
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 12, lines removed: 7
+
+```diff
+@@ -80,13 +80,18 @@
+  		error = null;
+  		const newApplicationResponse = await uploadApplication(file);
+- 		if (hasErr(newApplicationResponse)) return;
++ 		if (hasErr(newApplicationResponse)) {
++ 			isLoading = false;
++ 			return;
++ 		}
+  		// Обновляем список заявок
+  		await loadApplications();
+- 		// Загружаем полную заявку
+- 		const fullApplication = await getApplication(newApplicationResponse.value.id);
+- 		if (hasErr(fullApplication)) return;
+- 		selectApplication(fullApplication.value.id);
+- 
+- 		dispatch('upload', { application: fullApplication.value });
++ 		// Находим загруженную заявку в списке
++ 		const uploadedStatusInfo = applicationsStatusInfo.find(
++ 			(info) =&gt; info.application.id === newApplicationResponse.value.id
++ 		);
++ 		if (uploadedStatusInfo) {
++ 			selectApplication(uploadedStatusInfo.application.id);
++ 			dispatch('upload', { application: uploadedStatusInfo.application });
++ 		}
+  		isLoading = false;
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 3
+
+```diff
+@@ -104,7 +104,7 @@
+  	function selectApplication(id: string) {
+  		selectedId = id;
+- 		const application = applications.find((app) =&gt; app.id === id);
+- 		if (application) {
+- 			dispatch('select', { application });
++ 		const statusInfo = applicationsStatusInfo.find((info) =&gt; info.application.id === id);
++ 		if (statusInfo) {
++ 			dispatch('select', { application: statusInfo.application });
+  		}
+  	}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 12, lines removed: 4
+
+```diff
+@@ -121,8 +121,16 @@
+  	}
+  
+- 	async function getStatus(application: Application): Promise&lt;Result&lt;ApplicationStatusInfo, Error&gt;&gt; {
+- 		const statusInfo = await getApplicationStatusInfo(application.id);
+- 		if (hasErr(statusInfo)) return statusInfo;
+- 		return ok(statusInfo.value);
++ 	function getStatusText(status: ApplicationStatusInfo['status']): string {
++ 		switch (status) {
++ 			case 'completed':
++ 				return 'Обработана';
++ 			case 'processing':
++ 				return 'Обрабатывается';
++ 			case 'failed':
++ 				return 'Ошибка';
++ 			case 'nothing':
++ 			default:
++ 				return 'Новая';
++ 		}
+  	}
+  &lt;/script&gt;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 10, lines removed: 8
+
+```diff
+@@ -152,19 +152,21 @@
+  		{#if isLoading}
+  			&lt;div class="loading"&gt;Загрузка...&lt;/div&gt;
+- 		{:else if applications.length === 0}
++ 		{:else if applicationsStatusInfo.length === 0}
+  			&lt;EmptyState message="Нет загруженных заявок" /&gt;
+  		{:else}
+  			&lt;div class="applications"&gt;
+- 				{#each applications as application (application.id)}
++ 				{#each applicationsStatusInfo as statusInfo (statusInfo.application.id)}
+  					&lt;button
+  						class="application-item"
+- 						class:selected={selectedId === application.id}
+- 						on:click={() =&gt; selectApplication(application.id)}
++ 						class:selected={selectedId === statusInfo.application.id}
++ 						class:processed={statusInfo.status === 'completed'}
++ 						class:failed={statusInfo.status === 'failed'}
++ 						on:click={() =&gt; selectApplication(statusInfo.application.id)}
+  					&gt;
+- 						&lt;div class="application-name"&gt;{application.originalFilename}&lt;/div&gt;
++ 						&lt;div class="application-name"&gt;{statusInfo.application.originalFilename}&lt;/div&gt;
+  						&lt;div class="application-meta"&gt;
+- 							&lt;span class="date"&gt;{formatDate(application.uploadDate)}&lt;/span&gt;
+- 							&lt;span class="status" class:processed={application.processingEndDate}&gt;
+- 								{getStatus(application).value.status}
++ 							&lt;span class="date"&gt;{formatDate(statusInfo.application.uploadDate)}&lt;/span&gt;
++ 							&lt;span class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}&gt;
++ 								{getStatusText(statusInfo.status)}
+  							&lt;/span&gt;
+  						&lt;/div&gt;
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: undefined
+
+```diff
+@@ -281,4 +281,13 @@
+  		background: var(--color-status-processed);
+  	}
++ 
++ 	.status.failed {
++ 		background: var(--color-error-bg);
++ 		color: var(--color-error);
++ 	}
++ 
++ 	.application-item.failed {
++ 		border-left-color: var(--color-error);
++ 	}
+  &lt;/style&gt;
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю обработку ошибок при загрузке статусов:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationList.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю обработку ошибок: сохраняю индекс заявки при маппинге для корректного сопоставления результата.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/components/ApplicationList.svelte</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: 3
+
+```diff
+@@ -47,13 +47,15 @@
+  		// Загружаем статус для каждой заявки параллельно
+  		const statusInfoResults = await Promise.all(
+- 			applicationsResult.value.map((app) =&gt; getApplicationStatusInfo(app.id))
++ 			applicationsResult.value.map((app, index) =&gt; 
++ 				getApplicationStatusInfo(app.id).then(result =&gt; ({ result, index, app }))
++ 			)
+  		);
+  
+  		applicationsStatusInfo = statusInfoResults
+- 			.map((result) =&gt; {
++ 			.map(({ result, app }) =&gt; {
+  				if (result.isErr()) {
+  					// Если не удалось загрузить статус, создаем базовую информацию
+  					return {
+- 						application: applicationsResult.value.find((a) =&gt; a.id === result.error.message) || applicationsResult.value[0],
++ 						application: app,
+  						status: 'nothing' as const,
+  						operations: []
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/components/ApplicationList.svelte`
+
+Lint results
+
+Lint errors for `src/lib/components/ApplicationList.svelte`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'getApplication' is declared but its value is never read. | 6:3-6:17 | DIAGNOSTIC_SEVERITY_HINT |
+| 'ok' is declared but its value is never read. | 13:16-13:18 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю финальный результат:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/components/ApplicationList.svelte</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Удаляю неиспользуемые импорты:
+
+
+---
+
 <tool-use data-tool-type="unknown" data-tool-name="search_replace">
 <details>
 <summary>Tool use: **search_replace**</summary>
@@ -1878,14 +2613,14 @@ Parameters:
 
 ```json
 {
-  "relativeWorkspacePath": "src/lib/business/rest.ts"
+  "relativeWorkspacePath": "src/lib/components/ApplicationList.svelte"
 }
 ```
 Additional data:
 
 ```json
 {
-  "codeblockId": "3baaefb2-3b4a-44bb-8a78-23f7f54aeb15"
+  "codeblockId": "9f2ec54e-1b5f-4a10-827b-b02af5130e73"
 }
 ```
 User decision: **accepted**
@@ -1910,9 +2645,9 @@ Status: **loading**
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<tool-use data-tool-type="unknown" data-tool-name="search_replace">
 <details>
-<summary>Tool use: **read_lints**</summary>
+<summary>Tool use: **search_replace**</summary>
 
 Status: **loading**
 

@@ -4,7 +4,8 @@
 
 import type {
 	Application,
-	ApplicationFilters
+	ApplicationFilters,
+	ApplicationStatusInfo
 } from '$lib/business/types.js';
 import type { CreateApplicationResponse } from '$lib/api/types.js';
 import { Result, ok, err } from 'neverthrow';
@@ -149,4 +150,39 @@ export interface FileInfo {
  */
 export async function getFileInfo(id: string): Promise<Result<FileInfo, Error>> {
 	return fetchStableJson<FileInfo>(`${API_BASE}/applications/${id}/file-info`);
+}
+
+/**
+ * Получение информации о статусе обработки заявки
+ */
+export async function getApplicationStatusInfo(id: string): Promise<Result<ApplicationStatusInfo, Error>> {
+	const applicationResult = await getApplication(id);
+	if (applicationResult.isErr()) {
+		return err(applicationResult.error);
+	}
+
+	const operationsResult = await getOperations(id);
+	if (operationsResult.isErr()) {
+		return err(operationsResult.error);
+	}
+
+	let status = 'nothing';
+	if (operationsResult.value.length > 0) {
+		let completedOperations = 0;
+		for (const operation of operationsResult.value) {
+			if (operation.status === 'completed') {
+				completedOperations++;
+			}
+		}
+		if (completedOperations === operationsResult.value.length) {
+			status = 'completed';
+		}else{
+			status = 'processing';
+		}
+	}
+	return ok({
+		application: applicationResult.value,
+		status: status as ApplicationStatusInfo['status'],
+		operations: operationsResult.value
+	});
 }
