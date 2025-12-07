@@ -79,6 +79,21 @@ export function getFilePath(applicationId: string): Result<string, Error> {
 	return ok(join(applicationDir, file));
 }
 
+/**
+ * Возвращает имя файла с расширением из полного пути
+ * @param path - Полный путь к файлу
+ * @returns Имя файла с расширением
+ */
+export function getFileNameWithExtension(path: string): string {
+	const parts = path.split(/[\\/]/);
+	return parts[parts.length - 1];
+}
+
+/**
+ * Возвращает имя файла без расширения из полного пути
+ * @param path - Полный путь к файлу
+ * @returns Имя файла без расширения
+ */
 export function getFileNameWithoutExtension(path: string): string {
 	return path.split('.').slice(0, -1).join('.');
 }
