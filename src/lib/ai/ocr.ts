@@ -93,6 +93,7 @@ export async function extractText(applicationId: string, fileInfo: FileInfo): Pr
 			return err(new OCRError('Не поддерживаемый тип файла'));
 	}
 
+	// Создаем операцию извлечения текста. Если она уже существует, то получаем ошибку.
 	const processingOperationResult = createOperation(applicationId, 'extractText');
 	if (processingOperationResult.isErr())
 		return err(processingOperationResult.error);

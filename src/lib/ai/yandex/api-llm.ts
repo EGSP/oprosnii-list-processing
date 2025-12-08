@@ -114,7 +114,7 @@ export const MessageSchema = z.object({
 export const FunctionToolSchema = z.object({
 	name: z.string(),
 	description: z.string().optional(),
-	parameters: z.record(z.unknown()).optional(),
+	parameters: z.record(z.string(), z.unknown()).optional(),
 	strict: z.boolean().optional()
 });
 
@@ -145,7 +145,7 @@ export const CompletionRequestSchema = z.object({
 	tools: z.array(ToolSchema).optional(),
 	toolChoice: ToolChoiceSchema.optional(),
 	jsonObject: z.boolean().optional(),
-	jsonSchema: z.record(z.unknown()).optional(),
+	jsonSchema: z.record(z.string(), z.unknown()).optional(),
 	parallelToolCalls: z.boolean().optional()
 });
 

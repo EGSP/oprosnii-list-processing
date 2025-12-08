@@ -8,7 +8,11 @@
  */
 
 import type { ProcessingOperation } from "$lib/business/types";
+import { createOperation, getInstructionFileNamesByNameAndType, ProductTypeSchema, readApplicationFile, readInstruction } from "$lib/storage";
 import { err, ok, type Result } from "neverthrow";
+import { aiConfig } from "./config";
+import { getModelUri, type CompletionRequest } from "./yandex/api-llm";
+import z from "zod";
 
 
 export class LLMError extends Error {
@@ -45,3 +49,44 @@ function getYandexLLMData(data: { service: string;[key: string]: any }): Result<
 	return ok(data.data);
 }
 
+function getSystemMessage(instruction: string): string{
+	return `
+		Ты являешься помощником для определения типа продукции на основе текста заявки.
+		Ты должен определить тип продукции на основе текста заявки.
+		Ты должен вернуть тип продукции в формате JSON.
+		Инструкция по определению типа продукции:
+		${instruction}`
+}
+
+export async function resolveProductType(applicationId: string, text: string): Promise<Result<void, Error>> {
+	const config = aiConfig.yandexGPT;
+
+	const processingOperationResult = createOperation(applicationId, 'resolveProductType');
+	if (processingOperationResult.isErr())
+		return err(processingOperationResult.error);
+	
+	const instructionsResult = getInstructionFileNamesByNameAndType('Определение типа продукции', 'product-type');
+	if (instructionsResult.isErr())
+		return err(instructionsResult.error);
+	const instructions = instructionsResult.value;
+	const instructionResult = readInstruction(instructions[0]);
+	if (instructionResult.isErr())
+		return err(instructionResult.error);
+	const instruction = instructionResult.value;
+	const completionRequest: CompletionRequest = {
+		modelUri: getModelUri(config.folderId!, 'yandexgpt-lite'),
+		messages: [
+			{
+				role: 'system',
+				text: getSystemMessage(JSON.stringify(instruction))
+			},
+			{
+				role: 'user',
+				text: text
+			}
+		],
+	    jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema) }
+	}
+}
+
+	

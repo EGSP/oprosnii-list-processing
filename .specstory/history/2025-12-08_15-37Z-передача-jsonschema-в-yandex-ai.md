@@ -2462,3 +2462,1002 @@ Output mode: content
 
 ---
 
+_**User (2025-12-08 15:52Z)**_
+
+@src/lib/storage/instructions.ts напиши функции для чтения содержимого файлов инструкций. 
+
+
+
+Инструкциям создай схему, в которой будет всегда name и type (string, string). Также инструкции будут содержать любые другие параметры.
+
+
+
+Нужно создать функции:
+
+- Получение массива имен файлов по имени инструкции
+
+- Получения массива имен файлов по имени инструкции и типу.
+
+- Чтения содержимого инструкции, приводимого к схеме инструкции, через передаваемый параметр наименования файла
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю структуру проекта и существующие паттерны работы с файлами, чтобы реализовать функции для работы с инструкциями.
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/files.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/index.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/config.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="list_dir">
+<details>
+            <summary>Tool use: **list_dir** • Listed directory undefined • **0** results</summary>
+        
+No results found
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+
+</tool-use>
+
+---
+
+
+
+---
+
+
+Изучаю структуру ТУ для понимания паттерна:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: data/tu/example.json</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "How are TU files read and validated?" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `src/lib/config.ts` | L34 |
+| `PROJECT.md` | L27 |
+| `data/tu/example.json` | L18 |
+| `PROJECT.md` | L24-63 |
+| `README.md` | L66 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `package.json` | L36 |
+| `tsconfig.json` | L16 |
+| `.eslintrc.cjs` | L29 |
+| `README.md` | L64-74 |
+| `.prettierrc` | L8 |
+| `.gitignore` | L14 |
+| `svelte.config.js` | L11 |
+| `vite.config.ts` | L11 |
+| `src/app.html` | L12 |
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "tuDirectory|instructionsDirectory" • 2 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `.\src\lib\config.ts` | `tuDirectory: 'data/tu',` | L27 |
+| `.\src\lib\config.ts` | `instructionsDirectory: 'data/instructions',` | L28 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Создаю функции для работы с инструкциями:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="write">
+
+<details><summary>Tool use: **write** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 207, lines removed: 1
+
+```diff
+@@ -1,1 +1,207 @@
+- 
++ /**
++  * Модуль для работы с файлами инструкций
++  *
++  * Инструкции хранятся в директории data/instructions в формате JSON.
++  * Каждая инструкция должна содержать обязательные поля: name (string) и type (string),
++  * а также может содержать любые другие параметры.
++  */
++ 
++ import { join } from 'path';
++ import { readFileSync, readdirSync, existsSync } from 'fs';
++ import { z } from 'zod';
++ import { config } from '../config.js';
++ import { err, ok, type Result } from 'neverthrow';
++ import { StorageError } from './errors.js';
++ 
++ /**
++  * Схема валидации для инструкции
++  * Обязательные поля: name и type (оба string)
++  * Дополнительные поля разрешены через passthrough
++  */
++ export const InstructionSchema = z
++ 	.object({
++ 		name: z.string().describe('Название инструкции'),
++ 		type: z.string().describe('Тип инструкции')
++ 	})
++ 	.passthrough();
++ 
++ export type Instruction = z.infer&lt;typeof InstructionSchema&gt;;
++ 
++ /**
++  * Получает путь к директории с инструкциями
++  */
++ function getInstructionsDirectory(): string {
++ 	return join(process.cwd(), config.instructionsDirectory);
++ }
++ 
++ /**
++  * Читает и парсит JSON файл инструкции
++  */
++ function readInstructionFile(filePath: string): Result&lt;unknown, Error&gt; {
++ 	try {
++ 		if (!existsSync(filePath)) {
++ 			return err(new StorageError(&#96;Файл инструкции не найден: ${filePath}&#96;));
++ 		}
++ 
++ 		const fileContent = readFileSync(filePath, 'utf-8');
++ 		const jsonData = JSON.parse(fileContent);
++ 		return ok(jsonData);
++ 	} catch (error) {
++ 		if (error instanceof SyntaxError) {
++ 			return err(new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error.message}&#96;, error));
++ 		}
++ 		return err(
++ 			new StorageError(&#96;Ошибка чтения файла инструкции ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
++ 		);
++ 	}
++ }
++ 
++ /**
++  * Валидирует данные инструкции через Zod схему
++  */
++ function validateInstruction(data: unknown): Result&lt;Instruction, Error&gt; {
++ 	try {
++ 		const instruction = InstructionSchema.parse(data);
++ 		return ok(instruction);
++ 	} catch (error) {
++ 		return err(
++ 			new StorageError(
++ 				&#96;Ошибка валидации инструкции: ${error instanceof Error ? error.message : String(error)}&#96;,
++ 				error as Error
++ 			)
++ 		);
++ 	}
++ }
++ 
++ /**
++  * Получает массив имен файлов инструкций по имени инструкции
++  *
++  * @param name - Название инструкции (поле name в JSON)
++  * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем
++  */
++ export function getInstructionFileNames(name: string): Result&lt;string[], Error&gt; {
++ 	try {
++ 		const instructionsDir = getInstructionsDirectory();
++ 
++ 		if (!existsSync(instructionsDir)) {
++ 			return ok([]); // Директория не существует - возвращаем пустой массив
++ 		}
++ 
++ 		const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++ 
++ 		const matchingFiles: string[] = [];
++ 
++ 		for (const file of files) {
++ 			const filePath = join(instructionsDir, file);
++ 			const readResult = readInstructionFile(filePath);
++ 
++ 			if (readResult.isErr()) {
++ 				continue; // Пропускаем файлы с ошибками чтения
++ 			}
++ 
++ 			const validateResult = validateInstruction(readResult.value);
++ 
++ 			if (validateResult.isErr()) {
++ 				continue; // Пропускаем файлы с ошибками валидации
++ 			}
++ 
++ 			const instruction = validateResult.value;
++ 
++ 			if (instruction.name === name) {
++ 				matchingFiles.push(file);
++ 			}
++ 		}
++ 
++ 		return ok(matchingFiles);
++ 	} catch (error) {
++ 		return err(
++ 			new StorageError(
++ 				&#96;Ошибка при получении списка файлов инструкций: ${error instanceof Error ? error.message : String(error)}&#96;,
++ 				error as Error
++ 			)
++ 		);
++ 	}
++ }
++ 
++ /**
++  * Получает массив имен файлов инструкций по имени инструкции и типу
++  *
++  * @param name - Название инструкции (поле name в JSON)
++  * @param type - Тип инструкции (поле type в JSON)
++  * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
++  */
++ export function getInstructionFileNamesByNameAndType(name: string, type: string): Result&lt;string[], Error&gt; {
++ 	try {
++ 		const instructionsDir = getInstructionsDirectory();
++ 
++ 		if (!existsSync(instructionsDir)) {
++ 			return ok([]); // Директория не существует - возвращаем пустой массив
++ 		}
++ 
++ 		const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++ 
++ 		const matchingFiles: string[] = [];
++ 
++ 		for (const file of files) {
++ 			const filePath = join(instructionsDir, file);
++ 			const readResult = readInstructionFile(filePath);
++ 
++ 			if (readResult.isErr()) {
++ 				continue; // Пропускаем файлы с ошибками чтения
++ 			}
++ 
++ 			const validateResult = validateInstruction(readResult.value);
++ 
++ 			if (validateResult.isErr()) {
++ 				continue; // Пропускаем файлы с ошибками валидации
++ 			}
++ 
++ 			const instruction = validateResult.value;
++ 
++ 			if (instruction.name === name &amp;&amp; instruction.type === type) {
++ 				matchingFiles.push(file);
++ 			}
++ 		}
++ 
++ 		return ok(matchingFiles);
++ 	} catch (error) {
++ 		return err(
++ 			new StorageError(
++ 				&#96;Ошибка при получении списка файлов инструкций: ${error instanceof Error ? error.message : String(error)}&#96;,
++ 				error as Error
++ 			)
++ 		);
++ 	}
++ }
++ 
++ /**
++  * Читает содержимое инструкции из файла и валидирует его через схему
++  *
++  * @param filename - Имя файла инструкции (с расширением .json или без)
++  * @returns Валидированная инструкция
++  */
++ export function readInstruction(filename: string): Result&lt;Instruction, Error&gt; {
++ 	try {
++ 		const instructionsDir = getInstructionsDirectory();
++ 
++ 		// Добавляем расширение .json, если его нет
++ 		const normalizedFilename = filename.endsWith('.json') ? filename : &#96;${filename}.json&#96;;
++ 		const filePath = join(instructionsDir, normalizedFilename);
++ 
++ 		const readResult = readInstructionFile(filePath);
++ 
++ 		if (readResult.isErr()) {
++ 			return err(readResult.error);
++ 		}
++ 
++ 		return validateInstruction(readResult.value);
++ 	} catch (error) {
++ 		return err(
++ 			new StorageError(
++ 				&#96;Ошибка при чтении инструкции: ${error instanceof Error ? error.message : String(error)}&#96;,
++ 				error as Error
++ 			)
++ 		);
++ 	}
++ }
++ 
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/errors.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| '(): ZodObject<\{ name: ZodString; type: ZodString; \}, $loose>' is deprecated. | 26:3-26:14 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Добавляю экспорт функций в `index.ts`:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/index.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/index.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: undefined
+
+```diff
+@@ -8,4 +8,5 @@
+  export * from './files.js';
+  export * from './processingOperations.js';
++ export * from './instructions.js';
+  export * from './errors.js';
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| '(): ZodObject<\{ name: ZodString; type: ZodString; \}, $loose>' is deprecated. | 26:3-26:14 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Создан модуль для работы с инструкциями. Реализовано:
+
+## Созданные компоненты
+
+### 1. Схема Zod для инструкции
+- Обязательные поля: `name` (string) и `type` (string)
+- Используется `.passthrough()` для разрешения дополнительных полей
+
+### 2. Функции
+
+**`getInstructionFileNames(name: string)`**
+- Возвращает массив имен файлов (с расширением `.json`), содержащих инструкции с указанным `name`
+- Если директория не существует, возвращает пустой массив
+
+**`getInstructionFileNamesByNameAndType(name: string, type: string)`**
+- Возвращает массив имен файлов, содержащих инструкции с указанными `name` и `type`
+- Если директория не существует, возвращает пустой массив
+
+**`readInstruction(filename: string)`**
+- Читает содержимое инструкции из файла по имени
+- Автоматически добавляет расширение `.json`, если его нет
+- Валидирует данные через Zod схему
+- Возвращает валидированную инструкцию или ошибку
+
+### Особенности реализации
+
+- Используется `Result` из `neverthrow` для обработки ошибок
+- Ошибки оборачиваются в `StorageError`
+- Файлы с ошибками чтения или валидации пропускаются при поиске
+- Функции экспортированы через `src/lib/storage/index.ts`
+
+Код готов к использованию и соответствует паттернам проекта.
+
+---
+
+_**User (2025-12-08 15:52Z)**_
+
+Убери лишние try-catch
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Проверяю код и убираю лишние try-catch, используя Result из neverthrow:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/instructions.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Убираю лишние try-catch и использую `safeParse` для валидации:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: 6
+
+```diff
+@@ -61,15 +61,14 @@
+   */
+  function validateInstruction(data: unknown): Result&lt;Instruction, Error&gt; {
+- 	try {
+- 		const instruction = InstructionSchema.parse(data);
+- 		return ok(instruction);
+- 	} catch (error) {
++ 	const result = InstructionSchema.safeParse(data);
++ 	if (!result.success) {
+  		return err(
+  			new StorageError(
+- 				&#96;Ошибка валидации инструкции: ${error instanceof Error ? error.message : String(error)}&#96;,
+- 				error as Error
++ 				&#96;Ошибка валидации инструкции: ${result.error.message}&#96;,
++ 				result.error
+  			)
+  		);
+  	}
++ 	return ok(result.data);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 31
+
+```diff
+@@ -80,45 +80,36 @@
+   */
+  export function getInstructionFileNames(name: string): Result&lt;string[], Error&gt; {
+- 	try {
+- 		const instructionsDir = getInstructionsDirectory();
++ 	const instructionsDir = getInstructionsDirectory();
+  
+- 		if (!existsSync(instructionsDir)) {
+- 			return ok([]); // Директория не существует - возвращаем пустой массив
+- 		}
++ 	if (!existsSync(instructionsDir)) {
++ 		return ok([]); // Директория не существует - возвращаем пустой массив
++ 	}
+  
+- 		const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++ 	const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
+  
+- 		const matchingFiles: string[] = [];
++ 	const matchingFiles: string[] = [];
+  
+- 		for (const file of files) {
+- 			const filePath = join(instructionsDir, file);
+- 			const readResult = readInstructionFile(filePath);
++ 	for (const file of files) {
++ 		const filePath = join(instructionsDir, file);
++ 		const readResult = readInstructionFile(filePath);
+  
+- 			if (readResult.isErr()) {
+- 				continue; // Пропускаем файлы с ошибками чтения
+- 			}
++ 		if (readResult.isErr()) {
++ 			continue; // Пропускаем файлы с ошибками чтения
++ 		}
+  
+- 			const validateResult = validateInstruction(readResult.value);
++ 		const validateResult = validateInstruction(readResult.value);
+  
+- 			if (validateResult.isErr()) {
+- 				continue; // Пропускаем файлы с ошибками валидации
+- 			}
++ 		if (validateResult.isErr()) {
++ 			continue; // Пропускаем файлы с ошибками валидации
++ 		}
+  
+- 			const instruction = validateResult.value;
++ 		const instruction = validateResult.value;
+  
+- 			if (instruction.name === name) {
+- 				matchingFiles.push(file);
+- 			}
+- 		}
++ 		if (instruction.name === name) {
++ 			matchingFiles.push(file);
++ 		}
++ 	}
+  
+- 		return ok(matchingFiles);
+- 	} catch (error) {
+- 		return err(
+- 			new StorageError(
+- 				&#96;Ошибка при получении списка файлов инструкций: ${error instanceof Error ? error.message : String(error)}&#96;,
+- 				error as Error
+- 			)
+- 		);
+- 	}
++ 	return ok(matchingFiles);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 31
+
+```diff
+@@ -122,45 +122,36 @@
+   */
+  export function getInstructionFileNamesByNameAndType(name: string, type: string): Result&lt;string[], Error&gt; {
+- 	try {
+- 		const instructionsDir = getInstructionsDirectory();
++ 	const instructionsDir = getInstructionsDirectory();
+  
+- 		if (!existsSync(instructionsDir)) {
+- 			return ok([]); // Директория не существует - возвращаем пустой массив
+- 		}
++ 	if (!existsSync(instructionsDir)) {
++ 		return ok([]); // Директория не существует - возвращаем пустой массив
++ 	}
+  
+- 		const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++ 	const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
+  
+- 		const matchingFiles: string[] = [];
++ 	const matchingFiles: string[] = [];
+  
+- 		for (const file of files) {
+- 			const filePath = join(instructionsDir, file);
+- 			const readResult = readInstructionFile(filePath);
++ 	for (const file of files) {
++ 		const filePath = join(instructionsDir, file);
++ 		const readResult = readInstructionFile(filePath);
+  
+- 			if (readResult.isErr()) {
+- 				continue; // Пропускаем файлы с ошибками чтения
+- 			}
++ 		if (readResult.isErr()) {
++ 			continue; // Пропускаем файлы с ошибками чтения
++ 		}
+  
+- 			const validateResult = validateInstruction(readResult.value);
++ 		const validateResult = validateInstruction(readResult.value);
+  
+- 			if (validateResult.isErr()) {
+- 				continue; // Пропускаем файлы с ошибками валидации
+- 			}
++ 		if (validateResult.isErr()) {
++ 			continue; // Пропускаем файлы с ошибками валидации
++ 		}
+  
+- 			const instruction = validateResult.value;
++ 		const instruction = validateResult.value;
+  
+- 			if (instruction.name === name &amp;&amp; instruction.type === type) {
+- 				matchingFiles.push(file);
+- 			}
+- 		}
++ 		if (instruction.name === name &amp;&amp; instruction.type === type) {
++ 			matchingFiles.push(file);
++ 		}
++ 	}
+  
+- 		return ok(matchingFiles);
+- 	} catch (error) {
+- 		return err(
+- 			new StorageError(
+- 				&#96;Ошибка при получении списка файлов инструкций: ${error instanceof Error ? error.message : String(error)}&#96;,
+- 				error as Error
+- 			)
+- 		);
+- 	}
++ 	return ok(matchingFiles);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 18
+
+```diff
+@@ -163,26 +163,17 @@
+   */
+  export function readInstruction(filename: string): Result&lt;Instruction, Error&gt; {
+- 	try {
+- 		const instructionsDir = getInstructionsDirectory();
++ 	const instructionsDir = getInstructionsDirectory();
+  
+- 		// Добавляем расширение .json, если его нет
+- 		const normalizedFilename = filename.endsWith('.json') ? filename : &#96;${filename}.json&#96;;
+- 		const filePath = join(instructionsDir, normalizedFilename);
++ 	// Добавляем расширение .json, если его нет
++ 	const normalizedFilename = filename.endsWith('.json') ? filename : &#96;${filename}.json&#96;;
++ 	const filePath = join(instructionsDir, normalizedFilename);
+  
+- 		const readResult = readInstructionFile(filePath);
++ 	const readResult = readInstructionFile(filePath);
+  
+- 		if (readResult.isErr()) {
+- 			return err(readResult.error);
+- 		}
++ 	if (readResult.isErr()) {
++ 		return err(readResult.error);
++ 	}
+  
+- 		return validateInstruction(readResult.value);
+- 	} catch (error) {
+- 		return err(
+- 			new StorageError(
+- 				&#96;Ошибка при чтении инструкции: ${error instanceof Error ? error.message : String(error)}&#96;,
+- 				error as Error
+- 			)
+- 		);
+- 	}
++ 	return validateInstruction(readResult.value);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| '(): ZodObject<\{ name: ZodString; type: ZodString; \}, $loose>' is deprecated. | 26:3-26:14 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Убрал лишние try-catch. Изменения:
+
+1. **`validateInstruction`** — использует `safeParse` вместо `parse`, исключения не выбрасываются.
+2. **`getInstructionFileNames`** — убран try-catch, все операции возвращают `Result`.
+3. **`getInstructionFileNamesByNameAndType`** — убран try-catch, все операции возвращают `Result`.
+4. **`readInstruction`** — убран try-catch, все операции возвращают `Result`.
+
+Оставлен try-catch только в `readInstructionFile`, так как `readFileSync` и `JSON.parse` могут выбрасывать исключения.
+
+Код стал проще и соответствует паттернам проекта с использованием `Result` из neverthrow.
+
+---
+
+_**User (2025-12-08 15:52Z)**_
+
+  "jsonSchema": {
+
+
+
+    "schema": "object"
+
+  },
+
+
+
+Какую схему нужно написать для этого поля?
+
+---
+
+_**Agent (model default, mode Ask)**_
+
+
+
+---
+
+
+Проверяю текущий код и пример инструкции, чтобы определить правильный формат JSON Schema:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/api-llm.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: data/instructions/Определение_типа_продукции.json</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "How is jsonSchema used in Yandex LLM completion request?" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `PROJECT.md` | L24-63 |
+| `PROJECT.md` | L27 |
+| `data/tu/example.json` | L18 |
+| `README.md` | L66 |
+| `src/lib/config.ts` | L34 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `package.json` | L36 |
+| `tsconfig.json` | L16 |
+| `.prettierrc` | L8 |
+| `.eslintrc.cjs` | L29 |
+| `README.md` | L64-74 |
+| `src/app.html` | L12 |
+| `vite.config.ts` | L11 |
+| `.prettierignore` | L5 |
+| `svelte.config.js` | L11 |
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Поле `jsonSchema` должно содержать объект JSON Schema (не строку `"schema": "object"`). Формат:
+
+```json
+{
+  "jsonSchema": {
+    "type": "object",
+    "properties": {
+      "field1": {
+        "type": "string",
+        "description": "Описание поля"
+      },
+      "field2": {
+        "type": "number"
+      }
+    },
+    "required": ["field1"]
+  }
+}
+```
+
+В коде это должно быть:
+
+```typescript
+jsonSchema: z.record(z.unknown()).optional(),
+```
+
+Или можно создать более строгую схему для JSON Schema:
+
+```typescript
+const JsonSchemaSchema = z.object({
+  type: z.string(),
+  properties: z.record(z.unknown()).optional(),
+  required: z.array(z.string()).optional(),
+  description: z.string().optional(),
+  // ... другие поля JSON Schema
+}).passthrough();
+
+export const CompletionRequestSchema = z.object({
+  // ...
+  jsonSchema: JsonSchemaSchema.optional(),
+  // ...
+});
+```
+
+Пример для вашей инструкции (определение типа продукции):
+
+```json
+{
+  "jsonSchema": {
+    "type": "object",
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Тип продукции"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Уровень уверенности"
+      },
+      "reasoning": {
+        "type": "string",
+        "description": "Обоснование выбора"
+      }
+    },
+    "required": ["type"]
+  }
+}
+```
+
+Если используете Zod-схему, можно конвертировать её в JSON Schema с помощью `zod-to-json-schema`:
+
+```typescript
+import { zodToJsonSchema } from 'zod-to-json-schema';
+import { ProductTypeSchema } from '$lib/business/types';
+
+const jsonSchema = zodToJsonSchema(ProductTypeSchema);
+// Затем передать в jsonSchema: jsonSchema as Record<string, unknown>
+```
+
+Нужно, чтобы я добавил более строгую типизацию для `jsonSchema` в схеме запроса?
+
+---
+

@@ -25,6 +25,7 @@ export const config = {
 
 	// Путь к файлам ТУ
 	tuDirectory: 'data/tu',
+	instructionsDirectory: 'data/instructions',
 
 	// Путь к базе данных
 	dbPath: 'data/db/applications.db',
