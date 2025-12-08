@@ -106,7 +106,6 @@ export type ProcessingOperationUpdate = Partial<
 	Pick<ProcessingOperation, 'status' | 'data' | 'finishDate'>
 >;
 
-
 /// META TYPES
 
 export const ApplicationStatusInfoSchema = z.object({

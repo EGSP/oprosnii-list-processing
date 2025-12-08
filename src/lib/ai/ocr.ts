@@ -8,12 +8,14 @@
  */
 
 import {
-	getOperation
+	createOperation,
+	updateOperation
 } from '../storage/processingOperations.js';
-import { logger } from '../utils/logger.js';
-import { callYandexOCR, checkYandexOCROperation } from './yandex/api-ocr.js';
+import { recognizeText, recognizeTextAsync, type YandexOCRMimeType, type YandexOCRRecognitionResult } from './yandex/api-ocr.js';
 import type { ProcessingOperation } from '../business/types.js';
 import { ok, Result, err } from 'neverthrow';
+import { readApplicationFile, type FileInfo } from '$lib/storage/files.js';
+import { aiConfig } from './config.js';
 
 export class OCRError extends Error {
 	constructor(
@@ -25,135 +27,109 @@ export class OCRError extends Error {
 	}
 }
 
-/**
- * Результат извлечения текста из файла
- */
-export type ExtractTextResult =
-	| { type: 'text'; text: string } // Текст извлечен синхронно
-	| { type: 'processing'; operationId: string }; // Текст обрабатывается асинхронно
+export function getOCRData(processingOperation: ProcessingOperation): Result<string, Error> {
+	if (processingOperation.status !== 'completed')
+		return err(new OCRError('Операция не завершена'));
 
-/**
- * Извлекает текст из файла
- * Возвращает явный тип результата: либо текст, либо флаг обработки
- *
- * @param applicationId - ID заявки
- * @param fileInfo - Информация о файле (buffer, mimeType, fileType, pageCount, filename)
- * @returns Результат извлечения текста с явным типом
- */
-export async function extractText(
-	applicationId: string,
-	fileInfo: {
-		buffer: Buffer;
-		mimeType: string;
-		fileType: 'image' | 'pdf' | 'docx' | 'xlsx' | 'unknown';
-		pageCount: number;
-		filename?: string;
+	const service = processingOperation.data.service;
+	if (!service)
+		return err(new OCRError('Не указан сервис'));
+
+	switch (service) {
+		case 'yandex':
+			return getYandexOCRData(processingOperation.data as { service: string;[key: string]: any });
+		default:
+			return err(new OCRError('Неизвестный сервис'));
 	}
-): Promise<Result<ExtractTextResult, Error>> {
-	const { buffer, mimeType, fileType, pageCount, filename } = fileInfo;
-
-	// Для локальных файлов (DOCX, XLSX) - извлекаем текст напрямую, операции не создаем
-	if (fileType === 'docx' || fileType === 'xlsx') {
-		logger.info('Извлечение текста из файла (локальное)', {
-			applicationId,
-			fileType,
-			filename
-		});
-
-		try {
-			let text: string;
-			if (fileType === 'docx') {
-				text = await extractTextFromDOCX(buffer);
-			} else {
-				text = await extractTextFromXLSX(buffer);
-			}
-
-			logger.info('Текст успешно извлечен из файла (локальное)', {
-				applicationId,
-				fileType,
-				textLength: text.length
-			});
-
-			return ok({ type: 'text', text });
-		} catch (error) {
-			logger.error('Ошибка при локальном извлечении текста', {
-				applicationId,
-				fileType,
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined
-			});
-			throw error;
-		}
-	}
-
-	// Для изображений и PDF используем YandexOCR (операция создается внутри callYandexOCR)
-	if (fileType === 'image' || fileType === 'pdf') {
-		logger.info('Извлечение текста через YandexOCR', {
-			applicationId,
-			fileType,
-			filename,
-			pageCount
-		});
-
-		const result = await callYandexOCR(applicationId, buffer, mimeType, pageCount);
-		if (result.isErr()) {
-			return err(new OCRError('Не удалось извлечь текст через YandexOCR', result.error));
-		}
-		return ok({ type: 'text', text: result.value.result?.text as string });
-
-	}
-
-	logger.error('Неподдерживаемый тип файла', {
-		applicationId,
-		mimeType,
-		filename: fileInfo.filename
-	});
-	throw new OCRError(
-		`Неподдерживаемый тип файла: ${mimeType}. Поддерживаются: изображения (PNG, JPG), PDF, DOCX, XLSX.`
-	);
 }
 
 /**
- * Проверяет статус асинхронной операции OCR
- * Для Yandex OCR проверяет статус у внешнего сервиса
- *
- * @param operationId - ID операции
- * @returns Обновленная операция или ошибка, если не найдена
+ * Получает данные из операции OCR Yandex
+ * @param data - Данные операции
+ * @returns Результат с текстом или ошибкой
  */
-export async function checkOCROperation(operationId: string): Promise<Result<ProcessingOperation, OCRError>> {
-	logger.debug('Проверка статуса OCR операции', { operationId });
+function getYandexOCRData(data: { service: string;[key: string]: any }): Result<string, Error> {
+	if (!data.service || data.service !== 'yandex')
+		return err(new OCRError('Неверный сервис'));
 
-	const operation = getOperation(operationId);
-	if (operation.isErr()) {
-		logger.warn('Операция не найдена', { operationId });
-		return err(new OCRError('Операция не найдена', operation.error));
+	const recognitionResult = data.recognitionResult as YandexOCRRecognitionResult;
+	if (!recognitionResult)
+		return err(new OCRError('Не указан результат распознавания'));
+
+	if (Array.isArray(recognitionResult)) {
+		const text = recognitionResult.map((item) => item.textAnnotation?.fullText).join('\n');
+		return ok(text)
+	} else {
+		const text = recognitionResult.textAnnotation.fullText as string;
+		return ok(text);
 	}
+}
 
-	// Если операция уже завершена, возвращаем как есть
-	if (operation.value.status === 'completed' || operation.value.status === 'failed') {
-		return ok(operation.value);
-	}
+export async function extractText(applicationId: string, fileInfo: FileInfo): Promise<Result<ProcessingOperation, Error>> {
+	const config = aiConfig.yandexOCR;
+	if (fileInfo.type !== 'pdf' && fileInfo.type !== 'image')
+		return err(new OCRError('Не поддерживаемый тип файла'));
 
-	// Проверяем статус в зависимости от провайдера
-	switch (operation.value.provider) {
-		case 'yandex': {
-			const updatedOperation = await checkYandexOCROperation(operation.value.id);
-			if (updatedOperation.isErr()) {
-				return err(new OCRError('Не удалось проверить статус асинхронной операции', updatedOperation.error));
-			}
-			return ok(updatedOperation.value);
-		}
+	const fileBufferResult = readApplicationFile(applicationId);
+	if (fileBufferResult.isErr())
+		return err(fileBufferResult.error);
+	const fileBuffer = fileBufferResult.value;
 
-		case 'local': {
-			// Локальные операции всегда синхронные, не требуют проверки
-			return operation;
-		}
+	const fileExtension = fileInfo.extension;
 
+	let yandexMimeType: YandexOCRMimeType;
+	switch (fileExtension) {
+		case 'pdf':
+			yandexMimeType = 'application/pdf';
+			break;
+		case 'jpg':
+		case 'jpeg':
+			yandexMimeType = 'image/jpeg';
+			break;
+		case 'png':
+			yandexMimeType = 'image/png';
+			break;
 		default:
-			logger.warn('Неизвестный провайдер OCR', {
-				operationId,
-				provider: operation.value.provider
-			});
-			return operation;
+			return err(new OCRError('Не поддерживаемый тип файла'));
+	}
+
+	const processingOperationResult = createOperation(applicationId, 'extractText');
+	if (processingOperationResult.isErr())
+		return err(processingOperationResult.error);
+	const processingOperation = processingOperationResult.value;
+
+	const needAsyncRecognition = fileInfo.pageCount > 1 && fileExtension === 'pdf';
+	if (needAsyncRecognition) {
+		const cloudOperationResult = await recognizeTextAsync(config.apiKey, fileBuffer, yandexMimeType, 'page')
+		if (cloudOperationResult.isErr())
+			return err(cloudOperationResult.error);
+		const cloudOperation = cloudOperationResult.value;
+
+		processingOperation.data.service = 'yandex';
+		processingOperation.data.cloudOperation = cloudOperation;
+		const updateOperationResult = updateOperation(processingOperation.id, {
+			data: processingOperation.data
+		})
+
+		if (updateOperationResult.isErr())
+			return err(updateOperationResult.error);
+		return ok(updateOperationResult.value);
+	} else {
+		const recognitionResultResult = await recognizeText(config.apiKey, fileBuffer, yandexMimeType)
+		if (recognitionResultResult.isErr())
+			return err(recognitionResultResult.error);
+		const recognitionResult = recognitionResultResult.value;
+
+		processingOperation.status = 'completed';
+		processingOperation.data.service = 'yandex';
+		processingOperation.data.recognitionResult = recognitionResult;
+		const updateOperationResult = updateOperation(processingOperation.id, {
+			data: processingOperation.data,
+			status: 'completed'
+		})
+		
+		if (updateOperationResult.isErr())
+			return err(updateOperationResult.error);
+		return ok(updateOperationResult.value);
 	}
 }

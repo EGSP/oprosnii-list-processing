@@ -6,6 +6,7 @@
  * Поддерживает форматы таблиц: xls, xlsx, xlsb, xlsm, xltx
  */
 
+import { getFileNameWithExtension, getFilePath, readApplicationFile, type FileInfo } from '$lib/storage/files';
 import { Result, ok, err } from 'neverthrow';
 
 // textract не имеет типов TypeScript, используем require
@@ -108,5 +109,31 @@ export async function extractTextFromSpreadsheets(
 			}
 		);
 	});
+}
+
+/**
+ * Извлекает текст из файла заявки
+ * @param applicationId - GUID заявки
+ * @param fileInfo - Информация о файле
+ * @returns Результат извлечения текста в формате Result<string, Error>
+ */
+export async function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): Promise<Result<string, Error>> {
+	const fileBufferResult = readApplicationFile(applicationId);
+	if (fileBufferResult.isErr())
+		return err(fileBufferResult.error);
+	const fileBuffer = fileBufferResult.value;
+
+	const filePathResult = getFilePath(applicationId);
+	if (filePathResult.isErr())
+		return err(filePathResult.error);
+	const filePath = filePathResult.value;
+	const filenameWithExtension = getFileNameWithExtension(filePath);
+	
+	if (fileInfo.type === 'document') {
+		return extractTextFromDocuments(fileBuffer, filenameWithExtension);
+	} else if (fileInfo.type === 'spreadsheet') {
+		return extractTextFromSpreadsheets(fileBuffer, filenameWithExtension);
+	}
+	return err(new Error('Неподдерживаемый тип файла'));
 }
 

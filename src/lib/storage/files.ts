@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 import { findOperations, getOperation } from './processingOperations.js';
 import { err, ok, type Result } from 'neverthrow';
+import { getOCRData } from '$lib/ai/ocr.js';
 
 
 
@@ -130,7 +131,7 @@ function getFileExtension(path: string): string {
 }
 
 /**
- * Читает файл заявки
+ * Читает файл
  */
 export function readFile(path: string): Result<Buffer, Error> {
 	if (!path || !existsSync(path)) {
@@ -138,6 +139,25 @@ export function readFile(path: string): Result<Buffer, Error> {
 	}
 
 	const buffer = readFileSync(path);
+	return ok(buffer);
+}
+
+/**
+ * Читает файл заявки
+ * @param applicationId - GUID заявки
+ * @returns Buffer с содержимым файла
+ */
+export function readApplicationFile(applicationId: string): Result<Buffer, Error> {
+	const filePathResult = getFilePath(applicationId);
+	if (filePathResult.isErr()) {
+		return err(filePathResult.error);
+	}
+	const filePath = filePathResult.value;
+	const fileBufferResult = readFile(filePath);
+	if (fileBufferResult.isErr()) {
+		return err(fileBufferResult.error);
+	}
+	const buffer = fileBufferResult.value;
 	return ok(buffer);
 }
 
@@ -170,14 +190,14 @@ async function getPageCount(fileType: FileType, buffer: Buffer): Promise<Result<
 		return ok(pageCountResult);
 	}
 	return ok(1);
-}	
+}
 
 /**
  * Получает полную информацию о файле заявки
  *
  * Возвращает все необходимые данные о файле в одном месте:
  * - buffer, filename, mimeType, fileType, pageCount, size
- * - extractedText (если есть завершенная OCR операция)
+ * - extractedText формируется из операций
  *
  * @param applicationId - GUID заявки
  * @returns Информация о файле или null, если файл не найден
@@ -211,11 +231,20 @@ export async function getFileInfo(applicationId: string): Promise<Result<FileInf
 	let extractedText: string | undefined;
 	const textExtractionOperations = findOperations(applicationId, 'extractText');
 
-	if (textExtractionOperations.isOk()) {
+	if (textExtractionOperations.isOk() && textExtractionOperations.value.length > 0) {
 		extractedText = textExtractionOperations.value.map((operationId) => {
-			const operation = getOperation(operationId);
-			if (operation.isOk()) {
-				return operation.value.data?.result as string;
+			const operationResult = getOperation(operationId);
+			if (operationResult.isOk()) {
+				const operation = operationResult.value;
+				if (operation.status !== 'completed') return '';
+				if (operation.data.service) {
+					const ocrDataResult = getOCRData(operation);
+					if (ocrDataResult.isOk()) {
+						return ocrDataResult.value as string;
+					}
+				} else {
+					return operation.data?.result as string;
+				}
 			}
 			return '';
 		}).join('\n');
