@@ -10,7 +10,7 @@ import type {
 import type { CreateApplicationResponse } from '$lib/api/types.js';
 import { Result, ok, err } from 'neverthrow';
 import { fetchStable } from '$lib/utils/fetchStable.js';
-import type { FileType } from '$lib/storage/files';
+import type { FileInfo } from '$lib/storage/files';
 
 /**
  * Базовый URL для API (в SvelteKit это относительные пути)
