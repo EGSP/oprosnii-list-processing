@@ -78,7 +78,7 @@ export type ApplicationUpdate = Partial<
  * Типы операций обработки
  */
 export type ProcessingOperationTask = z.infer<typeof ProcessingOperationTaskSchema>;
-export const ProcessingOperationTaskSchema = z.enum(['extractText', 'generateProductType', 'generateAbbreviation']);
+export const ProcessingOperationTaskSchema = z.enum(['extractText', 'resolveProductType', 'resolveAbbreviation']);
 export type ProcessingOperationStatus = z.infer<typeof ProcessingOperationStatusSchema>;
 export const ProcessingOperationStatusSchema = z.enum(['started', 'completed', 'failed']);
 

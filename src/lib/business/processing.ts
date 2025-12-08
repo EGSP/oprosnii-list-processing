@@ -10,7 +10,10 @@ import {
 import {
 	getFileInfo,
 	findOperations,
-	createOperation
+	createOperation,
+	getApplication,
+	updateApplication,
+	getOperation
 } from '../storage/index.js';
 import { err, ok, Result } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
@@ -66,4 +69,29 @@ export async function processTextExtraction(applicationId: string): Promise<Resu
 	if (processingOperationResult.isErr())
 		return err(processingOperationResult.error);
 	return ok(undefined);
+}
+
+export async function processProductTypeResolve(applicationId: string): Promise<Result<void, Error>> {
+	const applicationResult = await getApplication(applicationId);
+	if (applicationResult.isErr())
+		return err(applicationResult.error);
+	const application = applicationResult.value;
+
+	if(application.productType)
+		return ok(undefined);
+
+	const operationsResult = findOperations(applicationId, 'resolveProductType');
+	if (operationsResult.isErr())
+		return err(operationsResult.error);
+
+	const operationsId = operationsResult.value;
+
+	if(operationsId.length > 0){
+		const operationId = operationsId[0];
+		const operationResult = getOperation(operationId);
+		if (operationResult.isErr())
+			return err(operationResult.error);
+		const operation = operationResult.value;
+		const applicationUpdateResult = updateApplication(applicationId, {productType: operation.data.})
+	}
 }

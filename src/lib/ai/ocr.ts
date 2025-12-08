@@ -37,7 +37,7 @@ export function getOCRData(processingOperation: ProcessingOperation): Result<str
 
 	switch (service) {
 		case 'yandex':
-			return getYandexOCRData(processingOperation.data as { service: string;[key: string]: any });
+			return getYandexOCRData(processingOperation.data as { service: string;[key: string]: unknown });
 		default:
 			return err(new OCRError('Неизвестный сервис'));
 	}
@@ -48,7 +48,7 @@ export function getOCRData(processingOperation: ProcessingOperation): Result<str
  * @param data - Данные операции
  * @returns Результат с текстом или ошибкой
  */
-function getYandexOCRData(data: { service: string;[key: string]: any }): Result<string, Error> {
+function getYandexOCRData(data: { service: string;[key: string]: unknown }): Result<string, Error> {
 	if (!data.service || data.service !== 'yandex')
 		return err(new OCRError('Неверный сервис'));
 
