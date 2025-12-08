@@ -44,3 +44,4 @@ function getYandexLLMData(data: { service: string;[key: string]: any }): Result<
 
 	return ok(data.data);
 }
+

@@ -1,4 +1,4 @@
-import z from "zod";
+import { z } from "zod";
 import { fetchStable } from "../../utils/fetchStable.js";
 import { Result, ok, err } from "neverthrow";
 
@@ -44,7 +44,7 @@ export const YandexCloudOperationSchema = z.object({
 		(!data.error && !data.response) || // либо их вообще нет (Operation не завершена)
 		(Boolean(data.done) && (Boolean(data.error) !== Boolean(data.response))), // либо done==true и только одно из них установлено
 	{
-		message: 'Если операция завершена (done==true), должно быть задано только одно из полей: error или response'
+		error: 'Если операция завершена (done==true), должно быть задано только одно из полей: error или response'
 	}
 );
 
