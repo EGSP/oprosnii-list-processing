@@ -28,9 +28,7 @@ export class YandexCloudOCRAPIError extends Error {
 }
 
 export type YandexOCRMimeType = z.infer<typeof YandexOCRMimeTypeEnum>;
-export const YandexOCRMimeTypeEnum = z.enum(['image/jpeg', 'image/png', 'application/pdf'], {
-	description: 'Возможные MIME типы файлов для Yandex OCR API'
-});
+export const YandexOCRMimeTypeEnum = z.enum(['image/jpeg', 'image/png', 'application/pdf']);
 
 
 // Список моделей для распознавания текста и документов Yandex OCR API
@@ -51,9 +49,7 @@ export const YandexOCRModelEnum = z.enum([
 	"vehicle-registration-front",    // Свидетельство о регистрации ТС, лицевая сторона
 	"vehicle-registration-back",     // Свидетельство о регистрации ТС, обратная сторона
 	"license-plates"                 // Все автомобильные номера на изображении
-], {
-	description: "Возможные модели для параметра model в Yandex OCR API"
-});
+]);
 
 
 /**

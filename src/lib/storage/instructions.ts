@@ -175,3 +175,11 @@ export function readInstruction(filename: string): Result<Instruction, Error> {
     return validateInstruction(readResult.value);
 }
 
+export function readInstructionByNameAndType(name: string, type: string): Result<Instruction, Error> {
+    const instructionFileNames = getInstructionFileNamesByNameAndType(name, type);
+    if (instructionFileNames.isErr()) {
+        return err(instructionFileNames.error);
+    }
+    return readInstruction(instructionFileNames.value[0]);
+}
+

@@ -218,3 +218,31 @@ export function findOperations(
 		return err(new StorageError('Failed to list operations', error as Error));
 	}
 }
+
+export function findOperationsByFilter(applicationId: string,
+	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }): Result<string[], Error> {
+	try {
+		const db = getDatabase();
+		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
+		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
+
+		if (filter.task) {
+			query += ' AND task = ?';
+			params.push(filter.task);
+		}
+
+		if (filter.status) {
+			query += ' AND status = ?';
+			params.push(filter.status);
+		}
+
+		query += ' ORDER BY start_date DESC';
+
+		const stmt = db.prepare(query);
+		const rows = stmt.all(...params) as { id: string }[];
+		return ok(rows.map((row) => row.id));
+	} catch (error) {
+		return err(new StorageError('Failed to list operations', error as Error));
+	}
+
+}

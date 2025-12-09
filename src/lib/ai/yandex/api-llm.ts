@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import { fetchStable } from '$lib/utils/fetchStable';
-import { Result, err, ok } from 'neverthrow';
+import { ResultAsync, errAsync, okAsync } from 'neverthrow';
 
 const COMPLETION_ENDPOINT = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion';
 
@@ -247,23 +247,21 @@ export function getModelUri(catalogId: string, model: 'yandexgpt-lite' | 'yandex
  * @param request - Запрос completion
  * @returns Результат выполнения запроса
  */
-export async function completion(apiKey: string, request: CompletionRequest): Promise<Result<CompletionResult, YandexLLMAPIError>> {
-	const response = await fetchStable(COMPLETION_ENDPOINT, {
+export function completion(apiKey: string, request: CompletionRequest): ResultAsync<CompletionResult, YandexLLMAPIError> {
+	return fetchStable(COMPLETION_ENDPOINT, {
 		method: 'POST',
 		headers: {
 			'Authorization': `Bearer ${apiKey}`,
 			'Content-Type': 'application/json'
 		},
 		body: JSON.stringify(request)
-	});
-	if (response.isOk()) {
-		const data = await response.value.json();
-
+	}).andThen((response) => {
+		return ResultAsync.fromSafePromise(response.json())
+	}).andThen((data) => {
 		const result = CompletionResultSchema.safeParse(data);
 		if (!result.success) {
-			return err(new YandexLLMAPIError('Invalid response from Yandex GPT', result.error));
+			return errAsync(new YandexLLMAPIError('Invalid response from Yandex GPT', result.error));
 		}
-		return ok(result.data);
-	}
-	return err(new YandexLLMAPIError(response.error.message));
+		return okAsync(result.data);
+	});
 }

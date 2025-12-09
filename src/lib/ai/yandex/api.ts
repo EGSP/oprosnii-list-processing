@@ -36,9 +36,9 @@ export const YandexCloudOperationSchema = z.object({
 	createdBy: z.string(),
 	modifiedAt: z.string(),
 	done: z.boolean(),
-	metadata: z.record(z.unknown()),
+	metadata: z.record(z.string(), z.unknown()),
 	error: YandexCloudOperationErrorSchema.optional(),
-	response: z.record(z.unknown()).optional()
+	response: z.record(z.string(), z.unknown()).optional()
 }).refine(
 	data =>
 		(!data.error && !data.response) || // либо их вообще нет (Operation не завершена)

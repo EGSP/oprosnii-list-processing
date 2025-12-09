@@ -6,17 +6,21 @@
  */
 
 import {
-	extractText} from '../ai/index.js';
+	extractText
+} from '../ai/index.js';
 import {
 	getFileInfo,
 	findOperations,
 	createOperation,
 	getApplication,
-	updateApplication,
-	getOperation
+	getOperation,
+	findOperationsByFilter,
+	updateOperation
 } from '../storage/index.js';
-import { err, ok, Result } from 'neverthrow';
+import { err, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
+import { resolveProductType } from '$lib/ai/llm.js';
+import { getOCRData } from '$lib/ai/ocr.js';
 
 export class ProcessingError extends Error {
 	constructor(
@@ -47,11 +51,11 @@ export async function processTextExtraction(applicationId: string): Promise<Resu
 
 	const operations = operationsResult.value;
 	// Если уже есть операция извлечения текста, то ничего не делаем
-	if(operations.length > 0)
+	if (operations.length > 0)
 		return ok(undefined);
 
 	// Извлекаем текст из файла через OCR
-	if(fileInfo.type === 'pdf' || fileInfo.type === 'image'){
+	if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
 		const extractOperationResult = await extractText(applicationId, fileInfo);
 		if (extractOperationResult.isErr())
 			return err(extractOperationResult.error);
@@ -65,33 +69,52 @@ export async function processTextExtraction(applicationId: string): Promise<Resu
 	const extractedText = extractTextFromApplicationFileResult.value;
 
 	// Создаем операцию извлечения текста с указанием результата
-	const processingOperationResult = createOperation(applicationId,'extractText',{result: extractedText},'completed');
+	const processingOperationResult = createOperation(applicationId, 'extractText', { result: extractedText }, 'completed');
 	if (processingOperationResult.isErr())
 		return err(processingOperationResult.error);
 	return ok(undefined);
 }
 
-export async function processProductTypeResolve(applicationId: string): Promise<Result<void, Error>> {
-	const applicationResult = await getApplication(applicationId);
-	if (applicationResult.isErr())
-		return err(applicationResult.error);
-	const application = applicationResult.value;
+export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
+	return getApplication(applicationId).asyncAndThen((application) => {
+		if (application.productType)
+			return okAsync(undefined);
 
-	if(application.productType)
-		return ok(undefined);
+		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
+			if (operationsId.length > 0)
+				return okAsync(undefined);
 
-	const operationsResult = findOperations(applicationId, 'resolveProductType');
-	if (operationsResult.isErr())
-		return err(operationsResult.error);
+			// Create fresh operation
+			return findExtractedText(applicationId).asyncAndThen((text) =>
+				createOperation(applicationId, 'resolveProductType')
+					.asyncAndThen(processingOperation => resolveProductType(applicationId, text)
+						.andThen(productType => updateOperation(processingOperation.id, {
+							status: 'completed', data: {
+								...processingOperation.data,
+								productType: productType
+							}
+						})
+					).map(() => undefined))
+			);
+		});
+	});
+}
 
-	const operationsId = operationsResult.value;
 
-	if(operationsId.length > 0){
-		const operationId = operationsId[0];
-		const operationResult = getOperation(operationId);
-		if (operationResult.isErr())
-			return err(operationResult.error);
-		const operation = operationResult.value;
-		const applicationUpdateResult = updateApplication(applicationId, {productType: operation.data.})
-	}
+function findExtractedText(applicationId: string): Result<string, Error> {
+	return findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' }).andThen((operationIds) => {
+		if (operationIds.length === 0)
+			return err(new ProcessingError('Не найден результат извлечения текста'));
+
+		const text = operationIds.map((operationId) => {
+			return getOperation(operationId).andThen((operation) => {
+				if (operation.data.service) {
+					return getOCRData(operation);
+				} else {
+					return ok(operation.data.result as string);
+				}
+			});
+		}).join('\n');
+		return ok(text);
+	});
 }
