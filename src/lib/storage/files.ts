@@ -11,12 +11,12 @@ import { FileStorageError } from './errors.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 import { findOperations, getOperation } from './processingOperations.js';
-import { err, ok, type Result } from 'neverthrow';
+import { err, Ok, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 import { getOCRData } from '$lib/ai/ocr.js';
 
 
 
-export type FileType = 'pdf' | 'document' | 'spreadsheet' | 'image' | 'unknown';
+export type FileType = 'pdf' | 'document' | 'spreadsheet' | 'image';
 /**
  * Тип информации о файле (без buffer)
  */
@@ -95,39 +95,40 @@ export function getFileNameWithExtension(path: string): string {
  * @param path - Полный путь к файлу
  * @returns Имя файла без расширения
  */
-export function getFileNameWithoutExtension(path: string): string {
-	return path.split('.').slice(0, -1).join('.');
+export function getFileNameWithoutExtension(path: string): Ok<string, Error> {
+	return ok(path.split('.').slice(0, -1).join('.'));
 }
 
-function getFileType(path: string): FileType {
+
+function getFileType(path: string): Result<FileType, Error> {
 	const extension = path.split('.').pop()?.toLowerCase();
 	if (!extension) {
-		return 'unknown';
+		return err(new Error('Не удалось определить расширение файла'));
 	}
 	switch (extension) {
 		case 'pdf':
-			return 'pdf';
+			return ok('pdf');
 		case 'docx':
 		case 'doc':
-			return 'document';
+			return ok('document');
 		case 'xlsx':
 		case 'xls':
-			return 'spreadsheet';
+			return ok('spreadsheet');
 		case 'jpeg':
 		case 'jpg':
 		case 'png':
-			return 'image';
+			return ok('image');
 		default:
-			return 'unknown';
+			return err(new Error(`Неизвестное расширение файла: ${extension}`));
 	}
 }
 
-function getFileExtension(path: string): string {
+function getFileExtension(path: string): Result<string, Error> {
 	const extension = path.split('.').pop()?.toLowerCase();
 	if (!extension) {
-		return '';
+		return err(new Error('Не удалось определить расширение файла'));
 	}
-	return extension;
+	return ok(extension);
 }
 
 /**
@@ -148,48 +149,33 @@ export function readFile(path: string): Result<Buffer, Error> {
  * @returns Buffer с содержимым файла
  */
 export function readApplicationFile(applicationId: string): Result<Buffer, Error> {
-	const filePathResult = getFilePath(applicationId);
-	if (filePathResult.isErr()) {
-		return err(filePathResult.error);
-	}
-	const filePath = filePathResult.value;
-	const fileBufferResult = readFile(filePath);
-	if (fileBufferResult.isErr()) {
-		return err(fileBufferResult.error);
-	}
-	const buffer = fileBufferResult.value;
-	return ok(buffer);
+	return getFilePath(applicationId).andThen(readFile);
 }
 
 /**
  * Определяет количество страниц в PDF файле
  */
-async function getPDFPageCount(buffer: Buffer): Promise<number> {
-	try {
-		// Конвертируем Buffer в Uint8Array для PDF-LIB
-		const uint8Array = new Uint8Array(buffer);
-
-		// Загружаем PDF документ
-		const pdfDoc = await PDFDocument.load(uint8Array);
-
-		// Получаем количество страниц
-		const pages = pdfDoc.getPages();
-		return pages.length;
-	} catch (error) {
-		// Если не удалось определить, возвращаем 1 (предполагаем одностраничный)
-		logger.warn('Не удалось определить количество страниц PDF', {
-			error: error instanceof Error ? error.message : String(error)
-		});
-		return 1;
-	}
+function getPDFPageCount(buffer: Buffer): ResultAsync<number, Error> {
+	const uint8Array = new Uint8Array(buffer);
+	return ResultAsync.fromPromise(PDFDocument.load(uint8Array)
+		.then((pdfDoc) => {
+			const pages = pdfDoc.getPages();
+			return pages.length;
+		}),
+		(error) => {
+			logger.warn('Не удалось определить количество страниц PDF', {
+				error: error instanceof Error ? error.message : String(error)
+			});
+			return error instanceof Error ? error : new Error(String(error));
+		}
+	);
 }
 
-async function getPageCount(fileType: FileType, buffer: Buffer): Promise<Result<number, Error>> {
+function getPageCount(fileType: FileType, buffer: Buffer): ResultAsync<number, Error> {
 	if (fileType === 'pdf') {
-		const pageCountResult = await getPDFPageCount(buffer);
-		return ok(pageCountResult);
+		return getPDFPageCount(buffer);
 	}
-	return ok(1);
+	return okAsync(1);
 }
 
 /**
@@ -202,59 +188,45 @@ async function getPageCount(fileType: FileType, buffer: Buffer): Promise<Result<
  * @param applicationId - GUID заявки
  * @returns Информация о файле или null, если файл не найден
  */
-export async function getFileInfo(applicationId: string): Promise<Result<FileInfo, Error>> {
-	const filePathResult = getFilePath(applicationId);
-	if (filePathResult.isErr()) {
-		return err(filePathResult.error);
-	}
-	const filePath = filePathResult.value;
+export function getFileInfo(applicationId: string): ResultAsync<FileInfo, Error> {
+	return getFilePath(applicationId).asyncAndThen((filePath) => {
+		return readFile(filePath).asyncAndThen((buffer) => {
+			return getFileType(filePath).asyncAndThen((type) => {
+				return getFileExtension(filePath).asyncAndThen((extension) => {
+					return getPageCount(type, buffer).andThen((pageCount) => {
+						let extractedText: string | undefined;
+						const textExtractionOperations = findOperations(applicationId, 'extractText');
+				
+						if (textExtractionOperations.isOk() && textExtractionOperations.value.length > 0) {
+							extractedText = textExtractionOperations.value.map((operationId) => {
+								const operationResult = getOperation(operationId);
+								if (operationResult.isOk()) {
+									const operation = operationResult.value;
+									if (operation.status !== 'completed') return '';
+									if (operation.data.service) {
+										const ocrDataResult = getOCRData(operation);
+										if (ocrDataResult.isOk()) {
+											return ocrDataResult.value as string;
+										}
+									} else {
+										return operation.data?.result as string;
+									}
+								}
+								return '';
+							}).join('\n');
+						}
 
-	const name = getFileNameWithoutExtension(filePath);
-
-	const fileBufferResult = readFile(filePath);
-	if (fileBufferResult.isErr()) {
-		return err(fileBufferResult.error);
-	}
-	const buffer = fileBufferResult.value;
-
-	const type = getFileType(filePath);
-	const extension = getFileExtension(filePath);
-
-	// Определяем количество страниц
-	const pageCountResult = await getPageCount(type, buffer);
-	if (pageCountResult.isErr()) {
-		return err(pageCountResult.error);
-	}
-	const pageCount = pageCountResult.value;
-
-	// Проверяем существующую OCR операцию для получения текста
-	let extractedText: string | undefined;
-	const textExtractionOperations = findOperations(applicationId, 'extractText');
-
-	if (textExtractionOperations.isOk() && textExtractionOperations.value.length > 0) {
-		extractedText = textExtractionOperations.value.map((operationId) => {
-			const operationResult = getOperation(operationId);
-			if (operationResult.isOk()) {
-				const operation = operationResult.value;
-				if (operation.status !== 'completed') return '';
-				if (operation.data.service) {
-					const ocrDataResult = getOCRData(operation);
-					if (ocrDataResult.isOk()) {
-						return ocrDataResult.value as string;
-					}
-				} else {
-					return operation.data?.result as string;
-				}
-			}
-			return '';
-		}).join('\n');
-	}
-
-	return ok({
-		name,
-		extension,
-		type,
-		pageCount,
-		extractedText
+						
+						return okAsync({
+							name: getFileNameWithoutExtension(filePath).value,
+							extension,
+							type,
+							pageCount,
+							extractedText
+						} as FileInfo);
+					});
+				});
+			});
+		});
 	});
 }

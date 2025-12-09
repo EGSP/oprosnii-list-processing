@@ -7,7 +7,7 @@
  */
 
 import { getFileNameWithExtension, getFilePath, readApplicationFile, type FileInfo } from '$lib/storage/files';
-import { Result, ok, err } from 'neverthrow';
+import { Result, ok, err, ResultAsync, errAsync, okAsync } from 'neverthrow';
 
 // textract не имеет типов TypeScript, используем require
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
@@ -117,23 +117,31 @@ export async function extractTextFromSpreadsheets(
  * @param fileInfo - Информация о файле
  * @returns Результат извлечения текста в формате Result<string, Error>
  */
-export async function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): Promise<Result<string, Error>> {
+export function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): ResultAsync<string, Error> {
 	const fileBufferResult = readApplicationFile(applicationId);
 	if (fileBufferResult.isErr())
-		return err(fileBufferResult.error);
+		return errAsync(fileBufferResult.error);
 	const fileBuffer = fileBufferResult.value;
 
 	const filePathResult = getFilePath(applicationId);
 	if (filePathResult.isErr())
-		return err(filePathResult.error);
+		return errAsync(filePathResult.error);
 	const filePath = filePathResult.value;
 	const filenameWithExtension = getFileNameWithExtension(filePath);
 	
 	if (fileInfo.type === 'document') {
-		return extractTextFromDocuments(fileBuffer, filenameWithExtension);
+		return ResultAsync.fromSafePromise(extractTextFromDocuments(fileBuffer, filenameWithExtension)).andThen((result) => {
+			if (result.isErr())
+				return errAsync(result.error);
+			return okAsync(result.value);
+		});
 	} else if (fileInfo.type === 'spreadsheet') {
-		return extractTextFromSpreadsheets(fileBuffer, filenameWithExtension);
+		return ResultAsync.fromSafePromise(extractTextFromSpreadsheets(fileBuffer, filenameWithExtension)).andThen((result) => {
+			if (result.isErr())
+				return errAsync(result.error);
+			return okAsync(result.value);
+		});
 	}
-	return err(new Error('Неподдерживаемый тип файла'));
+	return errAsync(new Error('Неподдерживаемый тип файла'));
 }
 

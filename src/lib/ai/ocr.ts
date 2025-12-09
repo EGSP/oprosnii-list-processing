@@ -13,7 +13,7 @@ import {
 } from '../storage/processingOperations.js';
 import { recognizeText, recognizeTextAsync, type YandexOCRMimeType, type YandexOCRRecognitionResult } from './yandex/api-ocr.js';
 import type { ProcessingOperation } from '../business/types.js';
-import { ok, Result, err } from 'neverthrow';
+import { ok, Result, err, errAsync, ResultAsync, okAsync } from 'neverthrow';
 import { readApplicationFile, type FileInfo } from '$lib/storage/files.js';
 import { aiConfig } from './config.js';
 
@@ -65,72 +65,54 @@ function getYandexOCRData(data: { service: string;[key: string]: unknown }): Res
 	}
 }
 
-export async function extractText(applicationId: string, fileInfo: FileInfo): Promise<Result<ProcessingOperation, Error>> {
+export function extractText(applicationId: string, fileInfo: FileInfo): ResultAsync<ProcessingOperation, Error> {
 	const config = aiConfig.yandexOCR;
 	if (fileInfo.type !== 'pdf' && fileInfo.type !== 'image')
-		return err(new OCRError('Не поддерживаемый тип файла'));
+		return errAsync(new OCRError('Не поддерживаемый тип файла'));
 
-	const fileBufferResult = readApplicationFile(applicationId);
-	if (fileBufferResult.isErr())
-		return err(fileBufferResult.error);
-	const fileBuffer = fileBufferResult.value;
 
-	const fileExtension = fileInfo.extension;
+	return readApplicationFile(applicationId).asyncAndThen((fileBuffer) => {
+		let yandexMimeType: YandexOCRMimeType;
+		switch (fileInfo.extension) {
+			case 'pdf':
+				yandexMimeType = 'application/pdf';
+				break;
+			case 'jpg':
+			case 'jpeg':
+				yandexMimeType = 'image/jpeg';
+				break;
+			case 'png':
+				yandexMimeType = 'image/png';
+				break;
+			default:
+				return errAsync(new OCRError('Не поддерживаемый тип файла'));
+		}
 
-	let yandexMimeType: YandexOCRMimeType;
-	switch (fileExtension) {
-		case 'pdf':
-			yandexMimeType = 'application/pdf';
-			break;
-		case 'jpg':
-		case 'jpeg':
-			yandexMimeType = 'image/jpeg';
-			break;
-		case 'png':
-			yandexMimeType = 'image/png';
-			break;
-		default:
-			return err(new OCRError('Не поддерживаемый тип файла'));
-	}
+		const needAsyncRecognition = fileInfo.pageCount > 1 && fileInfo.extension === 'pdf';
 
-	// Создаем операцию извлечения текста. Если она уже существует, то получаем ошибку.
-	const processingOperationResult = createOperation(applicationId, 'extractText');
-	if (processingOperationResult.isErr())
-		return err(processingOperationResult.error);
-	const processingOperation = processingOperationResult.value;
-
-	const needAsyncRecognition = fileInfo.pageCount > 1 && fileExtension === 'pdf';
-	if (needAsyncRecognition) {
-		const cloudOperationResult = await recognizeTextAsync(config.apiKey, fileBuffer, yandexMimeType, 'page')
-		if (cloudOperationResult.isErr())
-			return err(cloudOperationResult.error);
-		const cloudOperation = cloudOperationResult.value;
-
-		processingOperation.data.service = 'yandex';
-		processingOperation.data.cloudOperation = cloudOperation;
-		const updateOperationResult = updateOperation(processingOperation.id, {
-			data: processingOperation.data
-		})
-
-		if (updateOperationResult.isErr())
-			return err(updateOperationResult.error);
-		return ok(updateOperationResult.value);
-	} else {
-		const recognitionResultResult = await recognizeText(config.apiKey, fileBuffer, yandexMimeType)
-		if (recognitionResultResult.isErr())
-			return err(recognitionResultResult.error);
-		const recognitionResult = recognitionResultResult.value;
-
-		processingOperation.status = 'completed';
-		processingOperation.data.service = 'yandex';
-		processingOperation.data.recognitionResult = recognitionResult;
-		const updateOperationResult = updateOperation(processingOperation.id, {
-			data: processingOperation.data,
-			status: 'completed'
-		})
-		
-		if (updateOperationResult.isErr())
-			return err(updateOperationResult.error);
-		return ok(updateOperationResult.value);
-	}
+		return createOperation(applicationId, 'extractText')
+			.asyncAndThen((processingOperation) => {
+				if (needAsyncRecognition) {
+					return ResultAsync.fromSafePromise(recognizeTextAsync(config.apiKey, fileBuffer, yandexMimeType, 'page'))
+						.andThen((cloudOperation) => {
+							processingOperation.data.service = 'yandex';
+							processingOperation.data.cloudOperation = cloudOperation;
+							return updateOperation(processingOperation.id, {
+								data: processingOperation.data
+							});
+						});
+				} else {
+					return ResultAsync.fromSafePromise(recognizeText(config.apiKey, fileBuffer, yandexMimeType))
+						.andThen((recognitionResult) => {
+							processingOperation.status = 'completed';
+							processingOperation.data.service = 'yandex';
+							processingOperation.data.recognitionResult = recognitionResult;
+							return updateOperation(processingOperation.id, {
+								data: processingOperation.data,
+								status: 'completed'
+							});
+						});
+				}
+			});
+	});
 }

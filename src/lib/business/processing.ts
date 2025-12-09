@@ -17,7 +17,7 @@ import {
 	findOperationsByFilter,
 	updateOperation
 } from '../storage/index.js';
-import { err, ok, okAsync, Result, ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
 import { resolveProductType } from '$lib/ai/llm.js';
 import { getOCRData } from '$lib/ai/ocr.js';
@@ -38,41 +38,26 @@ export class ProcessingError extends Error {
  * @param applicationId - GUID заявки
  * @returns Результат извлечения текста с операцией
  */
-export async function processTextExtraction(applicationId: string): Promise<Result<void, Error>> {
-	const fileInfoResult = await getFileInfo(applicationId);
-	if (fileInfoResult.isErr()) {
-		return err(fileInfoResult.error);
-	}
-	const fileInfo = fileInfoResult.value;
-
-	const operationsResult = findOperations(applicationId, 'extractText');
-	if (operationsResult.isErr())
-		return err(operationsResult.error);
-
-	const operations = operationsResult.value;
-	// Если уже есть операция извлечения текста, то ничего не делаем
-	if (operations.length > 0)
-		return ok(undefined);
-
-	// Извлекаем текст из файла через OCR
-	if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
-		const extractOperationResult = await extractText(applicationId, fileInfo);
-		if (extractOperationResult.isErr())
-			return err(extractOperationResult.error);
-		return ok(undefined);
-	}
-
-	// Извлекаем текст из файла из Документов или Таблиц
-	const extractTextFromApplicationFileResult = await extractTextFromApplicationFile(applicationId, fileInfo);
-	if (extractTextFromApplicationFileResult.isErr())
-		return err(extractTextFromApplicationFileResult.error);
-	const extractedText = extractTextFromApplicationFileResult.value;
-
-	// Создаем операцию извлечения текста с указанием результата
-	const processingOperationResult = createOperation(applicationId, 'extractText', { result: extractedText }, 'completed');
-	if (processingOperationResult.isErr())
-		return err(processingOperationResult.error);
-	return ok(undefined);
+export function processTextExtraction(applicationId: string): ResultAsync<void, Error> {
+	return findOperations(applicationId, 'extractText')
+		.asyncAndThen((operations) => {
+			if (operations.length > 0)
+				return errAsync(new ProcessingError('Уже есть операция извлечения текста'));
+			return okAsync(undefined);
+		})
+		.andThen((undef) => {
+			return getFileInfo(applicationId);
+		})
+		.andThen(fileInfo => {
+			if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
+				// Если извлекаем через OCR, то операция создается внутри функции extractText
+				return extractText(applicationId, fileInfo);
+			} else {
+				return extractTextFromApplicationFile(applicationId, fileInfo).andThen((extractedText) =>
+					createOperation(applicationId, 'extractText', { result: extractedText }, 'completed'));
+			}
+		})
+		.map(() => undefined);
 }
 
 export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
@@ -94,7 +79,7 @@ export function processProductTypeResolve(applicationId: string): ResultAsync<vo
 								productType: productType
 							}
 						})
-					).map(() => undefined))
+						).map(() => undefined))
 			);
 		});
 	});
