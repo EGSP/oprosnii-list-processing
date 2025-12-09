@@ -11,8 +11,9 @@ import { processProductTypeResolve } from '$lib/business/processing.js';
 export const POST: RequestHandler = async ({ params }) => {
 	const { id } = params;
 
-	return await getApplication(id).asyncAndThen((application) => processProductTypeResolve(application.id)
-		.map(() => json({ success: true })))
+	return await getApplication(id)
+		.asyncAndThen((application) => processProductTypeResolve(application.id))
+		.map(() => json({ success: true }))
 		.mapErr((error) => json({ error: error.message }, { status: 500 }))
 		.match(
 			(success) => success,
