@@ -1,7 +1,9 @@
 <script lang="ts">
-	import type { ProcessingOperation } from '$lib/storage/types.js';
+	import type { ProcessingOperation } from '$lib/business/types.js';
 
-	export let operation: ProcessingOperation | { type: ProcessingOperation['type']; status: 'not_started' };
+	export let operation:
+		| ProcessingOperation
+		| { task: ProcessingOperation['task']; status: ProcessingOperation['status'] };
 
 	let isExpanded = false;
 
@@ -9,99 +11,97 @@
 		isExpanded = !isExpanded;
 	}
 
-	function isRealOperation(): operation is ProcessingOperation {
+	function isRealOperation(
+		operation: ProcessingOperation | { task: ProcessingOperation['task']; status: ProcessingOperation['status'] }
+	): operation is ProcessingOperation {
 		return 'id' in operation;
 	}
 
 	function getStatusLabel(): string {
-		if (!isRealOperation()) {
+		if (!isRealOperation(operation)) {
 			return 'Не начато';
 		}
-		
+
 		switch (operation.status) {
-			case 'pending':
+			case 'started':
 				return 'Ожидание';
-			case 'running':
-				return 'Выполняется';
 			case 'completed':
 				return 'Завершено';
 			case 'failed':
 				return 'Ошибка';
-			default:
-				return operation.status;
 		}
 	}
 
 	function getOperationTypeLabel(): string {
-		switch (operation.type) {
-			case 'ocr':
-				return 'OCR';
-			case 'llm_product_type':
-				return 'LLM Тип продукта';
-			case 'llm_abbreviation':
-				return 'LLM Аббревиатура';
+		switch (operation.task) {
+			case 'extractText':
+				return 'Извлечение текста';
+			case 'resolveProductType':
+				return 'Определение типа продукта';
+			case 'resolveAbbreviation':
+				return 'Формирование аббревиатуры';
 			default:
-				return operation.type;
+				return operation.task;
 		}
 	}
 
 	function getStatusColor(): string {
-		if (!isRealOperation()) {
+		if (!isRealOperation(operation)) {
 			return 'var(--color-border)';
 		}
-		
+
 		switch (operation.status) {
-			case 'pending':
+			case 'started':
 				return 'var(--color-status-pending)';
-			case 'running':
-				return 'var(--color-status-running)';
 			case 'completed':
 				return 'var(--color-status-completed)';
 			case 'failed':
 				return 'var(--color-status-failed)';
-			default:
-				return 'var(--color-border)';
 		}
 	}
 
 	function getStatusTextColor(): string {
-		if (!isRealOperation()) {
+		if (!isRealOperation(operation)) {
 			return 'var(--color-text-secondary)';
 		}
-		
+
 		switch (operation.status) {
-			case 'pending':
+			case 'started':
 				return 'var(--color-status-pending-text)';
-			case 'running':
-				return 'var(--color-status-running-text)';
 			case 'completed':
 				return 'var(--color-status-completed-text)';
 			case 'failed':
 				return 'var(--color-status-failed-text)';
-			default:
-				return 'var(--color-text)';
 		}
 	}
 
-	function getResultData(): string {
-		if (!isRealOperation()) {
+	function getOperationData(): string {
+		if (!isRealOperation(operation)) {
 			return '';
 		}
-		
-		if (operation.result) {
-			return JSON.stringify(operation.result, null, 2);
-		}
-		if (operation.error) {
-			return JSON.stringify(operation.error, null, 2);
+
+		if (operation.data) {
+			return JSON.stringify(operation.data, null, 2);
 		}
 		return '';
 	}
 
-	$: hasContent = isRealOperation() && !!(operation.result || operation.error);
+	$: hasContent = isRealOperation(operation) && !!operation.data;
 </script>
 
-<div class="operation-badge" style="--status-color: {getStatusColor()}; --status-text-color: {getStatusTextColor()};">
-	<div class="badge-header" class:clickable={hasContent} on:click={hasContent ? toggleExpanded : undefined} role={hasContent ? 'button' : undefined} tabindex={hasContent ? 0 : undefined} on:keydown={(e) => hasContent && e.key === 'Enter' && toggleExpanded()}>
+<div
+	class="operation-badge"
+	style="--status-color: {getStatusColor()}; --status-text-color: {getStatusTextColor()};"
+>
+	<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+	<div
+		class="badge-header"
+		class:clickable={hasContent}
+		on:click={hasContent ? toggleExpanded : undefined}
+		role={hasContent ? 'button' : undefined}
+		tabindex={hasContent ? 0 : undefined}
+		on:keydown={(e) => hasContent && e.key === 'Enter' && toggleExpanded()}
+	>
 		<div class="badge-label">
 			<span class="operation-type">{getOperationTypeLabel()}:</span>
 			<span class="status-badge">
@@ -109,16 +109,33 @@
 			</span>
 		</div>
 		{#if hasContent}
-			<button class="toggle-button" class:expanded={isExpanded} aria-label={isExpanded ? 'Свернуть' : 'Развернуть'} on:click|stopPropagation={toggleExpanded}>
-				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-					<path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+			<button
+				class="toggle-button"
+				class:expanded={isExpanded}
+				aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
+				on:click|stopPropagation={toggleExpanded}
+			>
+				<svg
+					width="16"
+					height="16"
+					viewBox="0 0 16 16"
+					fill="none"
+					xmlns="http://www.w3.org/2000/svg"
+				>
+					<path
+						d="M4 6L8 10L12 6"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
 				</svg>
 			</button>
 		{/if}
 	</div>
 	{#if isExpanded && hasContent}
 		<div class="badge-content">
-			<pre class="result-json">{getResultData()}</pre>
+			<pre class="result-json">{getOperationData()}</pre>
 		</div>
 	{/if}
 </div>
@@ -179,7 +196,9 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--color-text-secondary);
-		transition: transform 0.2s ease, color 0.2s ease;
+		transition:
+			transform 0.2s ease,
+			color 0.2s ease;
 		margin-left: 0.5rem;
 	}
 

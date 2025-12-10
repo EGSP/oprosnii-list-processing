@@ -5,7 +5,7 @@
  */
 
 import type { Handle } from '@sveltejs/kit';
-import { validateAIConfig } from '$lib/ai/index.js';
+import { validateAIConfig } from '$lib/ai/config.js';
 import { logger } from '$lib/utils/logger.js';
 
 // Флаг для проверки конфигурации (выполняется один раз)

@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, type FileInfo } from '$lib/business/rest.js';
+	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo } from '$lib/business/rest.js';
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Err, type Result } from 'neverthrow';
+	import type { FileInfo } from '$lib/storage/files.js';
 
 	interface TechnicalSpec {
 		id: string;
@@ -213,8 +214,8 @@
 	}
 
 	// Получаем все операции, включая те, которых еще нет
-	function getAllOperations(): Array<ProcessingOperation | { task: ProcessingOperation['task']; status: 'not_started' }> {
-		const operationTasks: ProcessingOperation['task'][] = ['extractText', 'generateProductType', 'generateAbbreviation'];
+	function getAllOperations(): Array<ProcessingOperation | { task: ProcessingOperation['task']; status: ProcessingOperation['status'] }> {
+		const operationTasks: ProcessingOperation['task'][] = ['extractText', 'resolveProductType', 'resolveAbbreviation'];
 		const operations = statusInfo?.operations || [];
 		const operationsMap = new Map(operations.map((op) => [op.task, op]));
 		
@@ -224,7 +225,7 @@
 				return existing;
 			}
 			// Возвращаем "пустую" операцию для отображения
-			return { task, status: 'not_started' as const };
+			return { task, status: 'started' };
 		});
 	}
 </script>
@@ -285,19 +286,11 @@
 				{:else if fileInfo}
 					<div class="field">
 						<label>Имя файла:</label>
-						<span>{fileInfo.filename}</span>
+						<span>{fileInfo.name}</span>
 					</div>
 					<div class="field">
 						<label>Тип файла:</label>
-						<span>{fileInfo.fileType}</span>
-					</div>
-					<div class="field">
-						<label>MIME тип:</label>
-						<span>{fileInfo.mimeType}</span>
-					</div>
-					<div class="field">
-						<label>Размер:</label>
-						<span>{formatFileSize(fileInfo.size)}</span>
+						<span>{fileInfo.type}</span>
 					</div>
 					<div class="field">
 						<label>Количество страниц:</label>

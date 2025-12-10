@@ -7,7 +7,7 @@
 
 import {
 	extractText
-} from '../ai/index.js';
+} from '$lib/ai/ocr.js';
 import {
 	getFileInfo,
 	findOperations,
