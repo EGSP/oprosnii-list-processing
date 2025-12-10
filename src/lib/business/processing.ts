@@ -15,12 +15,13 @@ import {
 	getApplication,
 	getOperation,
 	findOperationsByFilter,
-	updateOperation
+	updateOperation,
+	getOperationsByFilter
 } from '../storage/index.js';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
 import { resolveProductType } from '$lib/ai/llm.js';
-import { getOCRData } from '$lib/ai/ocr.js';
+import { fetchOCRData, getOCRData } from '$lib/ai/ocr.js';
 
 export class ProcessingError extends Error {
 	constructor(
@@ -58,6 +59,18 @@ export function processTextExtraction(applicationId: string): ResultAsync<void, 
 			}
 		})
 		.map(() => undefined);
+}
+
+/**
+ * Получает все не завершенные операции извлечения текста и пытается получить результаты по ним
+ * @param applicationId - ID заявки
+ * @returns Результат с ошибкой или undefined
+ */
+export function fetchTextExtraction(applicationId: string): ResultAsync<void, Error> {
+	return getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' })
+		.asyncAndThen((operations) => {
+			return ResultAsync.fromSafePromise(Promise.allSettled(operations.map((operation) => fetchOCRData(operation))));
+		}).map(() => undefined);
 }
 
 export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {

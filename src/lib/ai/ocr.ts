@@ -9,13 +9,16 @@
 
 import {
 	createOperation,
+	findOperationsByFilter,
+	getOperation,
 	updateOperation
 } from '../storage/processingOperations.js';
-import { recognizeText, recognizeTextAsync, type YandexOCRMimeType, type YandexOCRRecognitionResult } from './yandex/api-ocr.js';
+import { getRecognition, recognizeText, recognizeTextAsync, type YandexOCRMimeType, type YandexOCRRecognitionResult } from './yandex/api-ocr.js';
 import type { ProcessingOperation } from '../business/types.js';
 import { ok, Result, err, errAsync, ResultAsync, okAsync } from 'neverthrow';
 import { readApplicationFile, type FileInfo } from '$lib/storage/files.js';
 import { aiConfig } from './config.js';
+import type { YandexCloudOperation } from './yandex/api.js';
 
 export class OCRError extends Error {
 	constructor(
@@ -63,6 +66,41 @@ function getYandexOCRData(data: { service: string;[key: string]: unknown }): Res
 		const text = recognitionResult.textAnnotation.fullText as string;
 		return ok(text);
 	}
+}
+
+export function fetchOCRData(processingOperation: ProcessingOperation): ResultAsync<void, Error> {
+	if (processingOperation.status !== 'started')
+		return errAsync(new OCRError('Операция уже завершена'));
+
+	const service = processingOperation.data.service;
+	if (!service)
+		return errAsync(new OCRError('Не указан сервис'));
+
+	switch (service) {
+		case 'yandex':
+			return fetchYandexOCRData(processingOperation.data as { service: string;[key: string]: unknown })
+				.andThen((recognitionResult) => {
+					processingOperation.data.recognitionResult = recognitionResult;
+					return updateOperation(processingOperation.id, {
+						data: { ...processingOperation.data, recognitionResult },
+						status: 'completed'
+					});
+				}).map(() => undefined);
+		default:
+			return errAsync(new OCRError('Неизвестный сервис'));
+	}
+}
+
+function fetchYandexOCRData(data: { service: string;[key: string]: unknown }):
+	ResultAsync<YandexOCRRecognitionResult, Error> {
+	if (!data.service || data.service !== 'yandex')
+		return errAsync(new OCRError('Неверный сервис'));
+
+	const cloudOperation = data.cloudOperation as YandexCloudOperation;
+	if (!cloudOperation)
+		return errAsync(new OCRError('Не указан cloudOperation'));
+
+	return getRecognition(aiConfig.yandexOCR.apiKey, cloudOperation);
 }
 
 export function extractText(applicationId: string, fileInfo: FileInfo): ResultAsync<ProcessingOperation, Error> {
@@ -117,4 +155,13 @@ export function extractText(applicationId: string, fileInfo: FileInfo): ResultAs
 				}
 			});
 	});
+}
+
+/**
+ * Получает все не завершенные операции OCR и пытается получить результаты по ним
+ * @param processingOperation - Операция OCR
+ * @returns Результат с ошибкой или undefined
+ */
+export function fetchOCROperation(processingOperation: ProcessingOperation): ResultAsync<void, Error> {
+	return getOperation(processingOperation.id).asyncAndThen(fetchOCRData);
 }

@@ -8,10 +8,10 @@
  */
 
 import { fetchStable } from '../../utils/fetchStable.js';
-import { ok, err, Result } from 'neverthrow';
+import { ok, err, Result, ResultAsync } from 'neverthrow';
 
 import { z } from 'zod';
-import {type YandexCloudOperation, YandexCloudOperationSchema } from './api.js';
+import { type YandexCloudOperation, YandexCloudOperationSchema } from './api.js';
 
 const RECOGNIZE_TEXT_ENDPOINT = 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText';
 const RECOGNIZE_TEXT_ASYNC_ENDPOINT = 'https://ocr.api.cloud.yandex.net/ocr/v1/recognizeTextAsync';
@@ -271,11 +271,9 @@ export async function recognizeTextAsync(
 	}
 }
 
-export async function getRecognition(
-	apiKey: string,
-	operation: YandexCloudOperation
-): Promise<Result<YandexOCRRecognitionResult, YandexCloudOCRAPIError>> {
-	const responseResult = await fetchStable(
+export function getRecognition(apiKey: string, operation: YandexCloudOperation):
+	ResultAsync<YandexOCRRecognitionResult, YandexCloudOCRAPIError> {
+	return fetchStable(
 		`${GET_RECOGNITION_ENDPOINT}?operationId=${operation.id}`,
 		{
 			method: 'GET',
@@ -285,24 +283,19 @@ export async function getRecognition(
 		},
 		60000, // timeout: 60 секунд для OCR запросов
 		2 // maxRetries: 2 попытки при сетевых ошибках
-	)
-
-	if (responseResult.isErr()) {
-		return err(new YandexCloudOCRAPIError(`Не удалось выполнить запрос к Yandex OCR API: ${responseResult.error.message}`, responseResult.error));
-	}
-
-	const response = responseResult.value;
-	if (!response.ok) {
-		return err(new YandexCloudOCRAPIError(`Yandex OCR API вернул ошибку: ${response.status} ${response.statusText}`));
-	}
-	const result = await response.json();
-
-	try {
-		const recognitionResult = YandexOCRRecognitionResultSchema.parse(result);
-		return ok(recognitionResult);
-	} catch (error) {
-		return err(new YandexCloudOCRAPIError('Не удалось валидировать ответ Yandex OCR API как YandexOCRRecognitionResult', error as Error));
-	}
+	).andThen((response) => {
+		if (!response.ok) {
+			return err(new YandexCloudOCRAPIError(`Yandex OCR API вернул ошибку: ${response.status} ${response.statusText}`));
+		}
+		return ok(response.json());
+	}).andThen((result) => {
+		try {
+			const recognitionResult = YandexOCRRecognitionResultSchema.parse(result);
+			return ok(recognitionResult);
+		} catch (error) {
+			return err(new YandexCloudOCRAPIError('Не удалось валидировать ответ Yandex OCR API как YandexOCRRecognitionResult', error as Error));
+		}
+	});
 }
 
 

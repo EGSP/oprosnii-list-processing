@@ -72,6 +72,38 @@ export function getOperation(id: string): Result<ProcessingOperation, Error> {
 	}
 }
 
+/**
+ * Получает операции по фильтру
+ * @param filter - Фильтр
+ * @returns Результат с ошибкой или массивом операций
+ */
+export function getOperationsByFilter(applicationId: string, filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }):
+	Result<ProcessingOperation[], Error> {
+	try {
+		const db = getDatabase();
+		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
+		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
+
+		if (filter.task) {
+			query += ' WHERE task = ?';
+			params.push(filter.task);
+		}
+
+		if (filter.status) {
+			query += ' WHERE status = ?';
+			params.push(filter.status);
+		}
+
+		query += ' ORDER BY start_date DESC';
+
+		const stmt = db.prepare(query);
+		const rows = stmt.all(...params) as ProcessingOperationRow[];
+		return ok(rows.map((row) => rowToOperation(row)));
+	}
+	catch (error) {
+		return err(new StorageError('Failed to get operations by filter', error as Error));
+	}
+}
 
 /**
  * Создает новую операцию обработки
