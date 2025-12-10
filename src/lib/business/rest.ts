@@ -5,7 +5,8 @@
 import type {
 	Application,
 	ApplicationFilters,
-	ApplicationStatusInfo
+	ApplicationStatusInfo,
+	ProcessingOperation
 } from '$lib/business/types.js';
 import type { CreateApplicationResponse } from '$lib/api/types.js';
 import { Result, ok, err } from 'neverthrow';
@@ -58,9 +59,6 @@ export async function uploadApplication(file: File): Promise<Result<CreateApplic
  */
 export async function getApplications(filters?: ApplicationFilters): Promise<Result<Application[], Error>> {
 	const params = new URLSearchParams();
-	if (filters?.startDate) {
-		params.append('startDate', filters.startDate.toISOString());
-	}
 	if (filters?.endDate) {
 		params.append('endDate', filters.endDate.toISOString());
 	}
@@ -130,8 +128,15 @@ export async function processApplication(id: string, technicalSpecId: string): P
 /**
  * Получение списка операций для заявки
  */
-export async function getOperations(id: string): Promise<Result<import('$lib/business/types.js').ProcessingOperation[], Error>> {
-	return fetchStableJson<import('$lib/business/types.js').ProcessingOperation[]>(`${API_BASE}/applications/${id}/operations`);
+export async function getOperations(id: string): Promise<Result<string[], Error>> {
+	return fetchStableJson<string[]>(`${API_BASE}/applications/${id}/operations`);
+}
+
+/**
+ * Получение операции для заявки
+ */
+export async function getOperation(id: string, operationId: string): Promise<Result<ProcessingOperation, Error>> {
+	return fetchStableJson<ProcessingOperation>(`${API_BASE}/applications/${id}/operations/${operationId}`);
 }
 
 /**
@@ -156,12 +161,19 @@ export async function getApplicationStatusInfo(id: string): Promise<Result<Appli
 	}
 
 	let status = 'nothing';
+	let operations: ProcessingOperation[] = [];
 	if (operationsResult.value.length > 0) {
 		let completedOperations = 0;
-		for (const operation of operationsResult.value) {
+		for (const operationId of operationsResult.value) {
+			const operationResult = await getOperation(id, operationId);
+			if (operationResult.isErr()) {
+				return err(operationResult.error);
+			}
+			const operation = operationResult.value;
 			if (operation.status === 'completed') {
 				completedOperations++;
 			}
+			operations.push(operation);
 		}
 		if (completedOperations === operationsResult.value.length) {
 			status = 'completed';
@@ -172,6 +184,6 @@ export async function getApplicationStatusInfo(id: string): Promise<Result<Appli
 	return ok({
 		application: applicationResult.value,
 		status: status as ApplicationStatusInfo['status'],
-		operations: operationsResult.value
+		operations: operations
 	});
 }

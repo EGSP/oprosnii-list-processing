@@ -163,16 +163,11 @@ export function deleteApplication(applicationId: string): Result<boolean, Error>
 /**
  * Получает список заявок с опциональной фильтрацией
  */
-export function listApplications(filters?: ApplicationFilters): Result<Application[], Error> {
+export function getApplications(filters?: ApplicationFilters): Result<Application[], Error> {
 	const db = getDatabase();
 
 	let query = 'SELECT * FROM applications WHERE 1=1';
 	const params: (string | Date)[] = [];
-
-	if (filters?.startDate) {
-		query += ' AND upload_date >= ?';
-		params.push(filters.startDate.toISOString());
-	}
 
 	if (filters?.endDate) {
 		query += ' AND upload_date <= ?';
@@ -193,7 +188,7 @@ export function listApplications(filters?: ApplicationFilters): Result<Applicati
 
 		return ok(rows.map(rowToApplication));
 	} catch (error) {
-		return err(new StorageError('Failed to list applications', error as Error));
+		return err(new StorageError(`Failed to get applications ${error instanceof Error ? error.message : 'Unknown error'}`, error as Error));
 	}
 }
 

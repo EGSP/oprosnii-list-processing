@@ -62,7 +62,6 @@ export type Application = z.infer<typeof ApplicationSchema>;
  * Фильтры для списка заявок
  */
 export interface ApplicationFilters {
-	startDate?: Date;
 	endDate?: Date;
 	productType?: string;
 }
