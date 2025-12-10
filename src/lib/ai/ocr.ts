@@ -93,7 +93,8 @@ export function extractText(applicationId: string, fileInfo: FileInfo): ResultAs
 		return createOperation(applicationId, 'extractText')
 			.asyncAndThen((processingOperation) => {
 				if (needAsyncRecognition) {
-					return ResultAsync.fromSafePromise(recognizeTextAsync(config.apiKey, fileBuffer, yandexMimeType, 'page'))
+					return ResultAsync.fromSafePromise(
+						recognizeTextAsync(config.apiKey, fileBuffer, yandexMimeType, 'page'))
 						.andThen((cloudOperation) => {
 							processingOperation.data.service = 'yandex';
 							processingOperation.data.cloudOperation = cloudOperation;
@@ -102,7 +103,8 @@ export function extractText(applicationId: string, fileInfo: FileInfo): ResultAs
 							});
 						});
 				} else {
-					return ResultAsync.fromSafePromise(recognizeText(config.apiKey, fileBuffer, yandexMimeType))
+					return ResultAsync.fromSafePromise(
+						recognizeText(config.apiKey, fileBuffer, yandexMimeType))
 						.andThen((recognitionResult) => {
 							processingOperation.status = 'completed';
 							processingOperation.data.service = 'yandex';

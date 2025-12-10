@@ -50,7 +50,7 @@ export function processTextExtraction(applicationId: string): ResultAsync<void, 
 		})
 		.andThen(fileInfo => {
 			if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
-				// Если извлекаем через OCR, то операция создается внутри функции extractText
+				// Если извлекаем через OCR, то processing operation создается внутри функции extractText
 				return extractText(applicationId, fileInfo);
 			} else {
 				return extractTextFromApplicationFile(applicationId, fileInfo).andThen((extractedText) =>
