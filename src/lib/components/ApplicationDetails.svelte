@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo } from '$lib/business/rest.js';
+	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, fetchApplication } from '$lib/business/rest.js';
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
@@ -24,6 +24,7 @@
 	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 	let fileInfo: FileInfo | null = null;
 	let isLoadingFileInfo = false;
+	let isRefreshing = false;
 
 	$: if (applicationId) {
 		loadApplication();
@@ -175,6 +176,23 @@
 		isProcessing = false;
 	}
 
+	async function handleRefresh() {
+		if (!applicationId) return;
+
+		isRefreshing = true;
+		error = null;
+		const fetchResult = await fetchApplication(applicationId);
+		if (fetchResult.isErr()) {
+			error = fetchResult.error.message;
+		} else {
+			// После успешного обновления загружаем актуальные данные
+			await loadApplication();
+			// Запускаем периодическое обновление, если нужно
+			startOperationsUpdate();
+		}
+		isRefreshing = false;
+	}
+
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('ru-RU', {
@@ -241,6 +259,14 @@
 		<div class="details-content">
 			<div class="header">
 				<h2>Детали заявки</h2>
+				<button
+					class="refresh-button"
+					on:click={handleRefresh}
+					disabled={isRefreshing || isLoading}
+					title="Обновить данные заявки"
+				>
+					{isRefreshing ? 'Обновление...' : 'Обновить'}
+				</button>
 			</div>
 
 			{#if error}
@@ -383,6 +409,9 @@
 
 	.header {
 		margin-bottom: 1.5rem;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 	}
 
 	.header h2 {
@@ -390,6 +419,28 @@
 		font-size: 1.5rem;
 		font-weight: 600;
 		color: var(--color-text);
+	}
+
+	.refresh-button {
+		padding: 0.5rem 1rem;
+		background: var(--color-background-secondary);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--border-radius);
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.2s ease, border-color 0.2s ease;
+	}
+
+	.refresh-button:hover:not(:disabled) {
+		background: var(--color-background);
+		border-color: var(--color-primary);
+	}
+
+	.refresh-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.section {

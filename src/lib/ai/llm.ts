@@ -7,11 +7,11 @@
  * - Настройку параметров модели (temperature, maxTokens и т.д.)
  */
 
-import type { ProcessingOperation, ProductType } from "$lib/business/types";
-import { ProductTypeSchema, readInstructionByNameAndType } from "$lib/storage";
-import { err, ok, ResultAsync, type Result } from "neverthrow";
+import type { Abbreviation, ProcessingOperation, ProductType } from "$lib/business/types";
+import { AbbreviationSchema, getApplication, getOperation, ProductTypeSchema, readInstructionByNameAndType, updateApplication } from "$lib/storage";
+import { err, errAsync, ok, okAsync, ResultAsync, type Result } from "neverthrow";
 import { aiConfig } from "./config";
-import { completion, getModelUri, type CompletionRequest } from "./yandex/api-llm";
+import { completion, getModelUri, type CompletionRequest, type CompletionResult } from "./yandex/api-llm";
 import z from "zod";
 
 
@@ -58,6 +58,15 @@ function getSystemMessage(instruction: string): string {
 		${instruction}`
 }
 
+
+function getParsedCompletionText<T>(completionResult: CompletionResult, schema: z.ZodSchema<T>): Result<T, Error> {
+	const llmText = completionResult.alternatives[0].message.text
+	const parsedResult = schema.safeParse(llmText);
+	if (!parsedResult.success)
+		return err(new LLMError('Не удалось преобразовать ответ LLM в JSON:\n' + llmText));
+	return ok(parsedResult.data);
+}
+
 export function resolveProductType(applicationId: string, text: string): ResultAsync<ProductType, Error> {
 	const config = aiConfig.yandexGPT;
 	return readInstructionByNameAndType('Определение типа продукции', 'product-type')
@@ -77,16 +86,30 @@ export function resolveProductType(applicationId: string, text: string): ResultA
 				jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema) }
 			});
 		})
-		.asyncAndThen((completionRequest) => {
-			return completion(config.apiKey, completionRequest);
-		})
-		.andThen((completionResult) => {
-			const llmText = completionResult.alternatives[0].message.text;
-			const productTypeResult = ProductTypeSchema.safeParse(llmText);
-			if (!productTypeResult.success)
-				return err(new LLMError('Не удалось прочитать ответ LLM:\n' + llmText));
-			return ok(productTypeResult.data);
-		})
-		;
+		.asyncAndThen((completionRequest) => completion(config.apiKey, completionRequest))
+		.andThen((completionResult) => getParsedCompletionText(completionResult, ProductTypeSchema));
+}
+
+export function fetchLLMOperation(processingOperation: ProcessingOperation): ResultAsync<void, Error> {
+	if (processingOperation.status !== 'completed')
+		return errAsync(new LLMError('Операция должна быть завершена. Асинхронные операции не поддерживаются.'));
+
+	if (processingOperation.data.service === 'yandex')
+		if (processingOperation.task === 'resolveProductType')
+			return getApplication(processingOperation.applicationId)
+				.asyncAndThen((application) => updateApplication(
+					application.id,
+					{ productType: processingOperation.data.productType as ProductType })
+				.asyncAndThen(() => okAsync(undefined)));
+		else if (processingOperation.task === 'resolveAbbreviation')
+			return getApplication(processingOperation.applicationId)
+				.asyncAndThen((application) => updateApplication(
+					application.id,
+					{ abbreviation: processingOperation.data.abbreviation as Abbreviation })
+				.asyncAndThen(() => okAsync(undefined)));
+		else
+			return errAsync(new LLMError('Неизвестная задача'));
+	else
+		return errAsync(new LLMError('Неизвестный сервис'));
 }
 

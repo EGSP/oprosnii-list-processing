@@ -20,7 +20,7 @@ import {
 } from '../storage/index.js';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
-import { resolveProductType } from '$lib/ai/llm.js';
+import { fetchLLMOperation, resolveProductType } from '$lib/ai/llm.js';
 import { fetchOCRData, getOCRData } from '$lib/ai/ocr.js';
 
 export class ProcessingError extends Error {
@@ -73,33 +73,13 @@ export function fetchTextExtraction(applicationId: string): ResultAsync<void, Er
 		}).map(() => undefined);
 }
 
-export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
-	return getApplication(applicationId).asyncAndThen((application) => {
-		if (application.productType)
-			return okAsync(undefined);
 
-		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
-			if (operationsId.length > 0)
-				return okAsync(undefined);
-
-			// Create fresh operation
-			return findExtractedText(applicationId).asyncAndThen((text) =>
-				createOperation(applicationId, 'resolveProductType')
-					.asyncAndThen(processingOperation => resolveProductType(applicationId, text)
-						.andThen(productType => updateOperation(processingOperation.id, {
-							status: 'completed', data: {
-								...processingOperation.data,
-								productType: productType
-							}
-						})
-						).map(() => undefined))
-			);
-		});
-	});
-}
-
-
-function findExtractedText(applicationId: string): Result<string, Error> {
+/**
+ * Получает извлеченный текст из заявки
+ * @param applicationId - ID заявки
+ * @returns Результат с ошибкой или извлеченный текст
+ */
+export function getExtractedText(applicationId: string): Result<string, Error> {
 	return findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' }).andThen((operationIds) => {
 		if (operationIds.length === 0)
 			return err(new ProcessingError('Не найден результат извлечения текста'));
@@ -116,3 +96,71 @@ function findExtractedText(applicationId: string): Result<string, Error> {
 		return ok(text);
 	});
 }
+
+export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
+	return getApplication(applicationId).asyncAndThen((application) => {
+		if (application.productType)
+			return okAsync(undefined);
+
+		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
+			if (operationsId.length > 0)
+				return okAsync(undefined);
+
+			// Create fresh operation
+			return getExtractedText(applicationId).asyncAndThen((text) =>
+				createOperation(applicationId, 'resolveProductType')
+					.asyncAndThen(processingOperation => resolveProductType(applicationId, text)
+						.andThen(productType => updateOperation(processingOperation.id, {
+							status: 'completed', data: {
+								...processingOperation.data,
+								productType: productType
+							}
+						})
+						).map(() => undefined))
+			);
+		});
+	});
+}
+
+export function fetchProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
+	return getApplication(applicationId).asyncAndThen((application) => {
+		if (application.productType)
+			return okAsync(undefined);
+
+		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
+			if (operationsId.length > 0) {
+				return ResultAsync.fromSafePromise(
+					Promise.allSettled(operationsId.map((operationId) =>
+						getOperation(operationId).asyncAndThen((operation) => fetchLLMOperation(operation))
+					)));
+			}
+			return okAsync(undefined);
+		});
+	}).map(() => undefined);
+}
+
+function fetchAbbreviationResolve(applicationId: string): ResultAsync<void, Error> {
+	return getApplication(applicationId).asyncAndThen((application) => {
+		if (application.abbreviation)
+			return okAsync(undefined);
+
+		return findOperations(applicationId, 'resolveAbbreviation').asyncAndThen((operationsId) => {
+			if (operationsId.length > 0)
+				return ResultAsync.fromSafePromise(
+					Promise.allSettled(operationsId.map((operationId) =>
+						getOperation(operationId).asyncAndThen((operation) => fetchLLMOperation(operation))
+					)));
+			return okAsync(undefined);
+		}).map(() => undefined);
+	});
+}
+
+export function fetchApplication(applicationId: string): ResultAsync<void, Error> {
+	return getApplication(applicationId).asyncAndThen((application) => {
+		return fetchTextExtraction(applicationId).
+			andThen(() => fetchProductTypeResolve(applicationId)).
+			andThen(() => fetchAbbreviationResolve(applicationId)).
+			map(() => undefined);
+	}).map(() => undefined);
+}
+

@@ -85,12 +85,12 @@ export function getOperationsByFilter(applicationId: string, filter: { task?: Pr
 		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
 
 		if (filter.task) {
-			query += ' WHERE task = ?';
+			query += ' AND task = ?';
 			params.push(filter.task);
 		}
 
 		if (filter.status) {
-			query += ' WHERE status = ?';
+			query += ' AND status = ?';
 			params.push(filter.status);
 		}
 
@@ -98,6 +98,7 @@ export function getOperationsByFilter(applicationId: string, filter: { task?: Pr
 
 		const stmt = db.prepare(query);
 		const rows = stmt.all(...params) as ProcessingOperationRow[];
+		// Если операций нет, возвращаем пустой массив (это нормальная ситуация)
 		return ok(rows.map((row) => rowToOperation(row)));
 	}
 	catch (error) {

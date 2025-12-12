@@ -77,6 +77,12 @@ export async function getApplication(id: string): Promise<Result<Application, Er
 	return fetchStableJson<Application>(`${API_BASE}/applications/${id}`);
 }
 
+export async function fetchApplication(id:string): Promise<Result<void, Error>> {
+	return fetchStableJson<void>(`${API_BASE}/applications/${id}`, {
+		method: 'PATCH'
+	});
+}
+
 /**
  * Получение списка технических условий
  */

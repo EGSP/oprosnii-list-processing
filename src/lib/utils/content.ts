@@ -9,9 +9,16 @@
 import { getFileNameWithExtension, getFilePath, readApplicationFile, type FileInfo } from '$lib/storage/files';
 import { Result, ok, err, ResultAsync, errAsync, okAsync } from 'neverthrow';
 
-// textract не имеет типов TypeScript, используем require
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const textract = require('textract');
+// Ленивая загрузка textract через динамический импорт (для ESM совместимости)
+// @ts-ignore - textract не имеет типов TypeScript
+let textractCache: any = null;
+async function getTextract() {
+	if (!textractCache) {
+		// @ts-ignore - textract не имеет типов TypeScript
+		textractCache = await import('textract');
+	}
+	return textractCache;
+}
 
 /**
  * Поддерживаемые форматы документов
@@ -46,22 +53,31 @@ export async function extractTextFromDocuments(
 		);
 	}
 
-	return new Promise((resolve) => {
-		textract.fromBufferWithName(
-			filenameWithExtension,
-			buffer,
-			(error: Error | null, text: string | undefined) => {
-				if (error) {
-					const errorMessage =
-						error instanceof Error
-							? error.message
-							: `Ошибка при извлечении текста из документа: ${String(error)}`;
-					resolve(err(new Error(errorMessage)));
-				} else {
-					resolve(ok(text || ''));
+	return new Promise(async (resolve) => {
+		try {
+			const textract = await getTextract();
+			textract.fromBufferWithName(
+				filenameWithExtension,
+				buffer,
+				(error: Error | null, text: string | undefined) => {
+					if (error) {
+						const errorMessage =
+							error instanceof Error
+								? error.message
+								: `Ошибка при извлечении текста из документа: ${String(error)}`;
+						resolve(err(new Error(errorMessage)));
+					} else {
+						resolve(ok(text || ''));
+					}
 				}
-			}
-		);
+			);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error
+					? error.message
+					: `Ошибка при загрузке textract: ${String(error)}`;
+			resolve(err(new Error(errorMessage)));
+		}
 	});
 }
 
@@ -92,22 +108,31 @@ export async function extractTextFromSpreadsheets(
 		);
 	}
 
-	return new Promise((resolve) => {
-		textract.fromBufferWithName(
-			filenameWithExtension,
-			buffer,
-			(error: Error | null, text: string | undefined) => {
-				if (error) {
-					const errorMessage =
-						error instanceof Error
-							? error.message
-							: `Ошибка при извлечении текста из таблицы: ${String(error)}`;
-					resolve(err(new Error(errorMessage)));
-				} else {
-					resolve(ok(text || ''));
+	return new Promise(async (resolve) => {
+		try {
+			const textract = await getTextract();
+			textract.fromBufferWithName(
+				filenameWithExtension,
+				buffer,
+				(error: Error | null, text: string | undefined) => {
+					if (error) {
+						const errorMessage =
+							error instanceof Error
+								? error.message
+								: `Ошибка при извлечении текста из таблицы: ${String(error)}`;
+						resolve(err(new Error(errorMessage)));
+					} else {
+						resolve(ok(text || ''));
+					}
 				}
-			}
-		);
+			);
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error
+					? error.message
+					: `Ошибка при загрузке textract: ${String(error)}`;
+			resolve(err(new Error(errorMessage)));
+		}
 	});
 }
 
