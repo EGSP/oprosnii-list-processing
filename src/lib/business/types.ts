@@ -5,15 +5,8 @@ import { z } from 'zod';
  */
 export const ProductTypeSchema = z.object({
 	type: z.string().describe('Тип изделия, извлеченный из текста заявки'),
-	confidence: z
-		.number()
-		.min(0)
-		.max(1)
-		.optional()
-		.describe('Уровень уверенности в определении типа (0-1)'),
 	reasoning: z
 		.string()
-		.optional()
 		.describe('Обоснование выбора типа изделия на основе текста заявки')
 });
 

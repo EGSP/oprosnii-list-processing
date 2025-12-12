@@ -59,9 +59,13 @@ function getSystemMessage(instruction: string): string {
 }
 
 
-function getParsedCompletionText<T>(completionResult: CompletionResult, schema: z.ZodSchema<T>): Result<T, Error> {
-	const llmText = completionResult.alternatives[0].message.text
-	const parsedResult = schema.safeParse(llmText);
+function getParsedCompletionText<T extends z.ZodType>(completionResult: CompletionResult, schema: T):
+	Result<z.infer<T>, Error> {
+	const llmText = completionResult.alternatives[0].message.text;
+	if (!llmText)
+		return err(new LLMError('Не указан текст ответа LLM'));
+	const objectFromJson = JSON.parse(llmText);
+	const parsedResult = schema.safeParse(objectFromJson);
 	if (!parsedResult.success)
 		return err(new LLMError('Не удалось преобразовать ответ LLM в JSON:\n' + llmText));
 	return ok(parsedResult.data);
@@ -69,6 +73,7 @@ function getParsedCompletionText<T>(completionResult: CompletionResult, schema: 
 
 export function resolveProductType(applicationId: string, text: string): ResultAsync<ProductType, Error> {
 	const config = aiConfig.yandexGPT;
+	const stringify = JSON.stringify(text)
 	return readInstructionByNameAndType('Определение типа продукции', 'product-type')
 		.andThen((instruction) => {
 			return ok<CompletionRequest>({
@@ -83,7 +88,7 @@ export function resolveProductType(applicationId: string, text: string): ResultA
 						text: text
 					}
 				],
-				jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema) }
+				jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema, {}) }
 			});
 		})
 		.asyncAndThen((completionRequest) => completion(config.apiKey, completionRequest))
@@ -100,13 +105,13 @@ export function fetchLLMOperation(processingOperation: ProcessingOperation): Res
 				.asyncAndThen((application) => updateApplication(
 					application.id,
 					{ productType: processingOperation.data.productType as ProductType })
-				.asyncAndThen(() => okAsync(undefined)));
+					.asyncAndThen(() => okAsync(undefined)));
 		else if (processingOperation.task === 'resolveAbbreviation')
 			return getApplication(processingOperation.applicationId)
 				.asyncAndThen((application) => updateApplication(
 					application.id,
 					{ abbreviation: processingOperation.data.abbreviation as Abbreviation })
-				.asyncAndThen(() => okAsync(undefined)));
+					.asyncAndThen(() => okAsync(undefined)));
 		else
 			return errAsync(new LLMError('Неизвестная задача'));
 	else

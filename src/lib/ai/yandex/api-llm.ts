@@ -258,9 +258,13 @@ export function completion(apiKey: string, request: CompletionRequest): ResultAs
 	}).andThen((response) => {
 		return ResultAsync.fromSafePromise(response.json())
 	}).andThen((data) => {
-		const result = CompletionResultSchema.safeParse(data);
+		const result = CompletionResultSchema.safeParse(data?.result);
 		if (!result.success) {
-			return errAsync(new YandexLLMAPIError(`Invalid response from Yandex GPT ${JSON.stringify(data)}`, result.error));
+			return errAsync(new YandexLLMAPIError(`Invalid response from Yandex GPT ${JSON.stringify(data)}\n
+			${JSON.stringify(data?.error?.details)}\n
+			${data?.error?.httpStatus}\n
+			${data?.error?.message}`, result.error));
+			
 		}
 		return okAsync(result.data);
 	});

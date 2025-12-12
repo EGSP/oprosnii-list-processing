@@ -16,12 +16,14 @@ import {
 	getOperation,
 	findOperationsByFilter,
 	updateOperation,
-	getOperationsByFilter
+	getOperationsByFilter,
+	deleteOperations
 } from '../storage/index.js';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
 import { fetchLLMOperation, resolveProductType } from '$lib/ai/llm.js';
 import { fetchOCRData, getOCRData } from '$lib/ai/ocr.js';
+import { logger } from '$lib/utils/logger.js';
 
 export class ProcessingError extends Error {
 	constructor(
@@ -92,7 +94,7 @@ export function getExtractedText(applicationId: string): Result<string, Error> {
 					return ok(operation.data.result as string);
 				}
 			});
-		}).join('\n');
+		}).map((result) => result.isOk() ? result.value : null).filter((text) => text !== null).join('\n');
 		return ok(text);
 	});
 }
@@ -103,9 +105,12 @@ export function processProductTypeResolve(applicationId: string): ResultAsync<vo
 			return okAsync(undefined);
 
 		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
-			if (operationsId.length > 0)
-				return okAsync(undefined);
-
+			if (operationsId.length > 0) {
+				logger.info(`Удаляем операции перед определением типа изделия ${operationsId.join(', ')}`);
+				const deleteResult = deleteOperations(operationsId);
+				if (deleteResult.isErr())
+					return errAsync(new ProcessingError('Не удалось удалить операции перед определением типа изделия', deleteResult.error));
+			}
 			// Create fresh operation
 			return getExtractedText(applicationId).asyncAndThen((text) =>
 				createOperation(applicationId, 'resolveProductType')

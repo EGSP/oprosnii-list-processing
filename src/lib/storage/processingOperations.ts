@@ -117,7 +117,7 @@ export function createOperation(
 	status: ProcessingOperationStatus = 'started'
 ): Result<ProcessingOperation, Error> {
 	// Проверяем, существует ли операция с таким типом для заявки
-	const existingResult = findOperations(applicationId, task);
+	const existingResult = findOperationsByFilter(applicationId, { task });
 	if (existingResult.isOk() && existingResult.value.length > 0) {
 		return err(new OperationAlreadyExistsError(applicationId, task));
 	}
@@ -223,6 +223,16 @@ export function deleteOperation(id: string): Result<void, Error> {
 	}
 }
 
+export function deleteOperations(ids: string[]): Result<void, Error> {
+	try {
+		const db = getDatabase();
+		const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
+		stmt.run(ids);
+		return ok(undefined);
+	} catch (error) {
+		return err(new StorageError('Failed to delete operations', error as Error));
+	}
+}
 
 /**
  * Находит id операций по applicationId и task
