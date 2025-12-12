@@ -91,10 +91,19 @@ export async function getTechnicalSpecs(): Promise<Result<unknown[], Error>> {
 }
 
 /**
+ * Извлечение текста из файла заявки
+ */
+export async function extractText(id: string): Promise<Result<void, Error>> {
+	return fetchStableJson<void>(`${API_BASE}/applications/${id}/extract-text`, {
+		method: 'POST'
+	});
+}
+
+/**
  * Определение типа изделия
  */
-export async function detectProductType(id: string): Promise<Result<void, Error>> {
-	return fetchStableJson<void>(`${API_BASE}/applications/${id}/detect-product-type`, {
+export async function resolveProductType(id: string): Promise<Result<void, Error>> {
+	return fetchStableJson<void>(`${API_BASE}/applications/${id}/resolve-product-type`, {
 		method: 'POST'
 	});
 }
@@ -102,8 +111,8 @@ export async function detectProductType(id: string): Promise<Result<void, Error>
 /**
  * Формирование аббревиатуры продукции
  */
-export async function generateAbbreviation(id: string, technicalSpecId: string): Promise<Result<void, Error>> {
-	return fetchStableJson<void>(`${API_BASE}/applications/${id}/generate-abbreviation`, {
+export async function resolveAbbreviation(id: string, technicalSpecId: string): Promise<Result<void, Error>> {
+	return fetchStableJson<void>(`${API_BASE}/applications/${id}/resolve-abbreviation`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json'
@@ -117,15 +126,15 @@ export async function generateAbbreviation(id: string, technicalSpecId: string):
  */
 export async function processApplication(id: string, technicalSpecId: string): Promise<Result<void, Error>> {
 	// Сначала определяем тип изделия
-	const detectResult = await detectProductType(id);
-	if (detectResult.isErr()) {
-		return err(detectResult.error);
+	const resolveResult = await resolveProductType(id);
+	if (resolveResult.isErr()) {
+		return err(resolveResult.error);
 	}
 
 	// Затем формируем аббревиатуру
-	const generateResult = await generateAbbreviation(id, technicalSpecId);
-	if (generateResult.isErr()) {
-		return err(generateResult.error);
+	const abbreviationResult = await resolveAbbreviation(id, technicalSpecId);
+	if (abbreviationResult.isErr()) {
+		return err(abbreviationResult.error);
 	}
 
 	return ok(undefined);
