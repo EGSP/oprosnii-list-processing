@@ -4,6 +4,9 @@
 	export let operation:
 		| ProcessingOperation
 		| { task: ProcessingOperation['task']; status: ProcessingOperation['status'] };
+	export let applicationId: string | null = null;
+	export let onRun: ((task: ProcessingOperation['task']) => Promise<void>) | null = null;
+	export let isRunning: boolean = false;
 
 	let isExpanded = false;
 
@@ -86,7 +89,37 @@
 		return '';
 	}
 
+	function handleRunClick(event: MouseEvent) {
+		event.stopPropagation();
+		if (onRun && applicationId) {
+			onRun(operation.task);
+		}
+	}
+
+	function canRunOperation(): boolean {
+		if (!applicationId || !onRun) return false;
+		// Можно запустить, если операция еще не начата
+		if (!isRealOperation(operation)) return true;
+		// Можно запустить повторно, если операция завершилась с ошибкой
+		// Или если операция все еще выполняется (можно перезапустить)
+		return operation.status === 'failed' || operation.status === 'started';
+	}
+
+	function getRunButtonLabel(): string {
+		if (isRunning) {
+			return 'Запуск...';
+		}
+		if (!isRealOperation(operation)) {
+			return 'Запустить';
+		}
+		if (operation.status === 'failed') {
+			return 'Повторить';
+		}
+		return 'Запустить';
+	}
+
 	$: hasContent = isRealOperation(operation) && !!operation.data;
+	$: canRun = canRunOperation();
 </script>
 
 <div
@@ -108,30 +141,42 @@
 				{getStatusLabel()}
 			</span>
 		</div>
-		{#if hasContent}
-			<button
-				class="toggle-button"
-				class:expanded={isExpanded}
-				aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
-				on:click|stopPropagation={toggleExpanded}
-			>
-				<svg
-					width="16"
-					height="16"
-					viewBox="0 0 16 16"
-					fill="none"
-					xmlns="http://www.w3.org/2000/svg"
+		<div class="badge-actions">
+			{#if canRun}
+				<button
+					class="run-button"
+					disabled={isRunning}
+					on:click|stopPropagation={handleRunClick}
+					title="Запустить операцию"
 				>
-					<path
-						d="M4 6L8 10L12 6"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-			</button>
-		{/if}
+					{getRunButtonLabel()}
+				</button>
+			{/if}
+			{#if hasContent}
+				<button
+					class="toggle-button"
+					class:expanded={isExpanded}
+					aria-label={isExpanded ? 'Свернуть' : 'Развернуть'}
+					on:click|stopPropagation={toggleExpanded}
+				>
+					<svg
+						width="16"
+						height="16"
+						viewBox="0 0 16 16"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path
+							d="M4 6L8 10L12 6"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</button>
+			{/if}
+		</div>
 	</div>
 	{#if isExpanded && hasContent}
 		<div class="badge-content">
@@ -171,6 +216,35 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex: 1;
+	}
+
+	.badge-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: 0.5rem;
+	}
+
+	.run-button {
+		padding: 0.375rem 0.75rem;
+		background: var(--color-primary);
+		color: white;
+		border: none;
+		border-radius: var(--border-radius-sm);
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.2s ease, opacity 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.run-button:hover:not(:disabled) {
+		background: var(--color-primary-dark);
+	}
+
+	.run-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.operation-type {

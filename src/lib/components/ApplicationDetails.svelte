@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, fetchApplication } from '$lib/business/rest.js';
+	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, fetchApplication, extractText, resolveProductType, resolveAbbreviation } from '$lib/business/rest.js';
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
@@ -25,6 +25,7 @@
 	let fileInfo: FileInfo | null = null;
 	let isLoadingFileInfo = false;
 	let isRefreshing = false;
+	let runningOperations = new Set<ProcessingOperation['task']>();
 
 	$: if (applicationId) {
 		loadApplication();
@@ -193,6 +194,43 @@
 		isRefreshing = false;
 	}
 
+	async function handleRunOperation(task: ProcessingOperation['task']) {
+		if (!applicationId) return;
+
+		// Для resolveAbbreviation нужен technicalSpecId
+		if (task === 'resolveAbbreviation' && !selectedTechnicalSpecId) {
+			error = 'Выберите технические условия для формирования аббревиатуры';
+			return;
+		}
+
+		runningOperations.add(task);
+		error = null;
+
+		let result: Result<void, Error>;
+		if (task === 'extractText') {
+			result = await extractText(applicationId);
+		} else if (task === 'resolveProductType') {
+			result = await resolveProductType(applicationId);
+		} else if (task === 'resolveAbbreviation') {
+			result = await resolveAbbreviation(applicationId, selectedTechnicalSpecId);
+		} else {
+			error = 'Неизвестная операция';
+			runningOperations.delete(task);
+			return;
+		}
+
+		if (result.isErr()) {
+			error = result.error.message;
+		} else {
+			// После успешного запуска обновляем данные
+			await loadApplication();
+			// Запускаем периодическое обновление, если нужно
+			startOperationsUpdate();
+		}
+
+		runningOperations.delete(task);
+	}
+
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString);
 		return date.toLocaleDateString('ru-RU', {
@@ -299,7 +337,12 @@
 					<div class="field-label">Статусы операций:</div>
 					<div class="operations-list">
 						{#each getAllOperations() as operationOrPlaceholder}
-							<OperationStatusBadge operation={operationOrPlaceholder} />
+							<OperationStatusBadge 
+								operation={operationOrPlaceholder} 
+								applicationId={applicationId}
+								onRun={handleRunOperation}
+								isRunning={runningOperations.has(operationOrPlaceholder.task)}
+							/>
 						{/each}
 					</div>
 				</div>

@@ -118,7 +118,7 @@ export function createOperation(
 ): Result<ProcessingOperation, Error> {
 	// Проверяем, существует ли операция с таким типом для заявки
 	const existingResult = findOperations(applicationId, task);
-	if (existingResult.isOk()) {
+	if (existingResult.isOk() && existingResult.value.length > 0) {
 		return err(new OperationAlreadyExistsError(applicationId, task));
 	}
 

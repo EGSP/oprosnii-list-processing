@@ -260,7 +260,7 @@ export function completion(apiKey: string, request: CompletionRequest): ResultAs
 	}).andThen((data) => {
 		const result = CompletionResultSchema.safeParse(data);
 		if (!result.success) {
-			return errAsync(new YandexLLMAPIError('Invalid response from Yandex GPT', result.error));
+			return errAsync(new YandexLLMAPIError(`Invalid response from Yandex GPT ${JSON.stringify(data)}`, result.error));
 		}
 		return okAsync(result.data);
 	});
