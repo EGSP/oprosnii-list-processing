@@ -6,9 +6,10 @@ import {
 	ProcessingOperationSchema
 } from '../business/types.js';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageError, ValidationError, OperationAlreadyExistsError } from './errors.js';
-import { err, ok, Result } from 'neverthrow';
+import { StorageError, OperationNotFoundError, OperationAlreadyExistsError } from './errors.js';
+import { Effect, pipe } from 'effect';
 import { safeJsonParse } from '$lib/utils/json.js';
+import { parseZodSchema } from '$lib/utils/zod.js';
 
 /**
  * Интерфейс строки из БД для ProcessingOperation
@@ -56,54 +57,55 @@ export function operationToRow(operation: ProcessingOperation): ProcessingOperat
 /**
  * Получает операцию по ID
  */
-export function getOperation(id: string): Result<ProcessingOperation, Error> {
-	try {
+export function getOperation(id: string): Effect.Effect<ProcessingOperation, StorageError> {
+	return Effect.gen(function* () {
 		const db = getDatabase();
 		const stmt = db.prepare('SELECT * FROM processing_operations WHERE id = ?');
-		const row = stmt.get(id) as ProcessingOperationRow | undefined;
+		const row = yield* Effect.try({
+			try: () => stmt.get(id) as ProcessingOperationRow | undefined,
+			catch: (error) => new StorageError('Failed to get operation', error as Error)
+		});
 
 		if (!row) {
-			return err(new StorageError(`Operation not found ${id}`));
+			return yield* Effect.fail(new OperationNotFoundError(id));
 		}
 
-		return ok(rowToOperation(row));
-	} catch (error) {
-		return err(new StorageError('Failed to get operation', error as Error));
-	}
+		return rowToOperation(row);
+	});
 }
 
 /**
  * Получает операции по фильтру
  * @param filter - Фильтр
- * @returns Результат с ошибкой или массивом операций
+ * @returns Effect с ошибкой или массивом операций
  */
 export function getOperationsByFilter(applicationId: string, filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }):
-	Result<ProcessingOperation[], Error> {
-	try {
-		const db = getDatabase();
-		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
-		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
+	Effect.Effect<ProcessingOperation[], StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
+			const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
 
-		if (filter.task) {
-			query += ' AND task = ?';
-			params.push(filter.task);
-		}
+			if (filter.task) {
+				query += ' AND task = ?';
+				params.push(filter.task);
+			}
 
-		if (filter.status) {
-			query += ' AND status = ?';
-			params.push(filter.status);
-		}
+			if (filter.status) {
+				query += ' AND status = ?';
+				params.push(filter.status);
+			}
 
-		query += ' ORDER BY start_date DESC';
+			query += ' ORDER BY start_date DESC';
 
-		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as ProcessingOperationRow[];
-		// Если операций нет, возвращаем пустой массив (это нормальная ситуация)
-		return ok(rows.map((row) => rowToOperation(row)));
-	}
-	catch (error) {
-		return err(new StorageError('Failed to get operations by filter', error as Error));
-	}
+			const stmt = db.prepare(query);
+			const rows = stmt.all(...params) as ProcessingOperationRow[];
+			// Если операций нет, возвращаем пустой массив (это нормальная ситуация)
+			return rows.map((row) => rowToOperation(row));
+		},
+		catch: (error) => new StorageError('Failed to get operations by filter', error as Error)
+	});
 }
 
 /**
@@ -115,18 +117,17 @@ export function createOperation(
 	task: ProcessingOperationTask,
 	data: Record<string, unknown> = {},
 	status: ProcessingOperationStatus = 'started'
-): Result<ProcessingOperation, Error> {
-	// Проверяем, существует ли операция с таким типом для заявки
-	const existingResult = findOperationsByFilter(applicationId, { task });
-	if (existingResult.isOk() && existingResult.value.length > 0) {
-		return err(new OperationAlreadyExistsError(applicationId, task));
-	}
+): Effect.Effect<ProcessingOperation, StorageError> {
+	return Effect.gen(function* () {
+		// Проверяем, существует ли операция с таким типом для заявки
+		const existingIds = yield* findOperationsByFilter(applicationId, { task });
+		if (existingIds.length > 0) {
+			return yield* Effect.fail(new OperationAlreadyExistsError(applicationId, task));
+		}
 
-	// Создаем новую операцию
-	const now = new Date().toISOString();
-	let operation: ProcessingOperation;
-	try {
-		operation = ProcessingOperationSchema.parse({
+		// Создаем новую операцию
+		const now = new Date().toISOString();
+		const operationData = {
 			id: uuidv4(),
 			applicationId,
 			task,
@@ -134,28 +135,31 @@ export function createOperation(
 			data,
 			startDate: now,
 			finishDate: status === 'completed' || status === 'failed' ? now : null
+		};
+
+		const operation = yield* parseZodSchema(operationData, ProcessingOperationSchema).pipe(
+			Effect.mapError((error) => new StorageError('Invalid processing operation data', error))
+		);
+
+		const row = operationToRow(operation);
+
+		yield* Effect.try({
+			try: () => {
+				const db = getDatabase();
+				const stmt = db.prepare(`
+					INSERT INTO processing_operations (
+						id, application_id, task, status, data, start_date, finish_date
+					) VALUES (
+						:id, :application_id, :task, :status, :data, :start_date, :finish_date
+					)
+				`);
+				stmt.run(row);
+			},
+			catch: (error) => new StorageError('Failed to create operation', error as Error)
 		});
-	} catch (error) {
-		return err(new ValidationError('Invalid processing operation data', error));
-	}
 
-	const row = operationToRow(operation);
-
-	try {
-		const db = getDatabase();
-		const stmt = db.prepare(`
-			INSERT INTO processing_operations (
-				id, application_id, task, status, data, start_date, finish_date
-			) VALUES (
-				:id, :application_id, :task, :status, :data, :start_date, :finish_date
-			)
-		`);
-		stmt.run(row);
-
-		return ok(operation);
-	} catch (error) {
-		return err(new StorageError('Failed to create operation', error as Error));
-	}
+		return operation;
+	});
 }
 
 /**
@@ -165,73 +169,68 @@ export function createOperation(
 export function updateOperation(
 	id: string,
 	updates: Partial<Pick<ProcessingOperation, 'status' | 'data' | 'finishDate'>>
-): Result<ProcessingOperation, Error> {
-	// Получаем текущую операцию
-	const currentOperation = getOperation(id);
-	if (currentOperation.isErr()) {
-		return currentOperation;
-	}
+): Effect.Effect<ProcessingOperation, StorageError> {
+	return Effect.gen(function* () {
+		// Получаем текущую операцию
+		const current = yield* getOperation(id);
 
-	const current = currentOperation.value;
+		// Объединяем обновления с текущими данными
+		const updated: ProcessingOperation = {
+			...current,
+			...updates
+		};
 
-	// Объединяем обновления с текущими данными
-	const updated: ProcessingOperation = {
-		...current,
-		...updates
-	};
+		// Валидация
+		const validated = yield* parseZodSchema(updated, ProcessingOperationSchema).pipe(
+			Effect.mapError((error) => new StorageError('Invalid operation data', error))
+		);
 
-	// Валидация
-	let validated: ProcessingOperation;
-	try {
-		validated = ProcessingOperationSchema.parse(updated);
-	} catch (error) {
-		return err(new ValidationError('Invalid operation data', error));
-	}
+		const row = operationToRow(validated);
 
-	const row = operationToRow(validated);
-
-	try {
-		const db = getDatabase();
-		const stmt = db.prepare(`
-			UPDATE processing_operations SET
-				status = :status,
-				data = :data,
-				finish_date = :finish_date
-			WHERE id = :id
-		`);
-		stmt.run({
-			status: row.status,
-			data: row.data,
-			finish_date: row.finish_date,
-			id: row.id
+		yield* Effect.try({
+			try: () => {
+				const db = getDatabase();
+				const stmt = db.prepare(`
+					UPDATE processing_operations SET
+						status = :status,
+						data = :data,
+						finish_date = :finish_date
+					WHERE id = :id
+				`);
+				stmt.run({
+					status: row.status,
+					data: row.data,
+					finish_date: row.finish_date,
+					id: row.id
+				});
+			},
+			catch: (error) => new StorageError('Failed to update operation', error as Error)
 		});
 
-		return ok(validated);
-	} catch (error) {
-		return err(new StorageError('Failed to update operation', error as Error));
-	}
+		return validated;
+	});
 }
 
-export function deleteOperation(id: string): Result<void, Error> {
-	try {
-		const db = getDatabase();
-		const stmt = db.prepare('DELETE FROM processing_operations WHERE id = ?');
-		stmt.run(id);
-		return ok(undefined);
-	} catch (error) {
-		return err(new StorageError('Failed to delete operation', error as Error));
-	}
+export function deleteOperation(id: string): Effect.Effect<void, StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			const stmt = db.prepare('DELETE FROM processing_operations WHERE id = ?');
+			stmt.run(id);
+		},
+		catch: (error) => new StorageError('Failed to delete operation', error as Error)
+	});
 }
 
-export function deleteOperations(ids: string[]): Result<void, Error> {
-	try {
-		const db = getDatabase();
-		const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
-		stmt.run(ids);
-		return ok(undefined);
-	} catch (error) {
-		return err(new StorageError('Failed to delete operations', error as Error));
-	}
+export function deleteOperations(ids: string[]): Effect.Effect<void, StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
+			stmt.run(ids);
+		},
+		catch: (error) => new StorageError('Failed to delete operations', error as Error)
+	});
 }
 
 /**
@@ -240,52 +239,53 @@ export function deleteOperations(ids: string[]): Result<void, Error> {
 export function findOperations(
 	applicationId: string,
 	task?: ProcessingOperationTask
-): Result<string[], Error> {
-	try {
-		const db = getDatabase();
-		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
-		const params: (string | ProcessingOperationTask)[] = [applicationId];
+): Effect.Effect<string[], StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
+			const params: (string | ProcessingOperationTask)[] = [applicationId];
 
-		if (task) {
-			query += ' AND task = ?';
-			params.push(task);
-		}
+			if (task) {
+				query += ' AND task = ?';
+				params.push(task);
+			}
 
-		query += ' ORDER BY start_date DESC';
+			query += ' ORDER BY start_date DESC';
 
-		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as { id: string }[];
+			const stmt = db.prepare(query);
+			const rows = stmt.all(...params) as { id: string }[];
 
-		return ok(rows.map((row) => row.id));
-	} catch (error) {
-		return err(new StorageError('Failed to list operations', error as Error));
-	}
+			return rows.map((row) => row.id);
+		},
+		catch: (error) => new StorageError('Failed to list operations', error as Error)
+	});
 }
 
 export function findOperationsByFilter(applicationId: string,
-	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }): Result<string[], Error> {
-	try {
-		const db = getDatabase();
-		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
-		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
+	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }): Effect.Effect<string[], StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
+			const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
 
-		if (filter.task) {
-			query += ' AND task = ?';
-			params.push(filter.task);
-		}
+			if (filter.task) {
+				query += ' AND task = ?';
+				params.push(filter.task);
+			}
 
-		if (filter.status) {
-			query += ' AND status = ?';
-			params.push(filter.status);
-		}
+			if (filter.status) {
+				query += ' AND status = ?';
+				params.push(filter.status);
+			}
 
-		query += ' ORDER BY start_date DESC';
+			query += ' ORDER BY start_date DESC';
 
-		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as { id: string }[];
-		return ok(rows.map((row) => row.id));
-	} catch (error) {
-		return err(new StorageError('Failed to list operations', error as Error));
-	}
-
+			const stmt = db.prepare(query);
+			const rows = stmt.all(...params) as { id: string }[];
+			return rows.map((row) => row.id);
+		},
+		catch: (error) => new StorageError('Failed to list operations', error as Error)
+	});
 }

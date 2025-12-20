@@ -755,6 +755,614 @@ Lint errors for `src/lib/storage/applications.ts`
 ---
 
 
+Файл переписан на Effect. Итоги изменений:
+
+1. **Заменены возвращаемые типы**: `Result<T, Error>` → `Effect.Effect<T, StorageError>`
+2. **Удалены try-catch**: операции БД обернуты в `Effect.try`
+3. **Используется parseZodSchema**: валидация через утилиту из `zod.ts`
+4. **Использованы возможности Effect**:
+   - `Effect.gen` для последовательных операций
+   - `yield*` для композиции эффектов
+   - `Effect.fail` для явных ошибок
+   - `Effect.mapError` для преобразования ошибок валидации
+
+Все функции (`getApplication`, `createApplication`, `updateApplication`, `deleteApplication`, `getApplications`) теперь возвращают `Effect`. Ошибки обрабатываются автоматически через Effect, без явных try-catch блоков.
+
+---
+
+_**User (2025-12-20 10:50Z)**_
+
+@src/lib/storage/processingOperations.ts аналогично для этого файла
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю файл и переписываю функции на Effect аналогично `applications.ts`.
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/errors.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "OperationNotFoundError" in "src/lib/storage" • 2 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/storage\errors.ts` | `export class OperationNotFoundError extends StorageError \{` | L46 |
+| `src/lib/storage\errors.ts` | `this.name = 'OperationNotFoundError';` | L49 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Переписываю файл на Effect.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 2
+
+```diff
+@@ -7,7 +7,8 @@
+  } from '../business/types.js';
+  import { v4 as uuidv4 } from 'uuid';
+- import { StorageError, ValidationError, OperationAlreadyExistsError } from './errors.js';
+- import { err, ok, Result } from 'neverthrow';
++ import { StorageError, OperationNotFoundError, OperationAlreadyExistsError } from './errors.js';
++ import { Effect, pipe } from 'effect';
+  import { safeJsonParse } from '$lib/utils/json.js';
++ import { parseZodSchema } from '$lib/utils/zod.js';
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 8
+
+```diff
+@@ -58,18 +58,19 @@
+   * Получает операцию по ID
+   */
+- export function getOperation(id: string): Result&lt;ProcessingOperation, Error&gt; {
+- 	try {
++ export function getOperation(id: string): Effect.Effect&lt;ProcessingOperation, StorageError&gt; {
++ 	return Effect.gen(function* () {
+  		const db = getDatabase();
+  		const stmt = db.prepare('SELECT * FROM processing_operations WHERE id = ?');
+- 		const row = stmt.get(id) as ProcessingOperationRow | undefined;
++ 		const row = yield* Effect.try({
++ 			try: () =&gt; stmt.get(id) as ProcessingOperationRow | undefined,
++ 			catch: (error) =&gt; new StorageError('Failed to get operation', error as Error)
++ 		});
+  
+  		if (!row) {
+- 			return err(new StorageError(&#96;Operation not found ${id}&#96;));
++ 			return yield* Effect.fail(new OperationNotFoundError(id));
+  		}
+  
+- 		return ok(rowToOperation(row));
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to get operation', error as Error));
+- 	}
++ 		return rowToOperation(row);
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 23, lines removed: 23
+
+```diff
+@@ -78,33 +78,33 @@
+   * Получает операции по фильтру
+   * @param filter - Фильтр
+-  * @returns Результат с ошибкой или массивом операций
++  * @returns Effect с ошибкой или массивом операций
+   */
+  export function getOperationsByFilter(applicationId: string, filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }):
+- 	Result&lt;ProcessingOperation[], Error&gt; {
+- 	try {
+- 		const db = getDatabase();
+- 		let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
+- 		const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
++ 	Effect.Effect&lt;ProcessingOperation[], StorageError&gt; {
++ 	return Effect.try({
++ 		try: () =&gt; {
++ 			const db = getDatabase();
++ 			let query = 'SELECT * FROM processing_operations WHERE application_id = ?';
++ 			const params: (string | ProcessingOperationTask | ProcessingOperationStatus)[] = [applicationId];
+  
+- 		if (filter.task) {
+- 			query += ' AND task = ?';
+- 			params.push(filter.task);
+- 		}
++ 			if (filter.task) {
++ 				query += ' AND task = ?';
++ 				params.push(filter.task);
++ 			}
+  
+- 		if (filter.status) {
+- 			query += ' AND status = ?';
+- 			params.push(filter.status);
+- 		}
++ 			if (filter.status) {
++ 				query += ' AND status = ?';
++ 				params.push(filter.status);
++ 			}
+  
+- 		query += ' ORDER BY start_date DESC';
++ 			query += ' ORDER BY start_date DESC';
+  
+- 		const stmt = db.prepare(query);
+- 		const rows = stmt.all(...params) as ProcessingOperationRow[];
+- 		// Если операций нет, возвращаем пустой массив (это нормальная ситуация)
+- 		return ok(rows.map((row) =&gt; rowToOperation(row)));
+- 	}
+- 	catch (error) {
+- 		return err(new StorageError('Failed to get operations by filter', error as Error));
+- 	}
++ 			const stmt = db.prepare(query);
++ 			const rows = stmt.all(...params) as ProcessingOperationRow[];
++ 			// Если операций нет, возвращаем пустой массив (это нормальная ситуация)
++ 			return rows.map((row) =&gt; rowToOperation(row));
++ 		},
++ 		catch: (error) =&gt; new StorageError('Failed to get operations by filter', error as Error)
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 10, lines removed: 11
+
+```diff
+@@ -118,16 +118,15 @@
+  	data: Record&lt;string, unknown&gt; = {},
+  	status: ProcessingOperationStatus = 'started'
+- ): Result&lt;ProcessingOperation, Error&gt; {
+- 	// Проверяем, существует ли операция с таким типом для заявки
+- 	const existingResult = findOperationsByFilter(applicationId, { task });
+- 	if (existingResult.isOk() &amp;&amp; existingResult.value.length &gt; 0) {
+- 		return err(new OperationAlreadyExistsError(applicationId, task));
+- 	}
++ ): Effect.Effect&lt;ProcessingOperation, StorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		// Проверяем, существует ли операция с таким типом для заявки
++ 		const existingIds = yield* findOperationsByFilter(applicationId, { task });
++ 		if (existingIds.length &gt; 0) {
++ 			return yield* Effect.fail(new OperationAlreadyExistsError(applicationId, task));
++ 		}
+  
+- 	// Создаем новую операцию
+- 	const now = new Date().toISOString();
+- 	let operation: ProcessingOperation;
+- 	try {
+- 		operation = ProcessingOperationSchema.parse({
++ 		// Создаем новую операцию
++ 		const now = new Date().toISOString();
++ 		const operationData = {
+  			id: uuidv4(),
+  			applicationId,
+```
+
+**Chunk 2**
+Lines added: 23, lines removed: 20
+
+```diff
+@@ -137,26 +136,29 @@
+  			startDate: now,
+  			finishDate: status === 'completed' || status === 'failed' ? now : null
+- 		});
+- 	} catch (error) {
+- 		return err(new ValidationError('Invalid processing operation data', error));
+- 	}
++ 		};
++ 
++ 		const operation = yield* parseZodSchema(operationData, ProcessingOperationSchema).pipe(
++ 			Effect.mapError((error) =&gt; new StorageError('Invalid processing operation data', error))
++ 		);
+  
+- 	const row = operationToRow(operation);
++ 		const row = operationToRow(operation);
+  
+- 	try {
+- 		const db = getDatabase();
+- 		const stmt = db.prepare(&#96;
+- 			INSERT INTO processing_operations (
+- 				id, application_id, task, status, data, start_date, finish_date
+- 			) VALUES (
+- 				:id, :application_id, :task, :status, :data, :start_date, :finish_date
+- 			)
+- 		&#96;);
+- 		stmt.run(row);
+- 
+- 		return ok(operation);
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to create operation', error as Error));
+- 	}
++ 		yield* Effect.try({
++ 			try: () =&gt; {
++ 				const db = getDatabase();
++ 				const stmt = db.prepare(&#96;
++ 					INSERT INTO processing_operations (
++ 						id, application_id, task, status, data, start_date, finish_date
++ 					) VALUES (
++ 						:id, :application_id, :task, :status, :data, :start_date, :finish_date
++ 					)
++ 				&#96;);
++ 				stmt.run(row);
++ 			},
++ 			catch: (error) =&gt; new StorageError('Failed to create operation', error as Error)
++ 		});
++ 
++ 		return operation;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 36, lines removed: 41
+
+```diff
+@@ -170,49 +170,44 @@
+  	id: string,
+  	updates: Partial&lt;Pick&lt;ProcessingOperation, 'status' | 'data' | 'finishDate'&gt;&gt;
+- ): Result&lt;ProcessingOperation, Error&gt; {
+- 	// Получаем текущую операцию
+- 	const currentOperation = getOperation(id);
+- 	if (currentOperation.isErr()) {
+- 		return currentOperation;
+- 	}
+- 
+- 	const current = currentOperation.value;
++ ): Effect.Effect&lt;ProcessingOperation, StorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		// Получаем текущую операцию
++ 		const current = yield* getOperation(id);
+  
+- 	// Объединяем обновления с текущими данными
+- 	const updated: ProcessingOperation = {
+- 		...current,
+- 		...updates
+- 	};
++ 		// Объединяем обновления с текущими данными
++ 		const updated: ProcessingOperation = {
++ 			...current,
++ 			...updates
++ 		};
+  
+- 	// Валидация
+- 	let validated: ProcessingOperation;
+- 	try {
+- 		validated = ProcessingOperationSchema.parse(updated);
+- 	} catch (error) {
+- 		return err(new ValidationError('Invalid operation data', error));
+- 	}
++ 		// Валидация
++ 		const validated = yield* parseZodSchema(updated, ProcessingOperationSchema).pipe(
++ 			Effect.mapError((error) =&gt; new StorageError('Invalid operation data', error))
++ 		);
+  
+- 	const row = operationToRow(validated);
++ 		const row = operationToRow(validated);
+  
+- 	try {
+- 		const db = getDatabase();
+- 		const stmt = db.prepare(&#96;
+- 			UPDATE processing_operations SET
+- 				status = :status,
+- 				data = :data,
+- 				finish_date = :finish_date
+- 			WHERE id = :id
+- 		&#96;);
+- 		stmt.run({
+- 			status: row.status,
+- 			data: row.data,
+- 			finish_date: row.finish_date,
+- 			id: row.id
+- 		});
+- 
+- 		return ok(validated);
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to update operation', error as Error));
+- 	}
++ 		yield* Effect.try({
++ 			try: () =&gt; {
++ 				const db = getDatabase();
++ 				const stmt = db.prepare(&#96;
++ 					UPDATE processing_operations SET
++ 						status = :status,
++ 						data = :data,
++ 						finish_date = :finish_date
++ 					WHERE id = :id
++ 				&#96;);
++ 				stmt.run({
++ 					status: row.status,
++ 					data: row.data,
++ 					finish_date: row.finish_date,
++ 					id: row.id
++ 				});
++ 			},
++ 			catch: (error) =&gt; new StorageError('Failed to update operation', error as Error)
++ 		});
++ 
++ 		return validated;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 9
+
+```diff
+@@ -212,13 +212,13 @@
+  }
+  
+- export function deleteOperation(id: string): Result&lt;void, Error&gt; {
+- 	try {
+- 		const db = getDatabase();
+- 		const stmt = db.prepare('DELETE FROM processing_operations WHERE id = ?');
+- 		stmt.run(id);
+- 		return ok(undefined);
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to delete operation', error as Error));
+- 	}
++ export function deleteOperation(id: string): Effect.Effect&lt;void, StorageError&gt; {
++ 	return Effect.try({
++ 		try: () =&gt; {
++ 			const db = getDatabase();
++ 			const stmt = db.prepare('DELETE FROM processing_operations WHERE id = ?');
++ 			stmt.run(id);
++ 		},
++ 		catch: (error) =&gt; new StorageError('Failed to delete operation', error as Error)
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 9
+
+```diff
+@@ -223,13 +223,13 @@
+  }
+  
+- export function deleteOperations(ids: string[]): Result&lt;void, Error&gt; {
+- 	try {
+- 		const db = getDatabase();
+- 		const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
+- 		stmt.run(ids);
+- 		return ok(undefined);
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to delete operations', error as Error));
+- 	}
++ export function deleteOperations(ids: string[]): Effect.Effect&lt;void, StorageError&gt; {
++ 	return Effect.try({
++ 		try: () =&gt; {
++ 			const db = getDatabase();
++ 			const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
++ 			stmt.run(ids);
++ 		},
++ 		catch: (error) =&gt; new StorageError('Failed to delete operations', error as Error)
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/processingOperations.ts</summary>
+
+**Chunk 1**
+Lines added: 17, lines removed: 16
+
+```diff
+@@ -240,24 +240,25 @@
+  	applicationId: string,
+  	task?: ProcessingOperationTask
+- ): Result&lt;string[], Error&gt; {
+- 	try {
+- 		const db = getDatabase();
+- 		let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
+- 		const params: (string | ProcessingOperationTask)[] = [applicationId];
++ ): Effect.Effect&lt;string[], StorageError&gt; {
++ 	return Effect.try({
++ 		try: () =&gt; {
++ 			const db = getDatabase();
++ 			let query = 'SELECT id FROM processing_operations WHERE application_id = ?';
++ 			const params: (string | ProcessingOperationTask)[] = [applicationId];
+  
+- 		if (task) {
+- 			query += ' AND task = ?';
+- 			params.push(task);
+- 		}
++ 			if (task) {
++ 				query += ' AND task = ?';
++ 				params.push(task);
++ 			}
+  
+- 		query += ' ORDER BY start_date DESC';
++ 			query += ' ORDER BY start_date DESC';
+  
+- 		const stmt = db.prepare(query);
+- 		const rows = stmt.all(...params) as { id: string }[];
++ 			const stmt = db.prepare(query);
++ 			const rows = stmt.all(...params) as { id: string }[];
+  
+- 		return ok(rows.map((row) =&gt; row.id));
+- 	} catch (error) {
+- 		return err(new StorageError('Failed to list operations', error as Error));
+- 	}
++ 			return rows.map((row) =&gt; row.id);
++ 		},
++ 		catch: (error) =&gt; new StorageError('Failed to list operations', error as Error)
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<details>
+<summary>Tool use: **search_replace**</summary>
+
+
+Parameters:
+
+```json
+{
+  "relativeWorkspacePath": "src/lib/storage/processingOperations.ts"
+}
+```
+Additional data:
+
+```json
+{
+  "codeblockId": "aaef3d34-9a53-4540-b684-db732d8225ff"
+}
+```
+User decision: **accepted**
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_file">
+<details>
+<summary>Tool use: **read_file**</summary>
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
 
 ---
 
