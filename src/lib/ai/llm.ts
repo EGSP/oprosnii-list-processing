@@ -14,6 +14,7 @@ import { aiConfig } from "./config";
 import { completion, getModelUri, type CompletionRequest, type CompletionResult } from "./yandex/api-llm";
 import z from "zod";
 import { parseZodSchema } from "$lib/utils/zod.js";
+import { logger } from "$lib/utils/logger";
 
 
 
@@ -96,7 +97,8 @@ export function resolveProductType(applicationId: string, text: string): Effect.
 
 		const completionResult = yield* completion(config.apiKey, completionRequest);
 		const productType = yield* getParsedCompletionText(completionResult, ProductTypeSchema);
-		
+
+		logger.info(`resolveProductType: успешное определение типа продукции: ${JSON.stringify(productType)}`);
 		return productType;
 	});
 }
