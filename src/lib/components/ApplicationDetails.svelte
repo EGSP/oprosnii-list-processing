@@ -1,230 +1,96 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { getApplicationStatusInfo, getTechnicalSpecs, processApplication, getFileInfo, fetchApplication, extractText, resolveProductType, resolveAbbreviation } from '$lib/business/rest.js';
+	import { getApplicationStatusInfo, getFileInfo, fetchApplication, extractText, resolveProductType, resolveAbbreviation } from '$lib/business/rest.js';
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
-	import { Button, Select, SelectItem, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification } from 'carbon-components-svelte';
+	import { Button, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification } from 'carbon-components-svelte';
 	import { Renew } from 'carbon-icons-svelte';
-
-	interface TechnicalSpec {
-		id: string;
-		name: string;
-		description?: string;
-	}
 
 	export let applicationId: string | null = null;
 
 	let statusInfo: ApplicationStatusInfo | null = null;
-	let technicalSpecs: TechnicalSpec[] = [];
-	let selectedTechnicalSpecId: string = '';
-	let isProcessing = false;
 	let error: string | null = null;
-	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 	let fileInfo: FileInfo | null = null;
 	let isRefreshing = false;
 	let runningOperations = new Set<ProcessingOperation['task']>();
+	let currentApplicationId: string | null = null;
 
-	$: if (applicationId) {
-		loadApplication();
-	} else {
+	$: if (applicationId !== currentApplicationId) {
+		// При смене заявки сразу очищаем старые данные
+		currentApplicationId = applicationId;
 		statusInfo = null;
 		fileInfo = null;
-		stopOperationsUpdate();
-	}
-
-	onMount(() => {
-		loadTechnicalSpecs();
-		// Если заявка уже выбрана при монтировании, загружаем её
+		error = null;
+		runningOperations.clear();
+		
+		// Загружаем новую заявку с операциями
 		if (applicationId) {
 			loadApplication();
 		}
-	});
-
-	onDestroy(() => {
-		stopOperationsUpdate();
-	});
-
-	async function loadTechnicalSpecs() {
-		const specs = await Effect.runPromise(getTechnicalSpecs()).catch((err) => {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки технических условий';
-			return null;
-		});
-		if (specs) {
-			technicalSpecs = specs as TechnicalSpec[];
-			if (technicalSpecs.length > 0 && !selectedTechnicalSpecId) {
-				selectedTechnicalSpecId = technicalSpecs[0].id;
-			}
-		}
 	}
+
 
 	async function loadApplication() {
 		if (!applicationId) return;
-
-		// Не показываем индикатор загрузки, чтобы избежать моргания при быстром переключении
-		// Предыдущие данные остаются видимыми до загрузки новых
-		error = null;
-		const currentApplicationId = applicationId; // Сохраняем ID для проверки актуальности
 		
+		// Проверяем, что applicationId не изменился во время загрузки
+		const loadingId = applicationId;
+
+		error = null;
+		
+		// Загружаем данные заявки, ВСЕГДА включая операции
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {
-				const status = yield* getApplicationStatusInfo(applicationId);
-				const file = yield* Effect.option(getFileInfo(applicationId));
+				// getApplicationStatusInfo загружает заявку и ВСЕ операции
+				const status = yield* getApplicationStatusInfo(loadingId);
+				const file = yield* Effect.option(getFileInfo(loadingId));
 				return { status, file };
 			})
 		).catch((err) => {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
-			// Сбрасываем данные только если это все еще актуальная заявка
-			if (currentApplicationId === applicationId) {
+			// Очищаем данные только если это та же заявка
+			if (applicationId === loadingId) {
 				statusInfo = null;
 				fileInfo = null;
 			}
 			return null;
 		});
 		
-		// Обновляем данные только если заявка не изменилась во время загрузки
-		if (result && currentApplicationId === applicationId) {
-			statusInfo = result.status;
+		if (result) {
+			// Сохраняем данные заявки с операциями
+			// result.status.operations содержит все загруженные операции (может быть пустым массивом)
+			statusInfo = {
+				...result.status,
+				operations: result.status.operations || [] // Гарантируем, что operations всегда массив
+			};
 			fileInfo = Option.isSome(result.file) ? result.file.value : null;
 		}
 	}
 
-	/**
-	 * Обновляет заявку без показа индикатора загрузки (для фонового обновления)
-	 */
-	async function refreshApplication() {
-		if (!applicationId) return;
 
-		const result = await Effect.runPromise(getApplicationStatusInfo(applicationId)).catch((err) => {
-			// Игнорируем ошибки при фоновом обновлении
-			console.warn('Не удалось обновить заявку:', err);
-			return null;
-		});
-		
-		if (result) {
-			statusInfo = result;
-		}
-	}
-
-
-	/**
-	 * Проверяет, нужно ли обновлять данные заявки и операций
-	 */
-	function shouldUpdate(): boolean {
-		// Если нет статуса - не обновляем
-		if (!statusInfo) return false;
-
-		// Если статус completed или failed - не обновляем
-		if (statusInfo.status === 'completed' || statusInfo.status === 'failed') return false;
-
-		// Если статус processing - обновляем
-		return statusInfo.status === 'processing';
-	}
-
-	function startOperationsUpdate() {
-		stopOperationsUpdate();
-
-		// Проверяем, нужно ли обновление
-		if (!shouldUpdate()) {
-			return;
-		}
-
-		// Обновляем заявку и операции каждые 3 секунды
-		operationsUpdateInterval = setInterval(async () => {
-			if (!applicationId) {
-				stopOperationsUpdate();
-				return;
-			}
-
-			// Проверяем перед каждым обновлением
-			if (!shouldUpdate()) {
-				stopOperationsUpdate();
-				return;
-			}
-
-			// Обновляем статус (без показа индикатора загрузки)
-			await refreshApplication();
-		}, 3000);
-	}
-
-	function stopOperationsUpdate() {
-		if (operationsUpdateInterval) {
-			clearInterval(operationsUpdateInterval);
-			operationsUpdateInterval = null;
-		}
-	}
-
-	async function handleProcess() {
-		if (!applicationId || !selectedTechnicalSpecId) {
-			error = 'Выберите технические условия';
-			return;
-		}
-
-		isProcessing = true;
-		error = null;
-		const result = await Effect.runPromise(
-			Effect.gen(function* () {
-				yield* processApplication(applicationId, selectedTechnicalSpecId);
-				const status = yield* getApplicationStatusInfo(applicationId);
-				const file = yield* Effect.option(getFileInfo(applicationId));
-				return { status, file };
-			})
-		).catch((err) => {
-			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
-			// Всегда обновляем данные после обработки, даже при ошибке
-			// Это обеспечит отображение частичных результатов
-			return null;
-		});
-		
-		if (result) {
-			statusInfo = result.status;
-			fileInfo = Option.isSome(result.file) ? result.file.value : null;
-		} else {
-			// Всегда обновляем данные после обработки, даже при ошибке
-			await loadApplication();
-		}
-		// Запускаем периодическое обновление, если нужно
-		startOperationsUpdate();
-		isProcessing = false;
-	}
 
 	async function handleRefresh() {
 		if (!applicationId) return;
 
 		isRefreshing = true;
 		error = null;
-		const result = await Effect.runPromise(
-			Effect.gen(function* () {
-				yield* fetchApplication(applicationId);
-				const status = yield* getApplicationStatusInfo(applicationId);
-				const file = yield* Effect.option(getFileInfo(applicationId));
-				return { status, file };
-			})
+		
+		// Обновляем операции через fetchApplication
+		await Effect.runPromise(
+			fetchApplication(applicationId)
 		).catch((err) => {
-			error = err instanceof Error ? err.message : 'Ошибка обновления заявки';
-			isRefreshing = false;
-			return null;
+			console.warn('Ошибка при обновлении операций:', err);
 		});
 		
-		if (result) {
-			statusInfo = result.status;
-			fileInfo = Option.isSome(result.file) ? result.file.value : null;
-			// Запускаем периодическое обновление, если нужно
-			startOperationsUpdate();
-		}
+		// Загружаем обновленные данные
+		await loadApplication();
 		isRefreshing = false;
 	}
 
 	async function handleRunOperation(task: ProcessingOperation['task']) {
 		if (!applicationId) return;
-
-		// Для resolveAbbreviation нужен technicalSpecId
-		if (task === 'resolveAbbreviation' && !selectedTechnicalSpecId) {
-			error = 'Выберите технические условия для формирования аббревиатуры';
-			return;
-		}
 
 		runningOperations.add(task);
 		error = null;
@@ -235,32 +101,23 @@
 		} else if (task === 'resolveProductType') {
 			operationEffect = resolveProductType(applicationId);
 		} else if (task === 'resolveAbbreviation') {
-			operationEffect = resolveAbbreviation(applicationId, selectedTechnicalSpecId);
+			// Для resolveAbbreviation нужен technicalSpecId, но пока используем пустую строку
+			// TODO: нужно будет передавать technicalSpecId как-то иначе
+			error = 'Для формирования аббревиатуры требуется техническое условие';
+			runningOperations.delete(task);
+			return;
 		} else {
 			error = 'Неизвестная операция';
 			runningOperations.delete(task);
 			return;
 		}
 
-		const result = await Effect.runPromise(
-			Effect.gen(function* () {
-				yield* operationEffect;
-				const status = yield* getApplicationStatusInfo(applicationId);
-				const file = yield* Effect.option(getFileInfo(applicationId));
-				return { status, file };
-			})
-		).catch((err) => {
+		await Effect.runPromise(operationEffect).catch((err) => {
 			error = err instanceof Error ? err.message : 'Ошибка выполнения операции';
-			runningOperations.delete(task);
-			return null;
 		});
 		
-		if (result) {
-			statusInfo = result.status;
-			fileInfo = Option.isSome(result.file) ? result.file.value : null;
-			// Запускаем периодическое обновление, если нужно
-			startOperationsUpdate();
-		}
+		// Обновляем данные после операции
+		await loadApplication();
 		runningOperations.delete(task);
 	}
 
@@ -303,7 +160,8 @@
 	}
 
 	// Получаем все операции, включая те, которых еще нет
-	function getAllOperations(): Array<ProcessingOperation | { task: ProcessingOperation['task']; status: ProcessingOperation['status'] }> {
+	// Реактивная переменная, которая обновляется при изменении statusInfo
+	$: allOperations = (() => {
 		const operationTasks: ProcessingOperation['task'][] = ['extractText', 'resolveProductType', 'resolveAbbreviation'];
 		const operations = statusInfo?.operations || [];
 		const operationsMap = new Map(operations.map((op) => [op.task, op]));
@@ -314,9 +172,9 @@
 				return existing;
 			}
 			// Возвращаем "пустую" операцию для отображения
-			return { task, status: 'started' };
+			return { task, status: 'started' as ProcessingOperation['status'] };
 		});
-	}
+	})();
 </script>
 
 <div class="application-details">
@@ -338,12 +196,12 @@
 				<h2>Детали заявки</h2>
 				<Button
 					kind="ghost"
-					size="sm"
+					size="small"
 					on:click={handleRefresh}
 					disabled={isRefreshing}
 					title="Обновить данные заявки"
+					icon={Renew}
 				>
-					<Renew slot="icon" />
 					{isRefreshing ? 'Обновление...' : 'Обновить'}
 				</Button>
 			</div>
@@ -399,7 +257,7 @@
 					<FormGroup>
 						<label class="bx--label">Статусы операций:</label>
 						<div class="operations-list">
-							{#each getAllOperations() as operationOrPlaceholder}
+							{#each allOperations as operationOrPlaceholder}
 								<OperationStatusBadge 
 									operation={operationOrPlaceholder} 
 									applicationId={applicationId}
@@ -452,38 +310,6 @@
 				{:else}
 					<p>Информация о файле недоступна</p>
 				{/if}
-			</Tile>
-
-			<Tile class="section">
-				<h3>Обработка</h3>
-				<Form>
-					<FormGroup>
-						<Select
-							id="technical-spec-select"
-							labelText="Технические условия:"
-							selectedItem={technicalSpecs.find(s => s.id === selectedTechnicalSpecId)}
-							disabled={isProcessing || statusInfo.status === 'completed'}
-							on:select={(e) => {
-								const selected = e.detail.selectedItem;
-								if (selected) {
-									selectedTechnicalSpecId = selected.id;
-								}
-							}}
-						>
-							{#each technicalSpecs as spec}
-								<SelectItem value={spec} text={spec.name} />
-							{/each}
-						</Select>
-					</FormGroup>
-					<FormGroup>
-						<Button
-							on:click={handleProcess}
-							disabled={isProcessing || !selectedTechnicalSpecId || statusInfo.status === 'completed'}
-						>
-							{isProcessing ? 'Обработка...' : 'Обработать заявку'}
-						</Button>
-					</FormGroup>
-				</Form>
 			</Tile>
 
 			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}

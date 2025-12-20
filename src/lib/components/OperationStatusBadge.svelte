@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ProcessingOperation } from '$lib/business/types.js';
 	import { Tag, Button, Accordion, AccordionItem } from 'carbon-components-svelte';
-	import { ChevronDown, Checkmark, Error, Time } from 'carbon-icons-svelte';
+	import { ChevronDown, Checkmark, Error, Time, Play } from 'carbon-icons-svelte';
 
 	export let operation:
 		| ProcessingOperation
@@ -119,11 +119,12 @@
 		<div class="badge-actions">
 			{#if canRun}
 				<Button
-					size="sm"
+					size="small"
 					kind="primary"
 					disabled={isRunning}
 					on:click={handleRunClick}
 					title="Запустить операцию"
+					icon={Play}
 				>
 					{getRunButtonLabel()}
 				</Button>
@@ -134,8 +135,7 @@
 		<Accordion>
 			<AccordionItem
 				title="Детали операции"
-				open={isExpanded}
-				on:toggle={(e) => isExpanded = e.detail.open}
+				bind:open={isExpanded}
 			>
 				<pre class="result-json">{getOperationData()}</pre>
 			</AccordionItem>
