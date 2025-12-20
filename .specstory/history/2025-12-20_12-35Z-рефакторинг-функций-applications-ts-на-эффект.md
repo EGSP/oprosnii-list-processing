@@ -1454,14 +1454,631 @@ _**Agent (model default, mode Agent)**_
 ---
 
 
+Изучаю файл и связанные функции, чтобы переписать его на Effect.
+
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="codebase_search">
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
 <details>
-<summary>Tool use: **codebase_search**</summary>
+                <summary>Tool use: **codebase_search** • Searched codebase "What does getOCRData function return? How is it used?" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `PROJECT.md` | L27 |
+| `README.md` | L66 |
+| `PROJECT.md` | L24-63 |
+| `src/lib/config.ts` | L34 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `package.json` | L36 |
+| `src/app.d.ts` | L11 |
+| `src/routes/+page.svelte` | L3 |
+| `src/app.html` | L12 |
+| `data/tu/example.json` | L18 |
+| `README.md` | L64-74 |
+| `.gitignore` | L14 |
+| `.eslintrc.cjs` | L30 |
+| `svelte.config.js` | L11 |
+| `tsconfig.json` | L16 |
 
-Status: **loading**
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "getOCRData" in "src" • 5 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src\lib\ai\ocr.ts` | `export function getOCRData(processingOperation: ProcessingOperation): Result<string, Error> \{` | L33 |
+| `src\lib\business\processing.ts` | `import \{ fetchOCRData, getOCRData \} from '$lib/ai/ocr.js';` | L25 |
+| `src\lib\business\processing.ts` | `return getOCRData(operation);` | L92 |
+| `src\lib\storage\files.ts` | `import \{ getOCRData \} from '$lib/ai/ocr.js';` | L15 |
+| `src\lib\storage\files.ts` | `const ocrDataResult = getOCRData(operation);` | L207 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Изучаю `getOCRData`:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Переписываю файл на Effect. Для `getOCRData`, которая ещё возвращает `Result`, используем конвертацию в Effect:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -12,5 +12,5 @@
+  import { PDFDocument } from 'pdf-lib';
+  import { findOperations, getOperation } from './processingOperations.js';
+- import { err, Ok, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
++ import { Effect, pipe } from 'effect';
+  import { getOCRData } from '$lib/ai/ocr.js';
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 16, lines removed: 15
+
+```diff
+@@ -34,27 +34,28 @@
+   * @param applicationId - GUID заявки
+   * @param originalFilename - Оригинальное имя файла (для сохранения расширения)
+-  * @returns Путь к сохраненному файлу
++  * @returns Effect с путем к сохраненному файлу
+   */
+  export function storeFile(
+  	fileBuffer: Buffer,
+  	applicationId: string,
+  	originalFilename: string
+- ): string {
+- 	try {
+- 		// Создаем директорию для заявки
+- 		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
+- 		mkdirSync(applicationDir, { recursive: true });
++ ): Effect.Effect&lt;string, FileStorageError&gt; {
++ 	return Effect.try({
++ 		try: () =&gt; {
++ 			// Создаем директорию для заявки
++ 			const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
++ 			mkdirSync(applicationDir, { recursive: true });
+  
+- 		// Сохраняем оригинальное расширение
+- 		const extension = originalFilename.split('.').pop() || '';
+- 		const filename = &#96;${applicationId}.${extension}&#96;;
+- 		const filePath = join(applicationDir, filename);
++ 			// Сохраняем оригинальное расширение
++ 			const extension = originalFilename.split('.').pop() || '';
++ 			const filename = &#96;${applicationId}.${extension}&#96;;
++ 			const filePath = join(applicationDir, filename);
+  
+- 		writeFileSync(filePath, fileBuffer);
++ 			writeFileSync(filePath, fileBuffer);
+  
+- 		return filePath;
+- 	} catch (error) {
+- 		throw new FileStorageError(&#96;Failed to save file for application ${applicationId}&#96;, error as Error);
+- 	}
++ 			return filePath;
++ 		},
++ 		catch: (error) =&gt; new FileStorageError(&#96;Failed to save file for application ${applicationId}&#96;, error as Error)
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 20, lines removed: 13
+
+```diff
+@@ -63,21 +63,28 @@
+   * Получает путь к файлу заявки. Файл должен иметь GUID в имени. GUID - это ID заявки.
+   */
+- export function getFilePath(applicationId: string): Result&lt;string, Error&gt; {
+- 	const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
++ export function getFilePath(applicationId: string): Effect.Effect&lt;string, FileStorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
+  
+- 	if (!existsSync(applicationDir)) {
+- 		return err(new Error(&#96;Application directory not found for application ${applicationId}&#96;));
+- 	}
++ 		const dirExists = yield* Effect.sync(() =&gt; existsSync(applicationDir));
++ 		if (!dirExists) {
++ 			return yield* Effect.fail(new FileStorageError(&#96;Application directory not found for application ${applicationId}&#96;));
++ 		}
+  
+- 	// Ищем файл в директории заявки
+- 	// Файл может иметь GUID как имя, с любым расширением
+- 	const files = readdirSync(applicationDir);
+- 	const file = files.find((f: string) =&gt; f.startsWith(applicationId));
++ 		// Ищем файл в директории заявки
++ 		// Файл может иметь GUID как имя, с любым расширением
++ 		const files = yield* Effect.try({
++ 			try: () =&gt; readdirSync(applicationDir),
++ 			catch: (error) =&gt; new FileStorageError(&#96;Failed to read directory for application ${applicationId}&#96;, error as Error)
++ 		});
++ 		
++ 		const file = files.find((f: string) =&gt; f.startsWith(applicationId));
+  
+- 	if (!file) {
+- 		return err(new Error(&#96;File not found for application ${applicationId}. Files: ${files.join(', ')}&#96;));
+- 	}
++ 		if (!file) {
++ 			return yield* Effect.fail(new FileStorageError(&#96;File not found for application ${applicationId}. Files: ${files.join(', ')}&#96;));
++ 		}
+  
+- 	return ok(join(applicationDir, file));
++ 		return join(applicationDir, file);
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -104,6 +104,6 @@
+   * @returns Имя файла без расширения
+   */
+- export function getFileNameWithoutExtension(path: string): Ok&lt;string, Error&gt; {
+- 	return ok(path.split('.').slice(0, -1).join('.'));
++ export function getFileNameWithoutExtension(path: string): string {
++ 	return path.split('.').slice(0, -1).join('.');
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 23, lines removed: 21
+
+```diff
+@@ -109,25 +109,27 @@
+  
+  
+- function getFileType(path: string): Result&lt;FileType, Error&gt; {
+- 	const extension = path.split('.').pop()?.toLowerCase();
+- 	if (!extension) {
+- 		return err(new Error('Не удалось определить расширение файла'));
+- 	}
+- 	switch (extension) {
+- 		case 'pdf':
+- 			return ok('pdf');
+- 		case 'docx':
+- 		case 'doc':
+- 			return ok('document');
+- 		case 'xlsx':
+- 		case 'xls':
+- 			return ok('spreadsheet');
+- 		case 'jpeg':
+- 		case 'jpg':
+- 		case 'png':
+- 			return ok('image');
+- 		default:
+- 			return err(new Error(&#96;Неизвестное расширение файла: ${extension}&#96;));
+- 	}
++ function getFileType(path: string): Effect.Effect&lt;FileType, FileStorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		const extension = path.split('.').pop()?.toLowerCase();
++ 		if (!extension) {
++ 			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
++ 		}
++ 		switch (extension) {
++ 			case 'pdf':
++ 				return 'pdf' as FileType;
++ 			case 'docx':
++ 			case 'doc':
++ 				return 'document' as FileType;
++ 			case 'xlsx':
++ 			case 'xls':
++ 				return 'spreadsheet' as FileType;
++ 			case 'jpeg':
++ 			case 'jpg':
++ 			case 'png':
++ 				return 'image' as FileType;
++ 			default:
++ 				return yield* Effect.fail(new FileStorageError(&#96;Неизвестное расширение файла: ${extension}&#96;));
++ 		}
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 8, lines removed: 6
+
+```diff
+@@ -134,10 +134,12 @@
+  }
+  
+- function getFileExtension(path: string): Result&lt;string, Error&gt; {
+- 	const extension = path.split('.').pop()?.toLowerCase();
+- 	if (!extension) {
+- 		return err(new Error('Не удалось определить расширение файла'));
+- 	}
+- 	return ok(extension);
++ function getFileExtension(path: string): Effect.Effect&lt;string, FileStorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		const extension = path.split('.').pop()?.toLowerCase();
++ 		if (!extension) {
++ 			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
++ 		}
++ 		return extension;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 17, lines removed: 6
+
+```diff
+@@ -147,11 +147,22 @@
+   * Читает файл
+   */
+- export function readFile(path: string): Result&lt;Buffer, Error&gt; {
+- 	if (!path || !existsSync(path)) {
+- 		return err(new Error(&#96;File not found for path ${path}&#96;));
+- 	}
++ export function readFile(path: string): Effect.Effect&lt;Buffer, FileStorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		if (!path) {
++ 			return yield* Effect.fail(new FileStorageError(&#96;Invalid file path: ${path}&#96;));
++ 		}
++ 
++ 		const exists = yield* Effect.sync(() =&gt; existsSync(path));
++ 		if (!exists) {
++ 			return yield* Effect.fail(new FileStorageError(&#96;File not found for path ${path}&#96;));
++ 		}
+  
+- 	const buffer = readFileSync(path);
+- 	return ok(buffer);
++ 		const buffer = yield* Effect.try({
++ 			try: () =&gt; readFileSync(path),
++ 			catch: (error) =&gt; new FileStorageError(&#96;Failed to read file at path ${path}&#96;, error as Error)
++ 		});
++ 
++ 		return buffer;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 3
+
+```diff
+@@ -170,8 +170,12 @@
+   * Читает файл заявки
+   * @param applicationId - GUID заявки
+-  * @returns Buffer с содержимым файла
++  * @returns Effect с Buffer с содержимым файла
+   */
+- export function readApplicationFile(applicationId: string): Result&lt;Buffer, Error&gt; {
+- 	return getFilePath(applicationId).andThen(readFile);
++ export function readApplicationFile(applicationId: string): Effect.Effect&lt;Buffer, FileStorageError&gt; {
++ 	return Effect.gen(function* () {
++ 		const filePath = yield* getFilePath(applicationId);
++ 		const buffer = yield* readFile(filePath);
++ 		return buffer;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 8, lines removed: 7
+
+```diff
+@@ -183,18 +183,19 @@
+   * Определяет количество страниц в PDF файле
+   */
+- function getPDFPageCount(buffer: Buffer): ResultAsync&lt;number, Error&gt; {
++ function getPDFPageCount(buffer: Buffer): Effect.Effect&lt;number, FileStorageError&gt; {
+  	const uint8Array = new Uint8Array(buffer);
+- 	return ResultAsync.fromPromise(PDFDocument.load(uint8Array)
+- 		.then((pdfDoc) =&gt; {
++ 	return Effect.tryPromise({
++ 		try: async () =&gt; {
++ 			const pdfDoc = await PDFDocument.load(uint8Array);
+  			const pages = pdfDoc.getPages();
+  			return pages.length;
+- 		}),
+- 		(error) =&gt; {
++ 		},
++ 		catch: (error) =&gt; {
+  			logger.warn('Не удалось определить количество страниц PDF', {
+  				error: error instanceof Error ? error.message : String(error)
+  			});
+- 			return error instanceof Error ? error : new Error(String(error));
++ 			return new FileStorageError('Не удалось определить количество страниц PDF', error as Error);
+  		}
+- 	);
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -200,9 +200,9 @@
+  }
+  
+- function getPageCount(fileType: FileType, buffer: Buffer): ResultAsync&lt;number, Error&gt; {
++ function getPageCount(fileType: FileType, buffer: Buffer): Effect.Effect&lt;number, FileStorageError&gt; {
+  	if (fileType === 'pdf') {
+  		return getPDFPageCount(buffer);
+  	}
+- 	return okAsync(1);
++ 	return Effect.succeed(1);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 43, lines removed: 40
+
+```diff
+@@ -215,46 +215,49 @@
+   *
+   * @param applicationId - GUID заявки
+-  * @returns Информация о файле или null, если файл не найден
++  * @returns Effect с информацией о файле
+   */
+- export function getFileInfo(applicationId: string): ResultAsync&lt;FileInfo, Error&gt; {
+- 	return getFilePath(applicationId).asyncAndThen((filePath) =&gt; {
+- 		return readFile(filePath).asyncAndThen((buffer) =&gt; {
+- 			return getFileType(filePath).asyncAndThen((type) =&gt; {
+- 				return getFileExtension(filePath).asyncAndThen((extension) =&gt; {
+- 					return getPageCount(type, buffer).andThen((pageCount) =&gt; {
+- 						let extractedText: string | undefined;
+- 						const textExtractionOperations = findOperations(applicationId, 'extractText');
+- 				
+- 						if (textExtractionOperations.isOk() &amp;&amp; textExtractionOperations.value.length &gt; 0) {
+- 							extractedText = textExtractionOperations.value.map((operationId) =&gt; {
+- 								const operationResult = getOperation(operationId);
+- 								if (operationResult.isOk()) {
+- 									const operation = operationResult.value;
+- 									if (operation.status !== 'completed') return '';
+- 									if (operation.data.service) {
+- 										const ocrDataResult = getOCRData(operation);
+- 										if (ocrDataResult.isOk()) {
+- 											return ocrDataResult.value as string;
+- 										}
+- 									} else {
+- 										return operation.data?.result as string;
+- 									}
+- 								}
+- 								return '';
+- 							}).join('\n');
++ export function getFileInfo(applicationId: string): Effect.Effect&lt;FileInfo, FileStorageError | Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const filePath = yield* getFilePath(applicationId);
++ 		const buffer = yield* readFile(filePath);
++ 		const type = yield* getFileType(filePath);
++ 		const extension = yield* getFileExtension(filePath);
++ 		const pageCount = yield* getPageCount(type, buffer);
++ 		
++ 		let extractedText: string | undefined;
++ 		const textExtractionOperationIds = yield* findOperations(applicationId, 'extractText');
++ 
++ 		if (textExtractionOperationIds.length &gt; 0) {
++ 			const texts = yield* Effect.all(
++ 				textExtractionOperationIds.map((operationId) =&gt;
++ 					Effect.gen(function* () {
++ 						const operation = yield* getOperation(operationId);
++ 						if (operation.status !== 'completed') return '';
++ 						
++ 						if (operation.data.service) {
++ 							// Конвертируем Result в Effect для getOCRData
++ 							const ocrDataResult = getOCRData(operation);
++ 							if (ocrDataResult.isOk()) {
++ 								return ocrDataResult.value;
++ 							}
++ 							return '';
++ 						} else {
++ 							return operation.data?.result as string || '';
+  						}
+- 
+- 						
+- 						return okAsync({
+- 							name: getFileNameWithoutExtension(filePath).value,
+- 							extension,
+- 							type,
+- 							pageCount,
+- 							extractedText
+- 						} as FileInfo);
+- 					});
+- 				});
+- 			});
+- 		});
++ 					})
++ 				),
++ 				{ concurrency: 'unbounded' }
++ 			);
++ 			
++ 			extractedText = texts.filter((text) =&gt; text).join('\n');
++ 		}
++ 
++ 		return {
++ 			name: getFileNameWithoutExtension(filePath),
++ 			extension,
++ 			type,
++ 			pageCount,
++ 			extractedText
++ 		} as FileInfo;
+  	});
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/files.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/files.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 14:18-14:22 | DIAGNOSTIC_SEVERITY_HINT |
 
 
 </details>
@@ -1474,6 +2091,16 @@ Status: **loading**
 ---
 
 
+Проверяю файл и исправляю небольшие проблемы:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/files.ts</summary>
+
+</details>
+</tool-use>
 
 ---
 
@@ -1482,14 +2109,66 @@ Status: **loading**
 ---
 
 
+Исправляю логику в `getFileType`:
+
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_file">
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -113,6 +113,7 @@
+  		const extension = path.split('.').pop()?.toLowerCase();
+  		if (!extension) {
+- 			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
++ 			yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
+  		}
++ 		
+  		switch (extension) {
+  			case 'pdf':
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -129,5 +130,5 @@
+  				return 'image' as FileType;
+  			default:
+- 				return yield* Effect.fail(new FileStorageError(&#96;Неизвестное расширение файла: ${extension}&#96;));
++ 				yield* Effect.fail(new FileStorageError(&#96;Неизвестное расширение файла: ${extension}&#96;));
+  		}
+  	});
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **read_file**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/storage/files.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/files.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| Type 'Effect<FileType \| undefined, FileStorageError, never>' is not assignable to type 'Effect<FileType, FileStorageError, never>'.<br/>  Type 'FileType \| undefined' is not assignable to type 'FileType'.<br/>    Type 'undefined' is not assignable to type 'FileType'. | 112:2-112:8 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'pipe' is declared but its value is never read. | 14:18-14:22 | DIAGNOSTIC_SEVERITY_HINT |
 
 
 </details>
@@ -1502,14 +2181,63 @@ Status: **loading**
 ---
 
 
+Исправляю `getFileType` для корректной обработки ошибок:
+
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
-<details>
-<summary>Tool use: **search_replace**</summary>
+<tool-use data-tool-type="write" data-tool-name="search_replace">
 
-Status: **loading**
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/files.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -113,5 +113,5 @@
+  		const extension = path.split('.').pop()?.toLowerCase();
+  		if (!extension) {
+- 			yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
++ 			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
+  		}
+  		
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -130,5 +130,5 @@
+  				return 'image' as FileType;
+  			default:
+- 				yield* Effect.fail(new FileStorageError(&#96;Неизвестное расширение файла: ${extension}&#96;));
++ 				return yield* Effect.fail(new FileStorageError(&#96;Неизвестное расширение файла: ${extension}&#96;));
+  		}
+  	});
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/files.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/files.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 14:18-14:22 | DIAGNOSTIC_SEVERITY_HINT |
 
 
 </details>
@@ -1522,6 +2250,16 @@ Status: **loading**
 ---
 
 
+Проверяю финальную версию файла:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/files.ts</summary>
+
+</details>
+</tool-use>
 
 ---
 
@@ -1530,18 +2268,29 @@ Status: **loading**
 ---
 
 
+Файл `files.ts` переписан на Effect. Основные изменения:
 
----
+1. **Импорты обновлены**: удалён `neverthrow`, добавлены `Effect` и `pipe`.
 
+2. **Все функции переписаны на Effect**:
+   - `storeFile` — использует `Effect.try` вместо try-catch
+   - `getFilePath` — использует `Effect.gen`, `Effect.sync`, `Effect.try`
+   - `getFileNameWithoutExtension` — упрощена, возвращает `string` (была `Ok<string, Error>`)
+   - `getFileType` — использует `Effect.gen` с обработкой ошибок
+   - `getFileExtension` — использует `Effect.gen`
+   - `readFile` — использует `Effect.gen`, `Effect.sync`, `Effect.try`
+   - `readApplicationFile` — использует `Effect.gen` для композиции
+   - `getPDFPageCount` — использует `Effect.tryPromise` для асинхронной операции
+   - `getPageCount` — использует `Effect.succeed` для простого значения
+   - `getFileInfo` — использует `Effect.gen` и `Effect.all` для параллельной обработки операций
 
+3. **Убраны try-catch**: операции обёрнуты в `Effect.try` или `Effect.tryPromise`.
 
----
+4. **Композиция эффектов**: используется `Effect.gen` с `yield*` для последовательных операций и `Effect.all` для параллельных.
 
+5. **Работа с getOCRData**: `getOCRData` пока возвращает `Result`, поэтому результат конвертируется в Effect через проверку `isOk()`.
 
-
----
-
-
+Линтер ошибок не обнаружил. Файл готов к использованию.
 
 ---
 
