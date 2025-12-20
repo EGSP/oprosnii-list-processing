@@ -6,7 +6,7 @@
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
-	import { Button, Select, SelectItem, Form, FormGroup, TextInput, TextArea, Tile, Tag, Loading, InlineNotification } from 'carbon-components-svelte';
+	import { Button, Select, SelectItem, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification } from 'carbon-components-svelte';
 	import { Renew } from 'carbon-icons-svelte';
 
 	interface TechnicalSpec {
@@ -21,7 +21,6 @@
 	let technicalSpecs: TechnicalSpec[] = [];
 	let selectedTechnicalSpecId: string = '';
 	let isProcessing = false;
-	let isLoading = false;
 	let error: string | null = null;
 	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 	let fileInfo: FileInfo | null = null;
@@ -32,6 +31,7 @@
 		loadApplication();
 	} else {
 		statusInfo = null;
+		fileInfo = null;
 		stopOperationsUpdate();
 	}
 
@@ -63,8 +63,11 @@
 	async function loadApplication() {
 		if (!applicationId) return;
 
-		isLoading = true;
+		// Не показываем индикатор загрузки, чтобы избежать моргания при быстром переключении
+		// Предыдущие данные остаются видимыми до загрузки новых
 		error = null;
+		const currentApplicationId = applicationId; // Сохраняем ID для проверки актуальности
+		
 		const result = await Effect.runPromise(
 			Effect.gen(function* () {
 				const status = yield* getApplicationStatusInfo(applicationId);
@@ -73,16 +76,19 @@
 			})
 		).catch((err) => {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
-			statusInfo = null;
-			fileInfo = null;
+			// Сбрасываем данные только если это все еще актуальная заявка
+			if (currentApplicationId === applicationId) {
+				statusInfo = null;
+				fileInfo = null;
+			}
 			return null;
 		});
 		
-		if (result) {
+		// Обновляем данные только если заявка не изменилась во время загрузки
+		if (result && currentApplicationId === applicationId) {
 			statusInfo = result.status;
 			fileInfo = Option.isSome(result.file) ? result.file.value : null;
 		}
-		isLoading = false;
 	}
 
 	/**
@@ -316,10 +322,6 @@
 <div class="application-details">
 	{#if !applicationId}
 		<EmptyState message="Выберите заявку для просмотра" />
-	{:else if isLoading}
-		<div class="loading-container">
-			<Loading description="Загрузка заявки..." />
-		</div>
 	{:else if error && !statusInfo}
 		<div class="error-section">
 			<InlineNotification
@@ -338,7 +340,7 @@
 					kind="ghost"
 					size="sm"
 					on:click={handleRefresh}
-					disabled={isRefreshing || isLoading}
+					disabled={isRefreshing}
 					title="Обновить данные заявки"
 				>
 					<Renew slot="icon" />
@@ -508,13 +510,6 @@
 		height: 100%;
 		background: var(--cds-layer);
 		overflow-y: auto;
-	}
-
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 2rem;
 	}
 
 	.error-section {
