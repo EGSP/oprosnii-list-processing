@@ -3829,27 +3829,46 @@ Lint errors for `src/lib/ai/llm.ts`
 
 ---
 
+<tool-use data-tool-type="write" data-tool-name="search_replace">
 
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -9,5 +9,5 @@
+  
+  import type { Abbreviation, ProcessingOperation, ProductType } from "$lib/business/types";
+- import { AbbreviationSchema, getApplication, getOperation, ProductTypeSchema, readInstructionByNameAndType, updateApplication } from "$lib/storage";
++ import { getApplication, ProductTypeSchema, readInstructionByNameAndType, updateApplication } from "$lib/storage";
+  import { Effect, pipe } from "effect";
+  import { aiConfig } from "./config";
+```
+
+</details>
+
+</tool-use>
 
 ---
 
-
-
----
-
-
-
----
-
-
-
----
-
-<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **search_replace**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
 
-Status: **loading**
+- `src/lib/ai/llm.ts`
+
+Lint results
+
+Lint errors for `src/lib/ai/llm.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 12:18-12:22 | DIAGNOSTIC_SEVERITY_HINT |
+| 'applicationId' is declared but its value is never read. | 77:36-77:49 | DIAGNOSTIC_SEVERITY_HINT |
 
 
 </details>
@@ -3862,6 +3881,62 @@ Status: **loading**
 ---
 
 
+Удаляю неиспользуемые импорты:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -10,5 +10,5 @@
+  import type { Abbreviation, ProcessingOperation, ProductType } from "$lib/business/types";
+  import { getApplication, ProductTypeSchema, readInstructionByNameAndType, updateApplication } from "$lib/storage";
+- import { Effect, pipe } from "effect";
++ import { Effect } from "effect";
+  import { aiConfig } from "./config";
+  import { completion, getModelUri, type CompletionRequest, type CompletionResult } from "./yandex/api-llm";
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/llm.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai/llm.ts`
+
+Lint results
+
+Lint errors for `src/lib/ai/llm.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'applicationId' is declared but its value is never read. | 77:36-77:49 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
 
 ---
 
@@ -3870,6 +3945,830 @@ Status: **loading**
 ---
 
 
+Файл `llm.ts` переписан на Effect. Основные изменения:
+
+1. **Импорты обновлены**: удалён `neverthrow`, добавлены `Effect` и `parseZodSchema`. Удалён неиспользуемый класс `LLMError`.
+
+2. **Все функции переписаны на Effect**:
+   - `getProductTypeResolveData` — использует `Effect.gen` вместо `Result`
+   - `getYandexLLMData` — использует `Effect.succeed`/`Effect.fail`
+   - `getParsedCompletionText` — использует `Effect.gen`, `Effect.try`, `parseZodSchema` вместо `safeParse`
+   - `resolveProductType` — использует `Effect.gen` для композиции эффектов (было `ResultAsync`)
+   - `fetchLLMOperation` — использует `Effect.gen` для композиции эффектов (было `ResultAsync`)
+
+3. **Валидация через parseZodSchema**: в `getParsedCompletionText` заменён `safeParse` на `parseZodSchema`.
+
+4. **Упрощённая обработка ошибок**: удалена специальная обработка через `LLMError`, используются стандартные `Error`.
+
+5. **Композиция эффектов**: все функции используют `Effect.gen` с `yield*` для последовательных операций.
+
+Линтер ошибок не нашёл. Файл готов к использованию.
+
+---
+
+_**User (2025-12-20 10:50Z)**_
+
+@src/lib/business/processing.ts теперь для этого файла
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю файл и связанные функции, чтобы переписать его на Effect:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+Tool call timed out after 12s
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "^export.*extractTextFromApplicationFile" in "src/lib/utils" • 1 match</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/utils\content.ts` | `export function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): ResultAsync<string, Error> \{` | L145 |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "^export.*(fetchOCRData|getOCRData)" in "src/lib/ai" • 2 matches</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/ai\ocr.ts` | `export function getOCRData(processingOperation: ProcessingOperation): Effect.Effect<string, Error> \{` | L61 |
+| `src/lib/ai\ocr.ts` | `export function fetchOCRData(processingOperation: ProcessingOperation): Effect.Effect<void, Error> \{` | L90 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю сигнатуры функций:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/ocr.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/utils/content.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Переписываю файл на Effect. `extractTextFromApplicationFile` ещё возвращает `ResultAsync` — обработаю через Effect:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 11
+
+```diff
+@@ -20,19 +20,9 @@
+  	deleteOperations
+  } from '../storage/index.js';
+- import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
++ import { Effect } from 'effect';
+  import { extractTextFromApplicationFile } from '$lib/utils/content.js';
+  import { fetchLLMOperation, resolveProductType } from '$lib/ai/llm.js';
+  import { fetchOCRData, getOCRData } from '$lib/ai/ocr.js';
+  import { logger } from '$lib/utils/logger.js';
+- 
+- export class ProcessingError extends Error {
+- 	constructor(
+- 		message: string,
+- 		public cause?: Error
+- 	) {
+- 		super(message);
+- 		this.name = 'ProcessingError';
+- 	}
+- }
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 28, lines removed: 21
+
+```diff
+@@ -30,26 +30,33 @@
+   *
+   * @param applicationId - GUID заявки
+-  * @returns Результат извлечения текста с операцией
++  * @returns Effect с результатом извлечения текста
+   */
+- export function processTextExtraction(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return findOperations(applicationId, 'extractText')
+- 		.asyncAndThen((operations) =&gt; {
+- 			if (operations.length &gt; 0)
+- 				return errAsync(new ProcessingError('Уже есть операция извлечения текста'));
+- 			return okAsync(undefined);
+- 		})
+- 		.andThen((undef) =&gt; {
+- 			return getFileInfo(applicationId);
+- 		})
+- 		.andThen(fileInfo =&gt; {
+- 			if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
+- 				// Если извлекаем через OCR, то processing operation создается внутри функции extractText
+- 				return extractText(applicationId, fileInfo);
+- 			} else {
+- 				return extractTextFromApplicationFile(applicationId, fileInfo).andThen((extractedText) =&gt;
+- 					createOperation(applicationId, 'extractText', { result: extractedText }, 'completed'));
+- 			}
+- 		})
+- 		.map(() =&gt; undefined);
++ export function processTextExtraction(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const operations = yield* findOperations(applicationId, 'extractText');
++ 		if (operations.length &gt; 0) {
++ 			return yield* Effect.fail(new Error('Уже есть операция извлечения текста'));
++ 		}
++ 
++ 		const fileInfo = yield* getFileInfo(applicationId);
++ 
++ 		if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
++ 			// Если извлекаем через OCR, то processing operation создается внутри функции extractText
++ 			yield* extractText(applicationId, fileInfo);
++ 		} else {
++ 			// Конвертируем ResultAsync в Effect через Effect.tryPromise
++ 			const extractedText = yield* Effect.tryPromise({
++ 				try: async () =&gt; {
++ 					const result = await extractTextFromApplicationFile(applicationId, fileInfo).toPromise();
++ 					if (result.isErr()) {
++ 						throw result.error;
++ 					}
++ 					return result.value;
++ 				},
++ 				catch: (error) =&gt; error as Error
++ 			});
++ 			yield* createOperation(applicationId, 'extractText', { result: extractedText }, 'completed');
++ 		}
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 6
+
+```diff
+@@ -64,11 +64,14 @@
+   * Получает все не завершенные операции извлечения текста и пытается получить результаты по ним
+   * @param applicationId - ID заявки
+-  * @returns Результат с ошибкой или undefined
++  * @returns Effect с результатом обработки
+   */
+- export function fetchTextExtraction(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' })
+- 		.asyncAndThen((operations) =&gt; {
+- 			return ResultAsync.fromSafePromise(Promise.allSettled(operations.map((operation) =&gt; fetchOCRData(operation))));
+- 		}).map(() =&gt; undefined);
++ export function fetchTextExtraction(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const operations = yield* getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' });
++ 		yield* Effect.all(
++ 			operations.map((operation) =&gt; fetchOCRData(operation)),
++ 			{ concurrency: 'unbounded' }
++ 		);
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 15
+
+```diff
+@@ -80,21 +80,28 @@
+   * Получает извлеченный текст из заявки
+   * @param applicationId - ID заявки
+-  * @returns Результат с ошибкой или извлеченный текст
++  * @returns Effect с извлеченным текстом
+   */
+- export function getExtractedText(applicationId: string): Result&lt;string, Error&gt; {
+- 	return findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' }).andThen((operationIds) =&gt; {
+- 		if (operationIds.length === 0)
+- 			return err(new ProcessingError('Не найден результат извлечения текста'));
++ export function getExtractedText(applicationId: string): Effect.Effect&lt;string, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const operationIds = yield* findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' });
++ 		if (operationIds.length === 0) {
++ 			return yield* Effect.fail(new Error('Не найден результат извлечения текста'));
++ 		}
+  
+- 		const text = operationIds.map((operationId) =&gt; {
+- 			return getOperation(operationId).andThen((operation) =&gt; {
+- 				if (operation.data.service) {
+- 					return getOCRData(operation);
+- 				} else {
+- 					return ok(operation.data.result as string);
+- 				}
+- 			});
+- 		}).map((result) =&gt; result.isOk() ? result.value : null).filter((text) =&gt; text !== null).join('\n');
+- 		return ok(text);
++ 		const texts = yield* Effect.all(
++ 			operationIds.map((operationId) =&gt;
++ 				Effect.gen(function* () {
++ 					const operation = yield* getOperation(operationId);
++ 					if (operation.data.service) {
++ 						return yield* getOCRData(operation);
++ 					} else {
++ 						return operation.data.result as string;
++ 					}
++ 				})
++ 			),
++ 			{ concurrency: 'unbounded' }
++ 		);
++ 
++ 		return texts.filter((text) =&gt; text).join('\n');
+  	});
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 23
+
+```diff
+@@ -107,28 +107,27 @@
+  }
+  
+- export function processProductTypeResolve(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return getApplication(applicationId).asyncAndThen((application) =&gt; {
+- 		if (application.productType)
+- 			return okAsync(undefined);
++ export function processProductTypeResolve(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const application = yield* getApplication(applicationId);
++ 		if (application.productType) {
++ 			return;
++ 		}
+  
+- 		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) =&gt; {
+- 			if (operationsId.length &gt; 0) {
+- 				logger.info(&#96;Удаляем операции перед определением типа изделия ${operationsId.join(', ')}&#96;);
+- 				const deleteResult = deleteOperations(operationsId);
+- 				if (deleteResult.isErr())
+- 					return errAsync(new ProcessingError('Не удалось удалить операции перед определением типа изделия', deleteResult.error));
+- 			}
+- 			// Create fresh operation
+- 			return getExtractedText(applicationId).asyncAndThen((text) =&gt;
+- 				createOperation(applicationId, 'resolveProductType')
+- 					.asyncAndThen(processingOperation =&gt; resolveProductType(applicationId, text)
+- 						.andThen(productType =&gt; updateOperation(processingOperation.id, {
+- 							status: 'completed', data: {
+- 								...processingOperation.data,
+- 								productType: productType
+- 							}
+- 						})
+- 						).map(() =&gt; undefined))
+- 			);
++ 		const operationsId = yield* findOperations(applicationId, 'resolveProductType');
++ 		if (operationsId.length &gt; 0) {
++ 			logger.info(&#96;Удаляем операции перед определением типа изделия ${operationsId.join(', ')}&#96;);
++ 			yield* deleteOperations(operationsId);
++ 		}
++ 
++ 		// Create fresh operation
++ 		const text = yield* getExtractedText(applicationId);
++ 		const processingOperation = yield* createOperation(applicationId, 'resolveProductType');
++ 		const productType = yield* resolveProductType(applicationId, text);
++ 		yield* updateOperation(processingOperation.id, {
++ 			status: 'completed',
++ 			data: {
++ 				...processingOperation.data,
++ 				productType: productType
++ 			}
+  		});
+  	});
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 19, lines removed: 14
+
+```diff
+@@ -134,19 +134,24 @@
+  }
+  
+- export function fetchProductTypeResolve(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return getApplication(applicationId).asyncAndThen((application) =&gt; {
+- 		if (application.productType)
+- 			return okAsync(undefined);
++ export function fetchProductTypeResolve(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const application = yield* getApplication(applicationId);
++ 		if (application.productType) {
++ 			return;
++ 		}
+  
+- 		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) =&gt; {
+- 			if (operationsId.length &gt; 0) {
+- 				return ResultAsync.fromSafePromise(
+- 					Promise.allSettled(operationsId.map((operationId) =&gt;
+- 						getOperation(operationId).asyncAndThen((operation) =&gt; fetchLLMOperation(operation))
+- 					)));
+- 			}
+- 			return okAsync(undefined);
+- 		});
+- 	}).map(() =&gt; undefined);
++ 		const operationsId = yield* findOperations(applicationId, 'resolveProductType');
++ 		if (operationsId.length &gt; 0) {
++ 			yield* Effect.all(
++ 				operationsId.map((operationId) =&gt;
++ 					Effect.gen(function* () {
++ 						const operation = yield* getOperation(operationId);
++ 						yield* fetchLLMOperation(operation);
++ 					})
++ 				),
++ 				{ concurrency: 'unbounded' }
++ 			);
++ 		}
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 18, lines removed: 12
+
+```diff
+@@ -156,17 +156,23 @@
+  }
+  
+- function fetchAbbreviationResolve(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return getApplication(applicationId).asyncAndThen((application) =&gt; {
+- 		if (application.abbreviation)
+- 			return okAsync(undefined);
++ function fetchAbbreviationResolve(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const application = yield* getApplication(applicationId);
++ 		if (application.abbreviation) {
++ 			return;
++ 		}
+  
+- 		return findOperations(applicationId, 'resolveAbbreviation').asyncAndThen((operationsId) =&gt; {
+- 			if (operationsId.length &gt; 0)
+- 				return ResultAsync.fromSafePromise(
+- 					Promise.allSettled(operationsId.map((operationId) =&gt;
+- 						getOperation(operationId).asyncAndThen((operation) =&gt; fetchLLMOperation(operation))
+- 					)));
+- 			return okAsync(undefined);
+- 		}).map(() =&gt; undefined);
++ 		const operationsId = yield* findOperations(applicationId, 'resolveAbbreviation');
++ 		if (operationsId.length &gt; 0) {
++ 			yield* Effect.all(
++ 				operationsId.map((operationId) =&gt;
++ 					Effect.gen(function* () {
++ 						const operation = yield* getOperation(operationId);
++ 						yield* fetchLLMOperation(operation);
++ 					})
++ 				),
++ 				{ concurrency: 'unbounded' }
++ 			);
++ 		}
+  	});
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 7
+
+```diff
+@@ -178,11 +178,11 @@
+  }
+  
+- export function fetchApplication(applicationId: string): ResultAsync&lt;void, Error&gt; {
+- 	return getApplication(applicationId).asyncAndThen((application) =&gt; {
+- 		return fetchTextExtraction(applicationId).
+- 			andThen(() =&gt; fetchProductTypeResolve(applicationId)).
+- 			andThen(() =&gt; fetchAbbreviationResolve(applicationId)).
+- 			map(() =&gt; undefined);
+- 	}).map(() =&gt; undefined);
++ export function fetchApplication(applicationId: string): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		yield* getApplication(applicationId);
++ 		yield* fetchTextExtraction(applicationId);
++ 		yield* fetchProductTypeResolve(applicationId);
++ 		yield* fetchAbbreviationResolve(applicationId);
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+
+Lint results
+
+Lint errors for `src/lib/business/processing.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| Property 'toPromise' does not exist on type 'ResultAsync<string, Error>'. | 50:83-50:92 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю конвертацию ResultAsync в Effect: используем другой способ для работы с функцией, которая ещё возвращает ResultAsync.
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "How to convert ResultAsync to Promise or Effect? ResultAsync toPromise match" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `PROJECT.md` | L27 |
+| `README.md` | L66 |
+| `PROJECT.md` | L24-63 |
+| `package.json` | L36 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `src/lib/config.ts` | L34 |
+| `src/app.d.ts` | L11 |
+| `svelte.config.js` | L11 |
+| `vite.config.ts` | L11 |
+| `src/routes/+page.svelte` | L3 |
+| `.eslintrc.cjs` | L30 |
+| `src/app.html` | L12 |
+| `tsconfig.json` | L16 |
+| `src/routes/+layout.svelte` | L5 |
+| `.prettierrc` | L8 |
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 7
+
+```diff
+@@ -47,11 +47,8 @@
+  			// Конвертируем ResultAsync в Effect через Effect.tryPromise
+  			const extractedText = yield* Effect.tryPromise({
+- 				try: async () =&gt; {
+- 					const result = await extractTextFromApplicationFile(applicationId, fileInfo).toPromise();
+- 					if (result.isErr()) {
+- 						throw result.error;
+- 					}
+- 					return result.value;
+- 				},
++ 				try: () =&gt; extractTextFromApplicationFile(applicationId, fileInfo).match(
++ 					(ok) =&gt; Promise.resolve(ok),
++ 					(err) =&gt; Promise.reject(err)
++ 				),
+  				catch: (error) =&gt; error as Error
+  			});
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Файл `processing.ts` переписан на Effect. Основные изменения:
+
+1. **Импорты обновлены**: удалён `neverthrow`, добавлен `Effect`. Удалён класс `ProcessingError`.
+
+2. **Функции переписаны на Effect**:
+   - `processTextExtraction` — использует `Effect.gen` для композиции, для `extractTextFromApplicationFile` (которая ещё возвращает `ResultAsync`) используется `Effect.tryPromise` с `match()` для конвертации
+   - `fetchTextExtraction` — использует `Effect.gen` и `Effect.all` для параллельной обработки операций
+   - `getExtractedText` — использует `Effect.gen` и `Effect.all` для параллельной обработки операций
+   - `processProductTypeResolve` — использует `Effect.gen` для композиции эффектов
+   - `fetchProductTypeResolve` — использует `Effect.gen` и `Effect.all` для параллельной обработки
+   - `fetchAbbreviationResolve` — использует `Effect.gen` и `Effect.all` для параллельной обработки
+   - `fetchApplication` — использует `Effect.gen` для последовательного выполнения эффектов
+
+3. **Упрощённая обработка ошибок**: удалена специальная обработка через `ProcessingError`, используются стандартные `Error`.
+
+4. **Композиция эффектов**: все функции используют `Effect.gen` с `yield*` для последовательных операций и `Effect.all` для параллельных.
+
+5. **Обработка ResultAsync**: для `extractTextFromApplicationFile`, которая ещё возвращает `ResultAsync`, используется `Effect.tryPromise` с `match()` для конвертации в Promise.
+
+Линтер ошибок не нашёл. Файл готов к использованию.
+
+---
+
+_**User (2025-12-20 10:50Z)**_
+
+там где ты установил concurrency - лучше сделать последовательным  "Sequential Execution (Default)
+By default, if you don’t specify any concurrency option, effects will run sequentially, one after the other. This means each effect starts only after the previous one completes."
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Удаляю опцию `concurrency` во всех местах, чтобы эффекты выполнялись последовательно по умолчанию:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/business/processing.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -67,6 +67,5 @@
+  		const operations = yield* getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' });
+  		yield* Effect.all(
+- 			operations.map((operation) =&gt; fetchOCRData(operation)),
+- 			{ concurrency: 'unbounded' }
++ 			operations.map((operation) =&gt; fetchOCRData(operation))
+  		);
+  	});
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -95,6 +95,5 @@
+  					}
+  				})
+- 			),
+- 			{ concurrency: 'unbounded' }
++ 			)
+  		);
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/business/processing.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -144,6 +144,5 @@
+  						yield* fetchLLMOperation(operation);
+  					})
+- 				),
+- 				{ concurrency: 'unbounded' }
++ 				)
+  			);
+  		}
+```
+
+**Chunk 2**
+Lines added: 1, lines removed: 2
+
+```diff
+@@ -166,6 +165,5 @@
+  						yield* fetchLLMOperation(operation);
+  					})
+- 				),
+- 				{ concurrency: 'unbounded' }
++ 				)
+  			);
+  		}
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/business/processing.ts`
+
+Lint results
+
+
+**No lint errors found**
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Убрал опцию `concurrency: 'unbounded'` во всех местах, где используется `Effect.all`. Теперь эффекты выполняются последовательно (по умолчанию). Обновлены места в:
+
+1. `fetchTextExtraction` — убрана опция concurrency из `Effect.all` для операций OCR
+2. `getExtractedText` — убрана опция concurrency из `Effect.all` для обработки текстов
+3. `fetchProductTypeResolve` — убрана опция concurrency из `Effect.all` для операций LLM
+4. `fetchAbbreviationResolve` — убрана опция concurrency из `Effect.all` для операций LLM
+
+Все эффекты теперь выполняются последовательно, один за другим. Линтер ошибок не нашёл.
 
 ---
 

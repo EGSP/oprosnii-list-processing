@@ -19,153 +19,163 @@ import {
 	getOperationsByFilter,
 	deleteOperations
 } from '../storage/index.js';
-import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
+import { Effect } from 'effect';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
 import { fetchLLMOperation, resolveProductType } from '$lib/ai/llm.js';
 import { fetchOCRData, getOCRData } from '$lib/ai/ocr.js';
 import { logger } from '$lib/utils/logger.js';
 
-export class ProcessingError extends Error {
-	constructor(
-		message: string,
-		public cause?: Error
-	) {
-		super(message);
-		this.name = 'ProcessingError';
-	}
-}
-
 /**
  * Извлекает текст из файла заявки
  *
  * @param applicationId - GUID заявки
- * @returns Результат извлечения текста с операцией
+ * @returns Effect с результатом извлечения текста
  */
-export function processTextExtraction(applicationId: string): ResultAsync<void, Error> {
-	return findOperations(applicationId, 'extractText')
-		.asyncAndThen((operations) => {
-			if (operations.length > 0)
-				return errAsync(new ProcessingError('Уже есть операция извлечения текста'));
-			return okAsync(undefined);
-		})
-		.andThen((undef) => {
-			return getFileInfo(applicationId);
-		})
-		.andThen(fileInfo => {
-			if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
-				// Если извлекаем через OCR, то processing operation создается внутри функции extractText
-				return extractText(applicationId, fileInfo);
-			} else {
-				return extractTextFromApplicationFile(applicationId, fileInfo).andThen((extractedText) =>
-					createOperation(applicationId, 'extractText', { result: extractedText }, 'completed'));
-			}
-		})
-		.map(() => undefined);
+export function processTextExtraction(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		const operations = yield* findOperations(applicationId, 'extractText');
+		if (operations.length > 0) {
+			return yield* Effect.fail(new Error('Уже есть операция извлечения текста'));
+		}
+
+		const fileInfo = yield* getFileInfo(applicationId);
+
+		if (fileInfo.type === 'pdf' || fileInfo.type === 'image') {
+			// Если извлекаем через OCR, то processing operation создается внутри функции extractText
+			yield* extractText(applicationId, fileInfo);
+		} else {
+			// Конвертируем ResultAsync в Effect через Effect.tryPromise
+			const extractedText = yield* Effect.tryPromise({
+				try: () => extractTextFromApplicationFile(applicationId, fileInfo).match(
+					(ok) => Promise.resolve(ok),
+					(err) => Promise.reject(err)
+				),
+				catch: (error) => error as Error
+			});
+			yield* createOperation(applicationId, 'extractText', { result: extractedText }, 'completed');
+		}
+	});
 }
 
 /**
  * Получает все не завершенные операции извлечения текста и пытается получить результаты по ним
  * @param applicationId - ID заявки
- * @returns Результат с ошибкой или undefined
+ * @returns Effect с результатом обработки
  */
-export function fetchTextExtraction(applicationId: string): ResultAsync<void, Error> {
-	return getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' })
-		.asyncAndThen((operations) => {
-			return ResultAsync.fromSafePromise(Promise.allSettled(operations.map((operation) => fetchOCRData(operation))));
-		}).map(() => undefined);
+export function fetchTextExtraction(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		const operations = yield* getOperationsByFilter(applicationId, { task: 'extractText', status: 'started' });
+		yield* Effect.all(
+			operations.map((operation) => fetchOCRData(operation))
+		);
+	});
 }
 
 
 /**
  * Получает извлеченный текст из заявки
  * @param applicationId - ID заявки
- * @returns Результат с ошибкой или извлеченный текст
+ * @returns Effect с извлеченным текстом
  */
-export function getExtractedText(applicationId: string): Result<string, Error> {
-	return findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' }).andThen((operationIds) => {
-		if (operationIds.length === 0)
-			return err(new ProcessingError('Не найден результат извлечения текста'));
+export function getExtractedText(applicationId: string): Effect.Effect<string, Error> {
+	return Effect.gen(function* () {
+		const operationIds = yield* findOperationsByFilter(applicationId, { task: 'extractText', status: 'completed' });
+		if (operationIds.length === 0) {
+			return yield* Effect.fail(new Error('Не найден результат извлечения текста'));
+		}
 
-		const text = operationIds.map((operationId) => {
-			return getOperation(operationId).andThen((operation) => {
-				if (operation.data.service) {
-					return getOCRData(operation);
-				} else {
-					return ok(operation.data.result as string);
-				}
-			});
-		}).map((result) => result.isOk() ? result.value : null).filter((text) => text !== null).join('\n');
-		return ok(text);
+		const texts = yield* Effect.all(
+			operationIds.map((operationId) =>
+				Effect.gen(function* () {
+					const operation = yield* getOperation(operationId);
+					if (operation.data.service) {
+						return yield* getOCRData(operation);
+					} else {
+						return operation.data.result as string;
+					}
+				})
+			)
+		);
+
+		return texts.filter((text) => text).join('\n');
 	});
 }
 
-export function processProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
-	return getApplication(applicationId).asyncAndThen((application) => {
-		if (application.productType)
-			return okAsync(undefined);
+export function processProductTypeResolve(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		const application = yield* getApplication(applicationId);
+		if (application.productType) {
+			return;
+		}
 
-		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
-			if (operationsId.length > 0) {
-				logger.info(`Удаляем операции перед определением типа изделия ${operationsId.join(', ')}`);
-				const deleteResult = deleteOperations(operationsId);
-				if (deleteResult.isErr())
-					return errAsync(new ProcessingError('Не удалось удалить операции перед определением типа изделия', deleteResult.error));
+		const operationsId = yield* findOperations(applicationId, 'resolveProductType');
+		if (operationsId.length > 0) {
+			logger.info(`Удаляем операции перед определением типа изделия ${operationsId.join(', ')}`);
+			yield* deleteOperations(operationsId);
+		}
+
+		// Create fresh operation
+		const text = yield* getExtractedText(applicationId);
+		const processingOperation = yield* createOperation(applicationId, 'resolveProductType');
+		const productType = yield* resolveProductType(applicationId, text);
+		yield* updateOperation(processingOperation.id, {
+			status: 'completed',
+			data: {
+				...processingOperation.data,
+				productType: productType
 			}
-			// Create fresh operation
-			return getExtractedText(applicationId).asyncAndThen((text) =>
-				createOperation(applicationId, 'resolveProductType')
-					.asyncAndThen(processingOperation => resolveProductType(applicationId, text)
-						.andThen(productType => updateOperation(processingOperation.id, {
-							status: 'completed', data: {
-								...processingOperation.data,
-								productType: productType
-							}
-						})
-						).map(() => undefined))
+		});
+	});
+}
+
+export function fetchProductTypeResolve(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		const application = yield* getApplication(applicationId);
+		if (application.productType) {
+			return;
+		}
+
+		const operationsId = yield* findOperations(applicationId, 'resolveProductType');
+		if (operationsId.length > 0) {
+			yield* Effect.all(
+				operationsId.map((operationId) =>
+					Effect.gen(function* () {
+						const operation = yield* getOperation(operationId);
+						yield* fetchLLMOperation(operation);
+					})
+				)
 			);
-		});
+		}
 	});
 }
 
-export function fetchProductTypeResolve(applicationId: string): ResultAsync<void, Error> {
-	return getApplication(applicationId).asyncAndThen((application) => {
-		if (application.productType)
-			return okAsync(undefined);
+function fetchAbbreviationResolve(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		const application = yield* getApplication(applicationId);
+		if (application.abbreviation) {
+			return;
+		}
 
-		return findOperations(applicationId, 'resolveProductType').asyncAndThen((operationsId) => {
-			if (operationsId.length > 0) {
-				return ResultAsync.fromSafePromise(
-					Promise.allSettled(operationsId.map((operationId) =>
-						getOperation(operationId).asyncAndThen((operation) => fetchLLMOperation(operation))
-					)));
-			}
-			return okAsync(undefined);
-		});
-	}).map(() => undefined);
-}
-
-function fetchAbbreviationResolve(applicationId: string): ResultAsync<void, Error> {
-	return getApplication(applicationId).asyncAndThen((application) => {
-		if (application.abbreviation)
-			return okAsync(undefined);
-
-		return findOperations(applicationId, 'resolveAbbreviation').asyncAndThen((operationsId) => {
-			if (operationsId.length > 0)
-				return ResultAsync.fromSafePromise(
-					Promise.allSettled(operationsId.map((operationId) =>
-						getOperation(operationId).asyncAndThen((operation) => fetchLLMOperation(operation))
-					)));
-			return okAsync(undefined);
-		}).map(() => undefined);
+		const operationsId = yield* findOperations(applicationId, 'resolveAbbreviation');
+		if (operationsId.length > 0) {
+			yield* Effect.all(
+				operationsId.map((operationId) =>
+					Effect.gen(function* () {
+						const operation = yield* getOperation(operationId);
+						yield* fetchLLMOperation(operation);
+					})
+				)
+			);
+		}
 	});
 }
 
-export function fetchApplication(applicationId: string): ResultAsync<void, Error> {
-	return getApplication(applicationId).asyncAndThen((application) => {
-		return fetchTextExtraction(applicationId).
-			andThen(() => fetchProductTypeResolve(applicationId)).
-			andThen(() => fetchAbbreviationResolve(applicationId)).
-			map(() => undefined);
-	}).map(() => undefined);
+export function fetchApplication(applicationId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		yield* getApplication(applicationId);
+		yield* fetchTextExtraction(applicationId);
+		yield* fetchProductTypeResolve(applicationId);
+		yield* fetchAbbreviationResolve(applicationId);
+	});
 }
 
