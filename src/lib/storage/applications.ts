@@ -1,9 +1,10 @@
 import { getDatabase } from './db.js';
 import { type Application, type ApplicationFilters, type ApplicationUpdate, ApplicationSchema, type ProductType, type Abbreviation } from '../business/types.js';
 import { v4 as uuidv4 } from 'uuid';
-import { StorageError, ValidationError } from './errors.js';
-import { err, ok, Result } from 'neverthrow';
+import { StorageError, ApplicationNotFoundError } from './errors.js';
+import { Effect, pipe } from 'effect';
 import { safeJsonParse } from '$lib/utils/json.js';
+import { parseZodSchema } from '$lib/utils/zod.js';
 
 /**
  * Интерфейс строки из БД для Application
@@ -45,151 +46,148 @@ export function applicationToRow(application: Application): ApplicationRow {
 /**
  * Получает заявку по GUID
  */
-export function getApplication(guid: string): Result<Application, Error> {
-	try {
+export function getApplication(guid: string): Effect.Effect<Application, StorageError> {
+	return Effect.gen(function* () {
 		const db = getDatabase();
 		const stmt = db.prepare('SELECT * FROM applications WHERE id = ?');
-		const row = stmt.get(guid) as ApplicationRow | undefined;
+		const row = yield* Effect.try({
+			try: () => stmt.get(guid) as ApplicationRow | undefined,
+			catch: (error) => new StorageError('Failed to get application', error as Error)
+		});
 
 		if (!row) {
-			return err(new StorageError(`Application not found: ${guid}`));
+			return yield* Effect.fail(new ApplicationNotFoundError(guid));
 		}
 
-		return ok(rowToApplication(row));
-	} catch (error) {
-		return err(new StorageError('Failed to get application', error as Error));
-	}
+		return rowToApplication(row);
+	});
 }
 
 /**
  * Создает новую заявку в БД
  */
-export function createApplication(originalFilename: string, guid?: string): Result<Application, Error> {
-	const db = getDatabase();
-	const id = guid || uuidv4();
-	const now = new Date().toISOString();
+export function createApplication(originalFilename: string, guid?: string): Effect.Effect<Application, StorageError> {
+	return Effect.gen(function* () {
+		const db = getDatabase();
+		const id = guid || uuidv4();
+		const now = new Date().toISOString();
 
-	const application: Application = {
-		id,
-		originalFilename,
-		productType: null,
-		abbreviation: null,
-		uploadDate: now
-	};
+		const application = {
+			id,
+			originalFilename,
+			productType: null,
+			abbreviation: null,
+			uploadDate: now
+		};
 
-	// Валидация через Zod
-	let validated: Application;
-	try {
-		validated = ApplicationSchema.parse(application);
-	} catch (error) {
-		return err(new ValidationError('Invalid application data', error));
-	}
+		// Валидация через Zod
+		const validated = yield* parseZodSchema(application, ApplicationSchema).pipe(
+			Effect.mapError((error) => new StorageError('Invalid application data', error))
+		);
 
-	const row = applicationToRow(validated);
+		const row = applicationToRow(validated);
 
-	try {
-		const stmt = db.prepare(`
-			INSERT INTO applications (
-				id, original_filename, product_type, abbreviation, upload_date
-			) VALUES (
-				:id, :original_filename, :product_type, :abbreviation, :upload_date
-			)
-		`);
+		yield* Effect.try({
+			try: () => {
+				const stmt = db.prepare(`
+					INSERT INTO applications (
+						id, original_filename, product_type, abbreviation, upload_date
+					) VALUES (
+						:id, :original_filename, :product_type, :abbreviation, :upload_date
+					)
+				`);
+				stmt.run(row);
+			},
+			catch: (error) => new StorageError('Failed to create application', error as Error)
+		});
 
-		stmt.run(row);
-		return ok(validated);
-	} catch (error) {
-		return err(new StorageError('Failed to create application', error as Error));
-	}
+		return validated;
+	});
 }
 
 /**
  * Обновляет заявку
  */
-export function updateApplication(guid: string, updates: ApplicationUpdate): Result<Application, Error> {
-	const db = getDatabase();
+export function updateApplication(guid: string, updates: ApplicationUpdate): Effect.Effect<Application, StorageError> {
+	return Effect.gen(function* () {
+		const db = getDatabase();
 
-	// Получаем текущую заявку
-	const currentResult = getApplication(guid);
-	if (currentResult.isErr()) {
-		return currentResult;
-	}
+		// Получаем текущую заявку
+		const current = yield* getApplication(guid);
 
-	const current = currentResult.value;
+		// Объединяем обновления с текущими данными
+		const updated = { ...current, ...updates };
 
-	// Объединяем обновления с текущими данными
-	const updated = { ...current, ...updates };
+		// Валидация
+		const validated = yield* parseZodSchema(updated, ApplicationSchema).pipe(
+			Effect.mapError((error) => new StorageError('Invalid application update data', error))
+		);
 
-	// Валидация
-	let validated: Application;
-	try {
-		validated = ApplicationSchema.parse(updated);
-	} catch (error) {
-		return err(new ValidationError('Invalid application update data', error));
-	}
+		const row = applicationToRow(validated);
 
-	const row = applicationToRow(validated);
+		yield* Effect.try({
+			try: () => {
+				const stmt = db.prepare(`
+					UPDATE applications SET
+						product_type = :product_type,
+						abbreviation = :abbreviation
+					WHERE id = :id
+				`);
+				stmt.run({ product_type: row.product_type, abbreviation: row.abbreviation, id: row.id });
+			},
+			catch: (error) => new StorageError('Failed to update application', error as Error)
+		});
 
-	try {
-		const stmt = db.prepare(`
-			UPDATE applications SET
-				product_type = :product_type,
-				abbreviation = :abbreviation
-			WHERE id = :id
-		`);
-
-		stmt.run({ product_type: row.product_type, abbreviation: row.abbreviation, id: row.id });
-		return ok(validated);
-	} catch (error) {
-		return err(new StorageError('Failed to update application', error as Error));
-	}
+		return validated;
+	});
 }
 
 /**
  * Удаляет заявку (опционально, для административных задач)
  */
-export function deleteApplication(applicationId: string): Result<boolean, Error> {
-	try {
-		const db = getDatabase();
-		const stmt = db.prepare('DELETE FROM applications WHERE id = ?');
-		const result = stmt.run(applicationId);
-
-		return ok(result.changes > 0);
-	} catch (error) {
-		return err(new StorageError('Failed to delete application', error as Error));
-	}
+export function deleteApplication(applicationId: string): Effect.Effect<boolean, StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
+			const stmt = db.prepare('DELETE FROM applications WHERE id = ?');
+			const result = stmt.run(applicationId);
+			return result.changes > 0;
+		},
+		catch: (error) => new StorageError('Failed to delete application', error as Error)
+	});
 }
 
 /**
  * Получает список заявок с опциональной фильтрацией
  */
-export function getApplications(filters?: ApplicationFilters): Result<Application[], Error> {
-	const db = getDatabase();
+export function getApplications(filters?: ApplicationFilters): Effect.Effect<Application[], StorageError> {
+	return Effect.try({
+		try: () => {
+			const db = getDatabase();
 
-	let query = 'SELECT * FROM applications WHERE 1=1';
-	const params: (string | Date)[] = [];
+			let query = 'SELECT * FROM applications WHERE 1=1';
+			const params: (string | Date)[] = [];
 
-	if (filters?.endDate) {
-		query += ' AND upload_date <= ?';
-		params.push(filters.endDate.toISOString());
-	}
+			if (filters?.endDate) {
+				query += ' AND upload_date <= ?';
+				params.push(filters.endDate.toISOString());
+			}
 
-	if (filters?.productType) {
-		// Фильтрация по типу изделия требует поиска в JSON
-		query += ' AND product_type LIKE ?';
-		params.push(`%"type":"${filters.productType}"%`);
-	}
+			if (filters?.productType) {
+				// Фильтрация по типу изделия требует поиска в JSON
+				query += ' AND product_type LIKE ?';
+				params.push(`%"type":"${filters.productType}"%`);
+			}
 
-	query += ' ORDER BY upload_date DESC';
+			query += ' ORDER BY upload_date DESC';
 
-	try {
-		const stmt = db.prepare(query);
-		const rows = stmt.all(...params) as ApplicationRow[];
+			const stmt = db.prepare(query);
+			const rows = stmt.all(...params) as ApplicationRow[];
 
-		return ok(rows.map(rowToApplication));
-	} catch (error) {
-		return err(new StorageError(`Failed to get applications ${error instanceof Error ? error.message : 'Unknown error'}`, error as Error));
-	}
+			return rows.map(rowToApplication);
+		},
+		catch: (error) => new StorageError(`Failed to get applications ${error instanceof Error ? error.message : 'Unknown error'}`, error as Error)
+	});
 }
 
 
