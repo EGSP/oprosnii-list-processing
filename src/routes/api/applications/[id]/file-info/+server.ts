@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getApplication, getFileInfo } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/utils.js';
+import { Effect } from 'effect';
 
 /**
  * GET /api/applications/:id/file-info - Получение информации о файле заявки
@@ -16,19 +17,18 @@ export const GET: RequestHandler = async ({ params }) => {
 	if (uuidError)
 		return uuidError;
 
-	// Проверяем существование заявки
-	const applicationResult = getApplication(id);
-	if (applicationResult.isErr()) {
-		return json({ error: 'Заявка не найдена' }, { status: 404 });
+	const fileInfo = await Effect.runPromise(
+		Effect.gen(function* () {
+			// Проверяем существование заявки
+			yield* getApplication(id);
+			// Получаем информацию о файле
+			return yield* getFileInfo(id);
+		})
+	).catch((error) => handleStorageError(error));
+	
+	if (fileInfo instanceof Response) {
+		return fileInfo;
 	}
-
-	// Получаем информацию о файле
-	const fileInfoResult = await getFileInfo(id);
-	if (fileInfoResult.isErr()) {
-		return handleStorageError(fileInfoResult.error);
-	}
-
-	const fileInfo = fileInfoResult.value;
 	
 	// Возвращаем информацию о файле
 	return json({

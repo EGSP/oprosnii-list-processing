@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { getApplication, getTechnicalSpec } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/utils.js';
-import { err, ok } from 'neverthrow';
+import { Effect } from 'effect';
 
 /**
  * POST /api/applications/:id/resolve-abbreviation - Формирование аббревиатуры продукции
@@ -33,16 +33,17 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		);
 	}
 
-	// Проверяем существование заявки
-	const applicationResult = getApplication(id);
-	if (applicationResult.isErr()) {
-		return json({ error: 'Заявка не найдена' }, { status: 404 });
-	}
-
-	// Проверяем существование технического условия
-	const technicalSpecResult = getTechnicalSpec(body.technicalSpecId);
-	if (technicalSpecResult.isErr()) {
-		return json({ error: 'Техническое условие не найдено' }, { status: 404 });
+	const result = await Effect.runPromise(
+		Effect.gen(function* () {
+			// Проверяем существование заявки
+			yield* getApplication(id);
+			// Проверяем существование технического условия
+			yield* getTechnicalSpec(body.technicalSpecId);
+		})
+	).catch((error) => handleStorageError(error));
+	
+	if (result instanceof Response) {
+		return result;
 	}
 
 	// TODO: Реализовать processAbbreviationResolve в processing.ts

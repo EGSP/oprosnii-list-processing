@@ -9,9 +9,11 @@ import type {
 	ProcessingOperation
 } from '$lib/business/types.js';
 import type { CreateApplicationResponse } from '$lib/api/types.js';
-import { Result, ok, err } from 'neverthrow';
+import { Effect } from 'effect';
 import { fetchStable } from '$lib/utils/fetchStable.js';
+import { responseToZodSchema } from '$lib/utils/zod.js';
 import type { FileInfo } from '$lib/storage/files';
+import { z } from 'zod';
 
 /**
  * Базовый URL для API (в SvelteKit это относительные пути)
@@ -22,29 +24,40 @@ const API_BASE = '/api';
  * Обертка над fetchStable для работы с JSON API
  * Обрабатывает сетевые ошибки, проверяет HTTP статус и парсит JSON
  */
-async function fetchStableJson<T>(url: string, options: RequestInit = {}): Promise<Result<T, Error>> {
-	const responseResult = await fetchStable(url, options);
+function fetchStableJson<T>(url: string, options: RequestInit = {}, schema?: z.ZodType<T>): Effect.Effect<T, Error> {
+	return Effect.gen(function* () {
+		const response = yield* fetchStable(url, options);
 
-	if (responseResult.isErr()) {
-		return err(responseResult.error);
-	}
+		if (!response.ok) {
+			const errorText = yield* Effect.tryPromise({
+				try: async () => {
+					const errorData: { error?: string } = await response.json().catch(() => ({}));
+					return errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+				},
+				catch: (error) => new Error(`HTTP ${response.status}: ${response.statusText}`)
+			}).pipe(
+				Effect.map((text) => new Error(text))
+			);
+			return yield* Effect.fail(errorText);
+		}
 
-	const response = responseResult.value;
-	if (!response.ok) {
-		const error: { error?: string } = await response.json().catch(() => ({
-			error: `HTTP ${response.status}: ${response.statusText}`
-		}));
-		return err(new Error(error.error || `HTTP ${response.status}: ${response.statusText}`));
-	}
+		if (schema) {
+			return yield* responseToZodSchema(response, schema);
+		}
 
-	const data = await response.json();
-	return ok(data as T);
+		const data = yield* Effect.tryPromise({
+			try: () => response.json(),
+			catch: (error) => new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`)
+		});
+
+		return data as T;
+	});
 }
 
 /**
  * Загрузка файла заявки
  */
-export async function uploadApplication(file: File): Promise<Result<CreateApplicationResponse, Error>> {
+export function uploadApplication(file: File): Effect.Effect<CreateApplicationResponse, Error> {
 	const formData = new FormData();
 	formData.append('file', file);
 
@@ -57,7 +70,7 @@ export async function uploadApplication(file: File): Promise<Result<CreateApplic
 /**
  * Получение списка заявок
  */
-export async function getApplications(filters?: ApplicationFilters): Promise<Result<Application[], Error>> {
+export function getApplications(filters?: ApplicationFilters): Effect.Effect<Application[], Error> {
 	const params = new URLSearchParams();
 	if (filters?.endDate) {
 		params.append('endDate', filters.endDate.toISOString());
@@ -73,11 +86,11 @@ export async function getApplications(filters?: ApplicationFilters): Promise<Res
 /**
  * Получение деталей заявки
  */
-export async function getApplication(id: string): Promise<Result<Application, Error>> {
+export function getApplication(id: string): Effect.Effect<Application, Error> {
 	return fetchStableJson<Application>(`${API_BASE}/applications/${id}`);
 }
 
-export async function fetchApplication(id:string): Promise<Result<void, Error>> {
+export function fetchApplication(id: string): Effect.Effect<void, Error> {
 	return fetchStableJson<void>(`${API_BASE}/applications/${id}`, {
 		method: 'PATCH'
 	});
@@ -86,14 +99,14 @@ export async function fetchApplication(id:string): Promise<Result<void, Error>> 
 /**
  * Получение списка технических условий
  */
-export async function getTechnicalSpecs(): Promise<Result<unknown[], Error>> {
+export function getTechnicalSpecs(): Effect.Effect<unknown[], Error> {
 	return fetchStableJson<unknown[]>(`${API_BASE}/technical-specs`);
 }
 
 /**
  * Извлечение текста из файла заявки
  */
-export async function extractText(id: string): Promise<Result<void, Error>> {
+export function extractText(id: string): Effect.Effect<void, Error> {
 	return fetchStableJson<void>(`${API_BASE}/applications/${id}/extract-text`, {
 		method: 'POST'
 	});
@@ -102,7 +115,7 @@ export async function extractText(id: string): Promise<Result<void, Error>> {
 /**
  * Определение типа изделия
  */
-export async function resolveProductType(id: string): Promise<Result<void, Error>> {
+export function resolveProductType(id: string): Effect.Effect<void, Error> {
 	return fetchStableJson<void>(`${API_BASE}/applications/${id}/resolve-product-type`, {
 		method: 'POST'
 	});
@@ -111,7 +124,7 @@ export async function resolveProductType(id: string): Promise<Result<void, Error
 /**
  * Формирование аббревиатуры продукции
  */
-export async function resolveAbbreviation(id: string, technicalSpecId: string): Promise<Result<void, Error>> {
+export function resolveAbbreviation(id: string, technicalSpecId: string): Effect.Effect<void, Error> {
 	return fetchStableJson<void>(`${API_BASE}/applications/${id}/resolve-abbreviation`, {
 		method: 'POST',
 		headers: {
@@ -124,81 +137,65 @@ export async function resolveAbbreviation(id: string, technicalSpecId: string): 
 /**
  * Полная обработка заявки: определение типа + формирование аббревиатуры
  */
-export async function processApplication(id: string, technicalSpecId: string): Promise<Result<void, Error>> {
-	// Сначала определяем тип изделия
-	const resolveResult = await resolveProductType(id);
-	if (resolveResult.isErr()) {
-		return err(resolveResult.error);
-	}
-
-	// Затем формируем аббревиатуру
-	const abbreviationResult = await resolveAbbreviation(id, technicalSpecId);
-	if (abbreviationResult.isErr()) {
-		return err(abbreviationResult.error);
-	}
-
-	return ok(undefined);
+export function processApplication(id: string, technicalSpecId: string): Effect.Effect<void, Error> {
+	return Effect.gen(function* () {
+		// Сначала определяем тип изделия
+		yield* resolveProductType(id);
+		// Затем формируем аббревиатуру
+		yield* resolveAbbreviation(id, technicalSpecId);
+	});
 }
 
 /**
  * Получение списка операций для заявки
  */
-export async function getOperations(id: string): Promise<Result<string[], Error>> {
+export function getOperations(id: string): Effect.Effect<string[], Error> {
 	return fetchStableJson<string[]>(`${API_BASE}/applications/${id}/operations`);
 }
 
 /**
  * Получение операции для заявки
  */
-export async function getOperation(id: string, operationId: string): Promise<Result<ProcessingOperation, Error>> {
+export function getOperation(id: string, operationId: string): Effect.Effect<ProcessingOperation, Error> {
 	return fetchStableJson<ProcessingOperation>(`${API_BASE}/applications/${id}/operations/${operationId}`);
 }
 
 /**
  * Получение информации о файле заявки
  */
-export async function getFileInfo(id: string): Promise<Result<FileInfo, Error>> {
+export function getFileInfo(id: string): Effect.Effect<FileInfo, Error> {
 	return fetchStableJson<FileInfo>(`${API_BASE}/applications/${id}/file-info`);
 }
 
 /**
  * Получение информации о статусе обработки заявки
  */
-export async function getApplicationStatusInfo(id: string): Promise<Result<ApplicationStatusInfo, Error>> {
-	const applicationResult = await getApplication(id);
-	if (applicationResult.isErr()) {
-		return err(applicationResult.error);
-	}
+export function getApplicationStatusInfo(id: string): Effect.Effect<ApplicationStatusInfo, Error> {
+	return Effect.gen(function* () {
+		const application = yield* getApplication(id);
+		const operationIds = yield* getOperations(id);
 
-	const operationsResult = await getOperations(id);
-	if (operationsResult.isErr()) {
-		return err(operationsResult.error);
-	}
-
-	let status = 'nothing';
-	let operations: ProcessingOperation[] = [];
-	if (operationsResult.value.length > 0) {
-		let completedOperations = 0;
-		for (const operationId of operationsResult.value) {
-			const operationResult = await getOperation(id, operationId);
-			if (operationResult.isErr()) {
-				return err(operationResult.error);
+		let status = 'nothing';
+		let operations: ProcessingOperation[] = [];
+		if (operationIds.length > 0) {
+			let completedOperations = 0;
+			for (const operationId of operationIds) {
+				const operation = yield* getOperation(id, operationId);
+				if (operation.status === 'completed') {
+					completedOperations++;
+				}
+				operations.push(operation);
 			}
-			const operation = operationResult.value;
-			if (operation.status === 'completed') {
-				completedOperations++;
+			if (completedOperations === operationIds.length) {
+				status = 'completed';
+			} else {
+				status = 'processing';
 			}
-			operations.push(operation);
 		}
-		if (completedOperations === operationsResult.value.length) {
-			status = 'completed';
-		}else{
-			status = 'processing';
-		}
-	}
-	return ok({
-		application: applicationResult.value,
-		status: status as ApplicationStatusInfo['status'],
-		operations: operations
+		return {
+			application,
+			status: status as ApplicationStatusInfo['status'],
+			operations: operations
+		};
 	});
 }

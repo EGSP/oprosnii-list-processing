@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { getApplication, findOperations } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/utils.js';
 import type { ProcessingOperationTask } from '$lib/business/types.js';
+import { Effect } from 'effect';
 
 /**
  * GET /api/applications/:id/operations - Список операций заявки
@@ -11,31 +12,27 @@ import type { ProcessingOperationTask } from '$lib/business/types.js';
  * Автоматически синхронизирует результаты завершенных операций с заявкой.
  */
 export const GET: RequestHandler = async ({ params, url }) => {
-	try {
-		const { id } = params;
+	const { id } = params;
 
-		// Валидация UUID
-		const uuidError = requireValidUUID(id);
-		if (uuidError) {
-			return uuidError;
-		}
-        
-		// Получаем тип из query параметров (опционально)
-		const typeParam = url.searchParams.get('type');
-		const type: ProcessingOperationTask | undefined = typeParam
-			? (typeParam as ProcessingOperationTask)
-			: undefined;
-
-		// Получаем список id операций
-		const operationIdsResult = findOperations(id, type);
-        if (operationIdsResult.isErr()) {
-            return handleStorageError(operationIdsResult.error);
-        }
-        const operationIds = operationIdsResult.value;
-
-		// Возвращаем результат (массив id)
-		return json(operationIds);
-	} catch (err) {
-		return handleStorageError(err);
+	// Валидация UUID
+	const uuidError = requireValidUUID(id);
+	if (uuidError) {
+		return uuidError;
 	}
+	
+	// Получаем тип из query параметров (опционально)
+	const typeParam = url.searchParams.get('type');
+	const type: ProcessingOperationTask | undefined = typeParam
+		? (typeParam as ProcessingOperationTask)
+		: undefined;
+
+	// Получаем список id операций
+	const operationIds = await Effect.runPromise(findOperations(id, type)).catch((error) => handleStorageError(error));
+
+	if (operationIds instanceof Response) {
+		return operationIds;
+	}
+
+	// Возвращаем результат (массив id)
+	return json(operationIds);
 };

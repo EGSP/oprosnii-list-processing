@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { getApplication } from '$lib/storage/index.js';
 import { requireValidUUID, handleStorageError } from '$lib/api/utils.js';
 import { processTextExtraction } from '$lib/business/processing.js';
+import { Effect } from 'effect';
 
 /**
  * POST /api/applications/:id/extract-text - Извлечение текста из файла заявки
@@ -17,15 +18,17 @@ export const POST: RequestHandler = async ({ params }) => {
 	if (uuidError)
 		return uuidError;
 
-	const result = await getApplication(id)
-		.asyncAndThen((application) => processTextExtraction(application.id))
-		.map(() => ({ success: true }))
-		.mapErr((error) => ({ error: error.message }))
-		.match(
-			(success) => json(success),
-			(error) => handleStorageError(new Error(error.error || 'Failed to extract text'))
-		);
-
-	return result;
+	const result = await Effect.runPromise(
+		Effect.gen(function* () {
+			const application = yield* getApplication(id);
+			yield* processTextExtraction(application.id);
+		})
+	).catch((error) => handleStorageError(error));
+	
+	if (result instanceof Response) {
+		return result;
+	}
+	
+	return json({ success: true });
 };
 
