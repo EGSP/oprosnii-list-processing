@@ -27,12 +27,13 @@
 		"svelte": "^4.2.7",
 		"svelte-check": "^3.6.0",
 		"tslib": "^2.4.1",
-		"typescript": "^5.0.0",
+		"typescript": "^5.9.3",
 		"vite": "^5.0.3"
 	},
 	"type": "module",
 	"dependencies": {
 		"better-sqlite3": "^11.0.0",
+		"effect": "^3.19.13",
 		"mammoth": "^1.11.0",
 		"neverthrow": "^8.2.0",
 		"pdf-lib": "^1.17.1",
