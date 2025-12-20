@@ -35,7 +35,14 @@ export function responseToZodSchema<T extends z.ZodTypeAny>(
 	return Effect.tryPromise({
 		try: async () => {
 			const data = await response.json();
-			return schema.parse(data);
+			const result = schema.safeParse(data);
+			if (result.success) {
+				return result.data;
+			} else {
+				throw new Error(
+					`Ошибка валидации ответа: ${JSON.stringify(data)}`
+				);
+			}
 		},
 		catch: (error) => {
 			const message = `Не удалось разобрать JSON ответ`;
