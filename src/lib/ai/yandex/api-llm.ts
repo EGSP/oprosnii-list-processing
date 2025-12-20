@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { fetchStable } from '$lib/utils/fetchStable';
 import { Effect, pipe } from 'effect';
-import { responseToZodSchema } from '$lib/utils/zod';
+import { parseZodSchema, responseToZodSchema } from '$lib/utils/zod';
 
 const COMPLETION_ENDPOINT = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion';
 
@@ -249,16 +249,27 @@ export function getModelUri(catalogId: string, model: 'yandexgpt-lite' | 'yandex
  * @returns Результат выполнения запроса
  */
 export function completion(apiKey: string, request: CompletionRequest): Effect.Effect<CompletionResult, Error> {
-	return pipe(
-		fetchStable(COMPLETION_ENDPOINT,
-			{
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${apiKey}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(request)
-			}),
-		Effect.flatMap((response) => responseToZodSchema(response, CompletionResultSchema)),
-	)
+	return Effect.gen(function* () {
+		const response = yield* fetchStable(COMPLETION_ENDPOINT, {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${apiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(request),
+		});
+
+		const json = yield* Effect.tryPromise({
+			try: async () => await response.json(),
+			catch: (error) => new Error(error instanceof Error ? error.message : String(error))
+		});
+
+		if(!json.result)
+			if(json.error)
+				return yield* Effect.fail(new Error(json.error));
+			else
+				return yield* Effect.fail(new Error('Неизвестная ошибка'));
+
+		return yield* (parseZodSchema(json.result, CompletionResultSchema));
+	})
 }

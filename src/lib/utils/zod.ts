@@ -45,8 +45,7 @@ export function responseToZodSchema<T extends z.ZodTypeAny>(
 			}
 		},
 		catch: (error) => {
-			const message = `Не удалось разобрать JSON ответ`;
-			return new Error(message + `: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			return error as Error;
 		}
 	});
 }
