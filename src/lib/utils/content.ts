@@ -7,7 +7,7 @@
  */
 
 import { getFileNameWithExtension, getFilePath, readApplicationFile, type FileInfo } from '$lib/storage/files';
-import { Result, ok, err, ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { Effect } from 'effect';
 
 // Ленивая загрузка textract через динамический импорт (для ESM совместимости)
 // @ts-ignore - textract не имеет типов TypeScript
@@ -35,27 +35,33 @@ const SUPPORTED_SPREADSHEET_FORMATS = ['xls', 'xlsx', 'xlsb', 'xlsm', 'xltx'] as
  *
  * @param buffer - Буфер файла
  * @param filenameWithExtension - Имя файла с расширением (например, "document.docx")
- * @returns Результат извлечения текста в формате Result<string, Error>
+ * @returns Effect с результатом извлечения текста
  */
-export async function extractTextFromDocuments(
+export function extractTextFromDocuments(
 	buffer: Buffer,
 	filenameWithExtension: string
-): Promise<Result<string, Error>> {
-	// Извлекаем расширение из имени файла
-	const extension = filenameWithExtension.split('.').pop()?.toLowerCase() || '';
-	const normalizedExtension = extension.replace(/^\./, '');
-	
-	if (!SUPPORTED_DOCUMENT_FORMATS.includes(normalizedExtension as typeof SUPPORTED_DOCUMENT_FORMATS[number])) {
-		return err(
-			new Error(
-				`Неподдерживаемый формат документа: ${extension}. Поддерживаются: ${SUPPORTED_DOCUMENT_FORMATS.join(', ')}`
-			)
-		);
-	}
+): Effect.Effect<string, Error> {
+	return Effect.gen(function* () {
+		// Извлекаем расширение из имени файла
+		const extension = filenameWithExtension.split('.').pop()?.toLowerCase() || '';
+		const normalizedExtension = extension.replace(/^\./, '');
+		
+		if (!SUPPORTED_DOCUMENT_FORMATS.includes(normalizedExtension as typeof SUPPORTED_DOCUMENT_FORMATS[number])) {
+			return yield* Effect.fail(
+				new Error(
+					`Неподдерживаемый формат документа: ${extension}. Поддерживаются: ${SUPPORTED_DOCUMENT_FORMATS.join(', ')}`
+				)
+			);
+		}
 
-	return new Promise(async (resolve) => {
-		try {
-			const textract = await getTextract();
+		const textract = yield* Effect.tryPromise({
+			try: () => getTextract(),
+			catch: (error) => new Error(
+				`Ошибка при загрузке textract: ${error instanceof Error ? error.message : String(error)}`
+			)
+		});
+
+		return yield* Effect.async<string, Error>((resume) => {
 			textract.fromBufferWithName(
 				filenameWithExtension,
 				buffer,
@@ -65,19 +71,13 @@ export async function extractTextFromDocuments(
 							error instanceof Error
 								? error.message
 								: `Ошибка при извлечении текста из документа: ${String(error)}`;
-						resolve(err(new Error(errorMessage)));
+						resume(Effect.fail(new Error(errorMessage)));
 					} else {
-						resolve(ok(text || ''));
+						resume(Effect.succeed(text || ''));
 					}
 				}
 			);
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error
-					? error.message
-					: `Ошибка при загрузке textract: ${String(error)}`;
-			resolve(err(new Error(errorMessage)));
-		}
+		});
 	});
 }
 
@@ -86,31 +86,37 @@ export async function extractTextFromDocuments(
  *
  * @param buffer - Буфер файла
  * @param filenameWithExtension - Имя файла с расширением (например, "spreadsheet.xlsx")
- * @returns Результат извлечения текста в формате Result<string, Error>
+ * @returns Effect с результатом извлечения текста
  */
-export async function extractTextFromSpreadsheets(
+export function extractTextFromSpreadsheets(
 	buffer: Buffer,
 	filenameWithExtension: string
-): Promise<Result<string, Error>> {
-	// Извлекаем расширение из имени файла
-	const extension = filenameWithExtension.split('.').pop()?.toLowerCase() || '';
-	const normalizedExtension = extension.replace(/^\./, '');
-	
-	if (
-		!SUPPORTED_SPREADSHEET_FORMATS.includes(
-			normalizedExtension as typeof SUPPORTED_SPREADSHEET_FORMATS[number]
-		)
-	) {
-		return err(
-			new Error(
-				`Неподдерживаемый формат таблицы: ${extension}. Поддерживаются: ${SUPPORTED_SPREADSHEET_FORMATS.join(', ')}`
+): Effect.Effect<string, Error> {
+	return Effect.gen(function* () {
+		// Извлекаем расширение из имени файла
+		const extension = filenameWithExtension.split('.').pop()?.toLowerCase() || '';
+		const normalizedExtension = extension.replace(/^\./, '');
+		
+		if (
+			!SUPPORTED_SPREADSHEET_FORMATS.includes(
+				normalizedExtension as typeof SUPPORTED_SPREADSHEET_FORMATS[number]
 			)
-		);
-	}
+		) {
+			return yield* Effect.fail(
+				new Error(
+					`Неподдерживаемый формат таблицы: ${extension}. Поддерживаются: ${SUPPORTED_SPREADSHEET_FORMATS.join(', ')}`
+				)
+			);
+		}
 
-	return new Promise(async (resolve) => {
-		try {
-			const textract = await getTextract();
+		const textract = yield* Effect.tryPromise({
+			try: () => getTextract(),
+			catch: (error) => new Error(
+				`Ошибка при загрузке textract: ${error instanceof Error ? error.message : String(error)}`
+			)
+		});
+
+		return yield* Effect.async<string, Error>((resume) => {
 			textract.fromBufferWithName(
 				filenameWithExtension,
 				buffer,
@@ -120,19 +126,13 @@ export async function extractTextFromSpreadsheets(
 							error instanceof Error
 								? error.message
 								: `Ошибка при извлечении текста из таблицы: ${String(error)}`;
-						resolve(err(new Error(errorMessage)));
+						resume(Effect.fail(new Error(errorMessage)));
 					} else {
-						resolve(ok(text || ''));
+						resume(Effect.succeed(text || ''));
 					}
 				}
 			);
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error
-					? error.message
-					: `Ошибка при загрузке textract: ${String(error)}`;
-			resolve(err(new Error(errorMessage)));
-		}
+		});
 	});
 }
 
@@ -140,33 +140,20 @@ export async function extractTextFromSpreadsheets(
  * Извлекает текст из файла заявки
  * @param applicationId - GUID заявки
  * @param fileInfo - Информация о файле
- * @returns Результат извлечения текста в формате Result<string, Error>
+ * @returns Effect с результатом извлечения текста
  */
-export function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): ResultAsync<string, Error> {
-	const fileBufferResult = readApplicationFile(applicationId);
-	if (fileBufferResult.isErr())
-		return errAsync(fileBufferResult.error);
-	const fileBuffer = fileBufferResult.value;
-
-	const filePathResult = getFilePath(applicationId);
-	if (filePathResult.isErr())
-		return errAsync(filePathResult.error);
-	const filePath = filePathResult.value;
-	const filenameWithExtension = getFileNameWithExtension(filePath);
-	
-	if (fileInfo.type === 'document') {
-		return ResultAsync.fromSafePromise(extractTextFromDocuments(fileBuffer, filenameWithExtension)).andThen((result) => {
-			if (result.isErr())
-				return errAsync(result.error);
-			return okAsync(result.value);
-		});
-	} else if (fileInfo.type === 'spreadsheet') {
-		return ResultAsync.fromSafePromise(extractTextFromSpreadsheets(fileBuffer, filenameWithExtension)).andThen((result) => {
-			if (result.isErr())
-				return errAsync(result.error);
-			return okAsync(result.value);
-		});
-	}
-	return errAsync(new Error('Неподдерживаемый тип файла'));
+export function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): Effect.Effect<string, Error> {
+	return Effect.gen(function* () {
+		const fileBuffer = yield* readApplicationFile(applicationId);
+		const filePath = yield* getFilePath(applicationId);
+		const filenameWithExtension = getFileNameWithExtension(filePath);
+		
+		if (fileInfo.type === 'document') {
+			return yield* extractTextFromDocuments(fileBuffer, filenameWithExtension);
+		} else if (fileInfo.type === 'spreadsheet') {
+			return yield* extractTextFromSpreadsheets(fileBuffer, filenameWithExtension);
+		}
+		return yield* Effect.fail(new Error('Неподдерживаемый тип файла'));
+	});
 }
 

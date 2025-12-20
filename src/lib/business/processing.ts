@@ -44,14 +44,7 @@ export function processTextExtraction(applicationId: string): Effect.Effect<void
 			// Если извлекаем через OCR, то processing operation создается внутри функции extractText
 			yield* extractText(applicationId, fileInfo);
 		} else {
-			// Конвертируем ResultAsync в Effect через Effect.tryPromise
-			const extractedText = yield* Effect.tryPromise({
-				try: () => extractTextFromApplicationFile(applicationId, fileInfo).match(
-					(ok) => Promise.resolve(ok),
-					(err) => Promise.reject(err)
-				),
-				catch: (error) => error as Error
-			});
+			const extractedText = yield* extractTextFromApplicationFile(applicationId, fileInfo);
 			yield* createOperation(applicationId, 'extractText', { result: extractedText }, 'completed');
 		}
 	});
