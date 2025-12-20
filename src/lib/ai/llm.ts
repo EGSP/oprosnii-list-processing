@@ -126,7 +126,11 @@ export function fetchLLMOperation(processingOperation: ProcessingOperation): Eff
 				return yield* Effect.fail(new Error('Неизвестная задача'));
 			}
 		} else {
-			return yield* Effect.fail(new Error('Неизвестный сервис'));
+			return yield* Effect.fail(
+				new Error(
+					`Неизвестный сервис: ${JSON.stringify(processingOperation, null, 2)}`
+				)
+			);
 		}
 	});
 }

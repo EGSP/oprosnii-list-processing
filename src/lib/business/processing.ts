@@ -122,6 +122,7 @@ export function processProductTypeResolve(applicationId: string): Effect.Effect<
 			status: 'completed',
 			data: {
 				...processingOperation.data,
+				service: 'yandex',
 				productType: productType
 			}
 		});
