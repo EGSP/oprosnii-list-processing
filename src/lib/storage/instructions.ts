@@ -10,8 +10,8 @@ import { join } from 'path';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { err, ok, type Result } from 'neverthrow';
-import { StorageError } from './errors.js';
+import { Effect, pipe, Option } from 'effect';
+import { parseZodSchema } from '$lib/utils/zod.js';
 
 /**
  * Схема валидации для инструкции
@@ -37,79 +37,64 @@ function getInstructionsDirectory(): string {
 /**
  * Читает и парсит JSON файл инструкции
  */
-function readInstructionFile(filePath: string): Result<unknown, Error> {
-    try {
-        if (!existsSync(filePath)) {
-            return err(new StorageError(`Файл инструкции не найден: ${filePath}`));
-        }
-
-        const fileContent = readFileSync(filePath, 'utf-8');
-        const jsonData = JSON.parse(fileContent);
-        return ok(jsonData);
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            return err(new StorageError(`Ошибка парсинга JSON в файле ${filePath}: ${error.message}`, error));
-        }
-        return err(
-            new StorageError(`Ошибка чтения файла инструкции ${filePath}: ${error instanceof Error ? error.message : String(error)}`, error as Error)
-        );
-    }
+function readInstructionFile(filePath: string): Effect.Effect<unknown, Error> {
+    return Effect.try({
+        try: () => {
+            const fileContent = readFileSync(filePath, 'utf-8');
+            return JSON.parse(fileContent);
+        },
+        catch: (error) => error as Error
+    });
 }
 
 /**
  * Валидирует данные инструкции через Zod схему
  */
-function validateInstruction(data: unknown): Result<Instruction, Error> {
-    const result = InstructionSchema.safeParse(data);
-    if (!result.success) {
-        return err(
-            new StorageError(
-                `Ошибка валидации инструкции: ${result.error.message}`,
-                result.error
-            )
-        );
-    }
-    return ok(result.data);
+function validateInstruction(data: unknown): Effect.Effect<Instruction, Error> {
+    return parseZodSchema(data, InstructionSchema);
 }
 
 /**
  * Получает массив имен файлов инструкций по имени инструкции
  *
  * @param name - Название инструкции (поле name в JSON)
- * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем
+ * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем
  */
-export function getInstructionFileNames(name: string): Result<string[], Error> {
-    const instructionsDir = getInstructionsDirectory();
+export function getInstructionFileNames(name: string): Effect.Effect<string[], Error> {
+    return Effect.gen(function* () {
+        const instructionsDir = getInstructionsDirectory();
 
-    if (!existsSync(instructionsDir))
-        return err(new StorageError(`Директория инструкций не найдена: ${instructionsDir}`));
+        const files = yield* Effect.sync(() => readdirSync(instructionsDir).filter((file) => file.endsWith('.json')));
 
-    const files = readdirSync(instructionsDir).filter((file) => file.endsWith('.json'));
+        const matchingFiles: string[] = [];
 
-    const matchingFiles: string[] = [];
+        for (const file of files) {
+            const filePath = join(instructionsDir, file);
+            const dataOption = yield* readInstructionFile(filePath).pipe(
+                Effect.option
+            );
 
-    for (const file of files) {
-        const filePath = join(instructionsDir, file);
-        const readResult = readInstructionFile(filePath);
+            if (Option.isNone(dataOption)) {
+                continue; // Пропускаем файлы с ошибками чтения
+            }
 
-        if (readResult.isErr()) {
-            continue; // Пропускаем файлы с ошибками чтения
+            const instructionOption = yield* validateInstruction(dataOption.value).pipe(
+                Effect.option
+            );
+
+            if (Option.isNone(instructionOption)) {
+                continue; // Пропускаем файлы с ошибками валидации
+            }
+
+            const instruction = instructionOption.value;
+
+            if (instruction.name === name) {
+                matchingFiles.push(file);
+            }
         }
 
-        const validateResult = validateInstruction(readResult.value);
-
-        if (validateResult.isErr()) {
-            continue; // Пропускаем файлы с ошибками валидации
-        }
-
-        const instruction = validateResult.value;
-
-        if (instruction.name === name) {
-            matchingFiles.push(file);
-        }
-    }
-
-    return ok(matchingFiles);
+        return matchingFiles;
+    });
 }
 
 /**
@@ -117,69 +102,74 @@ export function getInstructionFileNames(name: string): Result<string[], Error> {
  *
  * @param name - Название инструкции (поле name в JSON)
  * @param type - Тип инструкции (поле type в JSON)
- * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
+ * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
  */
-export function getInstructionFileNamesByNameAndType(name: string, type: string): Result<string[], Error> {
-    const instructionsDir = getInstructionsDirectory();
+export function getInstructionFileNamesByNameAndType(name: string, type: string): Effect.Effect<string[], Error> {
+    return Effect.gen(function* () {
+        const instructionsDir = getInstructionsDirectory();
 
-    if (!existsSync(instructionsDir))
-        return err(new StorageError(`Директория инструкций не найдена: ${instructionsDir}`));
+        const files = yield* Effect.sync(() => readdirSync(instructionsDir).filter((file) => file.endsWith('.json')));
 
-    const files = readdirSync(instructionsDir).filter((file) => file.endsWith('.json'));
+        const matchingFiles: string[] = [];
 
-    const matchingFiles: string[] = [];
+        for (const file of files) {
+            const filePath = join(instructionsDir, file);
+            const dataOption = yield* readInstructionFile(filePath).pipe(
+                Effect.option
+            );
 
-    for (const file of files) {
-        const filePath = join(instructionsDir, file);
-        const readResult = readInstructionFile(filePath);
+            if (Option.isNone(dataOption)) {
+                continue; // Пропускаем файлы с ошибками чтения
+            }
 
-        if (readResult.isErr()) {
-            continue; // Пропускаем файлы с ошибками чтения
+            const instructionOption = yield* validateInstruction(dataOption.value).pipe(
+                Effect.option
+            );
+
+            if (Option.isNone(instructionOption)) {
+                continue; // Пропускаем файлы с ошибками валидации
+            }
+
+            const instruction = instructionOption.value;
+
+            if (instruction.name === name && instruction.type === type) {
+                matchingFiles.push(file);
+            }
         }
 
-        const validateResult = validateInstruction(readResult.value);
-
-        if (validateResult.isErr()) {
-            continue; // Пропускаем файлы с ошибками валидации
-        }
-
-        const instruction = validateResult.value;
-
-        if (instruction.name === name && instruction.type === type) {
-            matchingFiles.push(file);
-        }
-    }
-
-    return ok(matchingFiles);
+        return matchingFiles;
+    });
 }
 
 /**
  * Читает содержимое инструкции из файла и валидирует его через схему
  *
  * @param filename - Имя файла инструкции (с расширением .json или без)
- * @returns Валидированная инструкция
+ * @returns Effect с валидированной инструкцией
  */
-export function readInstruction(filename: string): Result<Instruction, Error> {
-    const instructionsDir = getInstructionsDirectory();
+export function readInstruction(filename: string): Effect.Effect<Instruction, Error> {
+    return Effect.gen(function* () {
+        const instructionsDir = getInstructionsDirectory();
 
-    // Добавляем расширение .json, если его нет
-    const normalizedFilename = filename.endsWith('.json') ? filename : `${filename}.json`;
-    const filePath = join(instructionsDir, normalizedFilename);
+        // Добавляем расширение .json, если его нет
+        const normalizedFilename = filename.endsWith('.json') ? filename : `${filename}.json`;
+        const filePath = join(instructionsDir, normalizedFilename);
 
-    const readResult = readInstructionFile(filePath);
-
-    if (readResult.isErr()) {
-        return err(readResult.error);
-    }
-
-    return validateInstruction(readResult.value);
+        const data = yield* readInstructionFile(filePath);
+        const instruction = yield* validateInstruction(data);
+        
+        return instruction;
+    });
 }
 
-export function readInstructionByNameAndType(name: string, type: string): Result<Instruction, Error> {
-    const instructionFileNames = getInstructionFileNamesByNameAndType(name, type);
-    if (instructionFileNames.isErr()) {
-        return err(instructionFileNames.error);
-    }
-    return readInstruction(instructionFileNames.value[0]);
+export function readInstructionByNameAndType(name: string, type: string): Effect.Effect<Instruction, Error> {
+    return Effect.gen(function* () {
+        const instructionFileNames = yield* getInstructionFileNamesByNameAndType(name, type);
+        if (instructionFileNames.length === 0) {
+            return yield* Effect.fail(new Error(`Инструкция с именем ${name} и типом ${type} не найдена`));
+        }
+        const instruction = yield* readInstruction(instructionFileNames[0]);
+        return instruction;
+    });
 }
 

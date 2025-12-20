@@ -2294,3 +2294,1090 @@ Lint errors for `src/lib/storage/files.ts`
 
 ---
 
+_**User (2025-12-20 10:50Z)**_
+
+@src/lib/storage/instructions.ts аналогично для инструкций. Не затрагивай другие файлы
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Переписываю файл `instructions.ts` на Effect, заменяя Result на Effect, убирая try-catch и используя parseZodSchema для валидации.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -11,6 +11,7 @@
+  import { z } from 'zod';
+  import { config } from '../config.js';
+- import { err, ok, type Result } from 'neverthrow';
++ import { Effect, pipe } from 'effect';
+  import { StorageError } from './errors.js';
++ import { parseZodSchema } from '$lib/utils/zod.js';
+  
+  /**
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 15
+
+```diff
+@@ -39,21 +39,28 @@
+   * Читает и парсит JSON файл инструкции
+   */
+- function readInstructionFile(filePath: string): Result&lt;unknown, Error&gt; {
+-     try {
+-         if (!existsSync(filePath)) {
+-             return err(new StorageError(&#96;Файл инструкции не найден: ${filePath}&#96;));
++ function readInstructionFile(filePath: string): Effect.Effect&lt;unknown, StorageError&gt; {
++     return Effect.gen(function* () {
++         const exists = yield* Effect.sync(() =&gt; existsSync(filePath));
++         if (!exists) {
++             return yield* Effect.fail(new StorageError(&#96;Файл инструкции не найден: ${filePath}&#96;));
+          }
+  
+-         const fileContent = readFileSync(filePath, 'utf-8');
+-         const jsonData = JSON.parse(fileContent);
+-         return ok(jsonData);
+-     } catch (error) {
+-         if (error instanceof SyntaxError) {
+-             return err(new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error.message}&#96;, error));
+-         }
+-         return err(
+-             new StorageError(&#96;Ошибка чтения файла инструкции ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
+-         );
+-     }
++         const fileContent = yield* Effect.try({
++             try: () =&gt; readFileSync(filePath, 'utf-8'),
++             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения файла инструкции ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
++         });
++ 
++         const jsonData = yield* Effect.try({
++             try: () =&gt; JSON.parse(fileContent),
++             catch: (error) =&gt; {
++                 if (error instanceof SyntaxError) {
++                     return new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error.message}&#96;, error);
++                 }
++                 return new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error);
++             }
++         });
++ 
++         return jsonData;
++     });
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 11
+
+```diff
+@@ -68,15 +68,8 @@
+   * Валидирует данные инструкции через Zod схему
+   */
+- function validateInstruction(data: unknown): Result&lt;Instruction, Error&gt; {
+-     const result = InstructionSchema.safeParse(data);
+-     if (!result.success) {
+-         return err(
+-             new StorageError(
+-                 &#96;Ошибка валидации инструкции: ${result.error.message}&#96;,
+-                 result.error
+-             )
+-         );
+-     }
+-     return ok(result.data);
++ function validateInstruction(data: unknown): Effect.Effect&lt;Instruction, StorageError&gt; {
++     return parseZodSchema(data, InstructionSchema).pipe(
++         Effect.mapError((error) =&gt; new StorageError(&#96;Ошибка валидации инструкции: ${error.message}&#96;, error))
++     );
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 35, lines removed: 24
+
+```diff
+@@ -78,38 +78,49 @@
+   *
+   * @param name - Название инструкции (поле name в JSON)
+-  * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем
++  * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем
+   */
+- export function getInstructionFileNames(name: string): Result&lt;string[], Error&gt; {
+-     const instructionsDir = getInstructionsDirectory();
++ export function getInstructionFileNames(name: string): Effect.Effect&lt;string[], StorageError&gt; {
++     return Effect.gen(function* () {
++         const instructionsDir = getInstructionsDirectory();
+  
+-     if (!existsSync(instructionsDir))
+-         return err(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
+- 
+-     const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++         const dirExists = yield* Effect.sync(() =&gt; existsSync(instructionsDir));
++         if (!dirExists) {
++             return yield* Effect.fail(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
++         }
++ 
++         const files = yield* Effect.try({
++             try: () =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')),
++             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения директории инструкций: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
++         });
+  
+-     const matchingFiles: string[] = [];
++         const matchingFiles: string[] = [];
+  
+-     for (const file of files) {
+-         const filePath = join(instructionsDir, file);
+-         const readResult = readInstructionFile(filePath);
++         for (const file of files) {
++             const filePath = join(instructionsDir, file);
++             const readResult = yield* readInstructionFile(filePath).pipe(
++                 Effect.either
++             );
+  
+-         if (readResult.isErr()) {
+-             continue; // Пропускаем файлы с ошибками чтения
+-         }
++             if (readResult._tag === 'Left') {
++                 continue; // Пропускаем файлы с ошибками чтения
++             }
+  
+-         const validateResult = validateInstruction(readResult.value);
++             const validateResult = yield* validateInstruction(readResult.right).pipe(
++                 Effect.either
++             );
+  
+-         if (validateResult.isErr()) {
+-             continue; // Пропускаем файлы с ошибками валидации
+-         }
++             if (validateResult._tag === 'Left') {
++                 continue; // Пропускаем файлы с ошибками валидации
++             }
+  
+-         const instruction = validateResult.value;
++             const instruction = validateResult.right;
+  
+-         if (instruction.name === name) {
+-             matchingFiles.push(file);
+-         }
+-     }
++             if (instruction.name === name) {
++                 matchingFiles.push(file);
++             }
++         }
+  
+-     return ok(matchingFiles);
++         return matchingFiles;
++     });
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 35, lines removed: 24
+
+```diff
+@@ -130,38 +130,49 @@
+   * @param name - Название инструкции (поле name в JSON)
+   * @param type - Тип инструкции (поле type в JSON)
+-  * @returns Массив имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
++  * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
+   */
+- export function getInstructionFileNamesByNameAndType(name: string, type: string): Result&lt;string[], Error&gt; {
+-     const instructionsDir = getInstructionsDirectory();
++ export function getInstructionFileNamesByNameAndType(name: string, type: string): Effect.Effect&lt;string[], StorageError&gt; {
++     return Effect.gen(function* () {
++         const instructionsDir = getInstructionsDirectory();
+  
+-     if (!existsSync(instructionsDir))
+-         return err(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
+- 
+-     const files = readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json'));
++         const dirExists = yield* Effect.sync(() =&gt; existsSync(instructionsDir));
++         if (!dirExists) {
++             return yield* Effect.fail(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
++         }
++ 
++         const files = yield* Effect.try({
++             try: () =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')),
++             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения директории инструкций: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
++         });
+  
+-     const matchingFiles: string[] = [];
++         const matchingFiles: string[] = [];
+  
+-     for (const file of files) {
+-         const filePath = join(instructionsDir, file);
+-         const readResult = readInstructionFile(filePath);
++         for (const file of files) {
++             const filePath = join(instructionsDir, file);
++             const readResult = yield* readInstructionFile(filePath).pipe(
++                 Effect.either
++             );
+  
+-         if (readResult.isErr()) {
+-             continue; // Пропускаем файлы с ошибками чтения
+-         }
++             if (readResult._tag === 'Left') {
++                 continue; // Пропускаем файлы с ошибками чтения
++             }
+  
+-         const validateResult = validateInstruction(readResult.value);
++             const validateResult = yield* validateInstruction(readResult.right).pipe(
++                 Effect.either
++             );
+  
+-         if (validateResult.isErr()) {
+-             continue; // Пропускаем файлы с ошибками валидации
+-         }
++             if (validateResult._tag === 'Left') {
++                 continue; // Пропускаем файлы с ошибками валидации
++             }
+  
+-         const instruction = validateResult.value;
++             const instruction = validateResult.right;
+  
+-         if (instruction.name === name &amp;&amp; instruction.type === type) {
+-             matchingFiles.push(file);
+-         }
+-     }
++             if (instruction.name === name &amp;&amp; instruction.type === type) {
++                 matchingFiles.push(file);
++             }
++         }
+  
+-     return ok(matchingFiles);
++         return matchingFiles;
++     });
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 12, lines removed: 13
+
+```diff
+@@ -181,20 +181,19 @@
+   *
+   * @param filename - Имя файла инструкции (с расширением .json или без)
+-  * @returns Валидированная инструкция
++  * @returns Effect с валидированной инструкцией
+   */
+- export function readInstruction(filename: string): Result&lt;Instruction, Error&gt; {
+-     const instructionsDir = getInstructionsDirectory();
++ export function readInstruction(filename: string): Effect.Effect&lt;Instruction, StorageError&gt; {
++     return Effect.gen(function* () {
++         const instructionsDir = getInstructionsDirectory();
+  
+-     // Добавляем расширение .json, если его нет
+-     const normalizedFilename = filename.endsWith('.json') ? filename : &#96;${filename}.json&#96;;
+-     const filePath = join(instructionsDir, normalizedFilename);
++         // Добавляем расширение .json, если его нет
++         const normalizedFilename = filename.endsWith('.json') ? filename : &#96;${filename}.json&#96;;
++         const filePath = join(instructionsDir, normalizedFilename);
+  
+-     const readResult = readInstructionFile(filePath);
+- 
+-     if (readResult.isErr()) {
+-         return err(readResult.error);
+-     }
+- 
+-     return validateInstruction(readResult.value);
++         const data = yield* readInstructionFile(filePath);
++         const instruction = yield* validateInstruction(data);
++         
++         return instruction;
++     });
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 9, lines removed: 6
+
+```diff
+@@ -198,10 +198,13 @@
+  }
+  
+- export function readInstructionByNameAndType(name: string, type: string): Result&lt;Instruction, Error&gt; {
+-     const instructionFileNames = getInstructionFileNamesByNameAndType(name, type);
+-     if (instructionFileNames.isErr()) {
+-         return err(instructionFileNames.error);
+-     }
+-     return readInstruction(instructionFileNames.value[0]);
++ export function readInstructionByNameAndType(name: string, type: string): Effect.Effect&lt;Instruction, StorageError&gt; {
++     return Effect.gen(function* () {
++         const instructionFileNames = yield* getInstructionFileNamesByNameAndType(name, type);
++         if (instructionFileNames.length === 0) {
++             return yield* Effect.fail(new StorageError(&#96;Инструкция с именем ${name} и типом ${type} не найдена&#96;));
++         }
++         const instruction = yield* readInstruction(instructionFileNames[0]);
++         return instruction;
++     });
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 13:18-13:22 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю обработку ошибок: для игнорирования используем Effect.catchAll или Effect.orElse вместо Effect.either:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/instructions.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю обработку ошибок: вместо Effect.either использую Effect.option для игнорирования ошибок при чтении файлов.
+
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+<details>
+                <summary>Tool use: **codebase_search** • Searched codebase "How to ignore errors in Effect? Effect.option or Effect.catchAll" • **15** results</summary>
+            
+| File | Lines |
+|------|-------|
+| `README.md` | L66 |
+| `package.json` | L36 |
+| `.cursor/plans/ai-a09a870a.plan.md` | L34 |
+| `src/app.d.ts` | L11 |
+| `PROJECT.md` | L27 |
+| `.gitignore` | L14 |
+| `PROJECT.md` | L24-63 |
+| `src/lib/config.ts` | L34 |
+| `tsconfig.json` | L16 |
+| `svelte.config.js` | L11 |
+| `.eslintrc.cjs` | L30 |
+| `vite.config.ts` | L11 |
+| `src/app.html` | L12 |
+| `.prettierignore` | L5 |
+| `src/app.css` | L13 |
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "Effect\.(option|catchAll|ignore)" in "src" • 0 matches</summary>
+
+Output mode: content
+
+
+_No matches found_
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю обработку ошибок: используем Effect.option для преобразования ошибок в Option.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -11,5 +11,5 @@
+  import { z } from 'zod';
+  import { config } from '../config.js';
+- import { Effect, pipe } from 'effect';
++ import { Effect, pipe, Option } from 'effect';
+  import { StorageError } from './errors.js';
+  import { parseZodSchema } from '$lib/utils/zod.js';
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 7
+
+```diff
+@@ -98,21 +98,21 @@
+          for (const file of files) {
+              const filePath = join(instructionsDir, file);
+-             const readResult = yield* readInstructionFile(filePath).pipe(
+-                 Effect.either
++             const dataOption = yield* readInstructionFile(filePath).pipe(
++                 Effect.option
+              );
+  
+-             if (readResult._tag === 'Left') {
++             if (Option.isNone(dataOption)) {
+                  continue; // Пропускаем файлы с ошибками чтения
+              }
+  
+-             const validateResult = yield* validateInstruction(readResult.right).pipe(
+-                 Effect.either
++             const instructionOption = yield* validateInstruction(dataOption.value).pipe(
++                 Effect.option
+              );
+  
+-             if (validateResult._tag === 'Left') {
++             if (Option.isNone(instructionOption)) {
+                  continue; // Пропускаем файлы с ошибками валидации
+              }
+  
+-             const instruction = validateResult.right;
++             const instruction = instructionOption.value;
+  
+              if (instruction.name === name) {
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 7
+
+```diff
+@@ -150,21 +150,21 @@
+          for (const file of files) {
+              const filePath = join(instructionsDir, file);
+-             const readResult = yield* readInstructionFile(filePath).pipe(
+-                 Effect.either
++             const dataOption = yield* readInstructionFile(filePath).pipe(
++                 Effect.option
+              );
+  
+-             if (readResult._tag === 'Left') {
++             if (Option.isNone(dataOption)) {
+                  continue; // Пропускаем файлы с ошибками чтения
+              }
+  
+-             const validateResult = yield* validateInstruction(readResult.right).pipe(
+-                 Effect.either
++             const instructionOption = yield* validateInstruction(dataOption.value).pipe(
++                 Effect.option
+              );
+  
+-             if (validateResult._tag === 'Left') {
++             if (Option.isNone(instructionOption)) {
+                  continue; // Пропускаем файлы с ошибками валидации
+              }
+  
+-             const instruction = validateResult.right;
++             const instruction = instructionOption.value;
+  
+              if (instruction.name === name &amp;&amp; instruction.type === type) {
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 13:18-13:22 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю финальную версию файла:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/instructions.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Файл `instructions.ts` переписан на Effect. Основные изменения:
+
+1. **Импорты обновлены**: удалён `neverthrow`, добавлены `Effect`, `pipe`, `Option` и `parseZodSchema`.
+
+2. **Функции переписаны на Effect**:
+   - `readInstructionFile` — использует `Effect.gen`, `Effect.sync`, `Effect.try`
+   - `validateInstruction` — использует `parseZodSchema` с `Effect.mapError`
+   - `getInstructionFileNames` — использует `Effect.gen`, `Effect.option` для игнорирования ошибок при обработке файлов
+   - `getInstructionFileNamesByNameAndType` — аналогично, с фильтрацией по имени и типу
+   - `readInstruction` — использует `Effect.gen` для композиции
+   - `readInstructionByNameAndType` — использует `Effect.gen` для композиции
+
+3. **Убраны try-catch блоки**: операции обёрнуты в `Effect.try` или `Effect.sync`.
+
+4. **Валидация через parseZodSchema**: вместо `safeParse` используется `parseZodSchema`.
+
+5. **Игнорирование ошибок**: в циклах обработки файлов используется `Effect.option` для преобразования ошибок в `Option`, что позволяет пропускать файлы с ошибками.
+
+Линтер ошибок не нашёл. Файл готов к использованию.
+
+---
+
+_**User (2025-12-20 10:50Z)**_
+
+Убери try catch логику. Нам не нужно обрабатывать ошибки как-то по особенному. Ошибка если появится, то её обработает код верхнего уровня
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Упрощаю код, убирая специальную обработку ошибок и оставляя базовую обёртку в Effect.
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/instructions.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 7, lines removed: 23
+
+```diff
+@@ -39,27 +39,11 @@
+   * Читает и парсит JSON файл инструкции
+   */
+- function readInstructionFile(filePath: string): Effect.Effect&lt;unknown, StorageError&gt; {
+-     return Effect.gen(function* () {
+-         const exists = yield* Effect.sync(() =&gt; existsSync(filePath));
+-         if (!exists) {
+-             return yield* Effect.fail(new StorageError(&#96;Файл инструкции не найден: ${filePath}&#96;));
+-         }
+- 
+-         const fileContent = yield* Effect.try({
+-             try: () =&gt; readFileSync(filePath, 'utf-8'),
+-             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения файла инструкции ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
+-         });
+- 
+-         const jsonData = yield* Effect.try({
+-             try: () =&gt; JSON.parse(fileContent),
+-             catch: (error) =&gt; {
+-                 if (error instanceof SyntaxError) {
+-                     return new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error.message}&#96;, error);
+-                 }
+-                 return new StorageError(&#96;Ошибка парсинга JSON в файле ${filePath}: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error);
+-             }
+-         });
+- 
+-         return jsonData;
++ function readInstructionFile(filePath: string): Effect.Effect&lt;unknown, Error&gt; {
++     return Effect.try({
++         try: () =&gt; {
++             const fileContent = readFileSync(filePath, 'utf-8');
++             return JSON.parse(fileContent);
++         },
++         catch: (error) =&gt; error as Error
+      });
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'pipe' is declared but its value is never read. | 13:18-13:22 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Упрощаю остальные функции, убирая избыточную обработку ошибок:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 6
+
+```diff
+@@ -40,10 +40,7 @@
+   */
+  function readInstructionFile(filePath: string): Effect.Effect&lt;unknown, Error&gt; {
+-     return Effect.try({
+-         try: () =&gt; {
+-             const fileContent = readFileSync(filePath, 'utf-8');
+-             return JSON.parse(fileContent);
+-         },
+-         catch: (error) =&gt; error as Error
++     return Effect.sync(() =&gt; {
++         const fileContent = readFileSync(filePath, 'utf-8');
++         return JSON.parse(fileContent);
+      });
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 4
+
+```diff
+@@ -49,8 +49,6 @@
+   * Валидирует данные инструкции через Zod схему
+   */
+- function validateInstruction(data: unknown): Effect.Effect&lt;Instruction, StorageError&gt; {
+-     return parseZodSchema(data, InstructionSchema).pipe(
+-         Effect.mapError((error) =&gt; new StorageError(&#96;Ошибка валидации инструкции: ${error.message}&#96;, error))
+-     );
++ function validateInstruction(data: unknown): Effect.Effect&lt;Instruction, Error&gt; {
++     return parseZodSchema(data, InstructionSchema);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 10
+
+```diff
+@@ -59,17 +59,9 @@
+   * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем
+   */
+- export function getInstructionFileNames(name: string): Effect.Effect&lt;string[], StorageError&gt; {
++ export function getInstructionFileNames(name: string): Effect.Effect&lt;string[], Error&gt; {
+      return Effect.gen(function* () {
+          const instructionsDir = getInstructionsDirectory();
+  
+-         const dirExists = yield* Effect.sync(() =&gt; existsSync(instructionsDir));
+-         if (!dirExists) {
+-             return yield* Effect.fail(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
+-         }
+- 
+-         const files = yield* Effect.try({
+-             try: () =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')),
+-             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения директории инструкций: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
+-         });
++         const files = yield* Effect.sync(() =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')));
+  
+          const matchingFiles: string[] = [];
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 10
+
+```diff
+@@ -103,17 +103,9 @@
+   * @returns Effect с массивом имен файлов (с расширением .json), содержащих инструкции с указанным именем и типом
+   */
+- export function getInstructionFileNamesByNameAndType(name: string, type: string): Effect.Effect&lt;string[], StorageError&gt; {
++ export function getInstructionFileNamesByNameAndType(name: string, type: string): Effect.Effect&lt;string[], Error&gt; {
+      return Effect.gen(function* () {
+          const instructionsDir = getInstructionsDirectory();
+  
+-         const dirExists = yield* Effect.sync(() =&gt; existsSync(instructionsDir));
+-         if (!dirExists) {
+-             return yield* Effect.fail(new StorageError(&#96;Директория инструкций не найдена: ${instructionsDir}&#96;));
+-         }
+- 
+-         const files = yield* Effect.try({
+-             try: () =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')),
+-             catch: (error) =&gt; new StorageError(&#96;Ошибка чтения директории инструкций: ${error instanceof Error ? error.message : String(error)}&#96;, error as Error)
+-         });
++         const files = yield* Effect.sync(() =&gt; readdirSync(instructionsDir).filter((file) =&gt; file.endsWith('.json')));
+  
+          const matchingFiles: string[] = [];
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -146,5 +146,5 @@
+   * @returns Effect с валидированной инструкцией
+   */
+- export function readInstruction(filename: string): Effect.Effect&lt;Instruction, StorageError&gt; {
++ export function readInstruction(filename: string): Effect.Effect&lt;Instruction, Error&gt; {
+      return Effect.gen(function* () {
+          const instructionsDir = getInstructionsDirectory();
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 2
+
+```diff
+@@ -161,9 +161,9 @@
+  }
+  
+- export function readInstructionByNameAndType(name: string, type: string): Effect.Effect&lt;Instruction, StorageError&gt; {
++ export function readInstructionByNameAndType(name: string, type: string): Effect.Effect&lt;Instruction, Error&gt; {
+      return Effect.gen(function* () {
+          const instructionFileNames = yield* getInstructionFileNamesByNameAndType(name, type);
+          if (instructionFileNames.length === 0) {
+-             return yield* Effect.fail(new StorageError(&#96;Инструкция с именем ${name} и типом ${type} не найдена&#96;));
++             return yield* Effect.fail(new Error(&#96;Инструкция с именем ${name} и типом ${type} не найдена&#96;));
+          }
+          const instruction = yield* readInstruction(instructionFileNames[0]);
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 1
+
+```diff
+@@ -12,5 +12,4 @@
+  import { config } from '../config.js';
+  import { Effect, pipe, Option } from 'effect';
+- import { StorageError } from './errors.js';
+  import { parseZodSchema } from '$lib/utils/zod.js';
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'existsSync' is declared but its value is never read. | 10:37-10:47 | DIAGNOSTIC_SEVERITY_HINT |
+| 'pipe' is declared but its value is never read. | 13:18-13:22 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Исправляю `readInstructionFile`: `Effect.sync` не перехватывает исключения, используем `Effect.try` без обработки ошибок.
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/storage/instructions.ts</summary>
+
+**Chunk 1**
+Lines added: 6, lines removed: 3
+
+```diff
+@@ -39,7 +39,10 @@
+   */
+  function readInstructionFile(filePath: string): Effect.Effect&lt;unknown, Error&gt; {
+-     return Effect.sync(() =&gt; {
+-         const fileContent = readFileSync(filePath, 'utf-8');
+-         return JSON.parse(fileContent);
++     return Effect.try({
++         try: () =&gt; {
++             const fileContent = readFileSync(filePath, 'utf-8');
++             return JSON.parse(fileContent);
++         },
++         catch: (error) =&gt; error as Error
+      });
+  }
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<details>
+<summary>Tool use: **read_lints**</summary>
+
+Status: **loading**
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
