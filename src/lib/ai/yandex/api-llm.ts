@@ -9,7 +9,8 @@
 
 import { z } from 'zod';
 import { fetchStable } from '$lib/utils/fetchStable';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { Effect, pipe } from 'effect';
+import { responseToZodSchema } from '$lib/utils/zod';
 
 const COMPLETION_ENDPOINT = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion';
 
@@ -247,25 +248,17 @@ export function getModelUri(catalogId: string, model: 'yandexgpt-lite' | 'yandex
  * @param request - Запрос completion
  * @returns Результат выполнения запроса
  */
-export function completion(apiKey: string, request: CompletionRequest): ResultAsync<CompletionResult, YandexLLMAPIError> {
-	return fetchStable(COMPLETION_ENDPOINT, {
-		method: 'POST',
-		headers: {
-			'Authorization': `Bearer ${apiKey}`,
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(request)
-	}).andThen((response) => {
-		return ResultAsync.fromSafePromise(response.json())
-	}).andThen((data) => {
-		const result = CompletionResultSchema.safeParse(data?.result);
-		if (!result.success) {
-			return errAsync(new YandexLLMAPIError(`Invalid response from Yandex GPT ${JSON.stringify(data)}\n
-			${JSON.stringify(data?.error?.details)}\n
-			${data?.error?.httpStatus}\n
-			${data?.error?.message}`, result.error));
-			
-		}
-		return okAsync(result.data);
-	});
+export function completion(apiKey: string, request: CompletionRequest): Effect.Effect<CompletionResult, Error> {
+	return pipe(
+		fetchStable(COMPLETION_ENDPOINT,
+			{
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(request)
+			}),
+		Effect.flatMap((response) => responseToZodSchema(response, CompletionResultSchema)),
+	)
 }

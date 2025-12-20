@@ -1,8 +1,50 @@
-import { ResultAsync } from 'neverthrow';
+import { Effect, Schedule, Duration, pipe } from 'effect';
 
 /**
  * Fetch с таймаутом и retry логикой для стабильной работы с внешними API
  */
+
+/**
+ * Проверяет, является ли ошибка сетевой (fetch failed, timeout и т.д.)
+ */
+function isNetworkError(error: unknown): boolean {
+	return (
+		error instanceof TypeError ||
+		error instanceof DOMException ||
+		(error instanceof Error &&
+			(error.message.includes('fetch') ||
+				error.message.includes('network') ||
+				error.message.includes('timeout') ||
+				error.message.includes('aborted')))
+	);
+}
+
+/**
+ * Выполняет fetch запрос с таймаутом
+ */
+function fetchWithTimeout(
+	url: string,
+	options: RequestInit,
+	timeout: number
+): Effect.Effect<Response, Error> {
+	return Effect.tryPromise({
+		try: async () => {
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+			try {
+				const response = await fetch(url, {
+					...options,
+					signal: controller.signal
+				});
+				return response;
+			} finally {
+				clearTimeout(timeoutId);
+			}
+		},
+		catch: (error) => (error instanceof Error ? error : new Error(String(error)))
+	});
+}
 
 /**
  * Выполняет fetch запрос с таймаутом и автоматическим retry при сетевых ошибках
@@ -12,7 +54,7 @@ import { ResultAsync } from 'neverthrow';
  * @param timeout - Таймаут в миллисекундах (по умолчанию 30000 = 30 секунд)
  * @param maxRetries - Максимальное количество попыток (по умолчанию 2, итого 3 запроса)
  * @param retryDelay - Задержка между попытками в миллисекундах (по умолчанию 1000 = 1 секунда)
- * @returns ResultAsync, содержащий Response при успехе или Error при ошибке
+ * @returns Effect, содержащий Response при успехе или Error при ошибке
  */
 export function fetchStable(
 	url: string,
@@ -20,59 +62,21 @@ export function fetchStable(
 	timeout: number = 30000,
 	maxRetries: number = 2,
 	retryDelay: number = 1000
-): ResultAsync<Response, Error> {
-	return ResultAsync.fromPromise(
-		(async (): Promise<Response> => {
-			let lastError: Error | null = null;
+): Effect.Effect<Response, Error> {
+	const fetchEffect = fetchWithTimeout(url, options, timeout);
 
-			for (let attempt = 0; attempt <= maxRetries; attempt++) {
-				let timeoutId: NodeJS.Timeout | null = null;
+	// Создаем расписание с экспоненциальной задержкой и ограничением количества попыток
+	const retrySchedule = pipe(
+		Schedule.exponential(Duration.millis(retryDelay)),
+		Schedule.compose(Schedule.recurs(maxRetries))
+	);
 
-				try {
-					// Создаем AbortController для таймаута
-					const controller = new AbortController();
-					timeoutId = setTimeout(() => controller.abort(), timeout);
-
-					// Выполняем запрос с таймаутом
-					const response = await fetch(url, {
-						...options,
-						signal: controller.signal
-					});
-
-					if (timeoutId) {
-						clearTimeout(timeoutId);
-					}
-					return response;
-				} catch (error) {
-					if (timeoutId) {
-						clearTimeout(timeoutId);
-					}
-
-					// Проверяем, является ли ошибка сетевой (fetch failed, timeout и т.д.)
-					const isNetworkError =
-						error instanceof TypeError ||
-						error instanceof DOMException ||
-						(error instanceof Error &&
-							(error.message.includes('fetch') ||
-								error.message.includes('network') ||
-								error.message.includes('timeout') ||
-								error.message.includes('aborted')));
-
-					lastError = error as Error;
-
-					// Если это не сетевая ошибка или последняя попытка - выбрасываем ошибку
-					if (!isNetworkError || attempt === maxRetries) {
-						throw error as Error;
-					}
-
-					// Ждем перед следующей попыткой (экспоненциальная задержка)
-					await new Promise((resolve) => setTimeout(resolve, retryDelay * (attempt + 1)));
-				}
-			}
-
-			throw lastError || new Error('Неизвестная ошибка при выполнении fetch запроса');
-		})(),
-		(error) => error instanceof Error ? error : new Error(String(error))
+	// Применяем retry только для сетевых ошибок
+	return pipe(
+		fetchEffect,
+		Effect.retry({
+			schedule: retrySchedule,
+			while: (error) => isNetworkError(error)
+		})
 	);
 }
-

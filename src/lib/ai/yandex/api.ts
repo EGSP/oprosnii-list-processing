@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { fetchStable } from "../../utils/fetchStable.js";
-import { Result, ok, err } from "neverthrow";
+import { Effect } from "effect";
+import { parseZodSchema } from "../../utils/zod.js";
 
 const GET_OPERATION_ENDPOINT = (operationId: string) => `https://operation.api.cloud.yandex.net/operations/${operationId}`;
 const CANCEL_OPERATION_ENDPOINT = (operationId: string) => `https://operation.api.cloud.yandex.net/operations/${operationId}:cancel`;
@@ -55,136 +56,72 @@ export const YandexCloudOperationSchema = z.object({
  * @param apiKey - API ключ Yandex Cloud
  * @returns Result с YandexCloudOperation при успехе или Error при ошибке
  */
-export async function getYandexCloudOperation(
-	operationId: string,
-	apiKey: string
-): Promise<Result<YandexCloudOperation, YandexCloudOperationAPIError>> {
-	const responseResult = await fetchStable(
-		GET_OPERATION_ENDPOINT(operationId),
-		{
-			method: "GET",
-			headers: {
-				Authorization: `Api-Key ${apiKey}`
-			}
-		},
-		30000, // timeout: 30 секунд
-		2 // maxRetries: 2 попытки при сетевых ошибках
-	);
+export function getYandexCloudOperation(operationId: string, apiKey: string):
+	Effect.Effect<YandexCloudOperation, Error> {
 
-	if (responseResult.isErr()) {
-		return err(
-			new YandexCloudOperationAPIError(
-				`Не удалось выполнить запрос к Operation API: ${responseResult.error.message}`,
-				responseResult.error
-			)
+	return Effect.gen(function* () {
+		const response = yield* fetchStable(GET_OPERATION_ENDPOINT(operationId),
+			{
+				method: "GET",
+				headers: {
+					Authorization: `Api-Key ${apiKey}`
+				}
+			},
+			30000, // timeout: 30 секунд
+			2 // maxRetries: 2 попытки при сетевых ошибках
 		);
-	}
 
-	const response = responseResult.value;
-
-	if (!response.ok) {
-		let errorMessage = `Operation API вернул ошибку: ${response.status} ${response.statusText}`;
-		try {
-			const errorBody = await response.json();
-			errorMessage += `. ${JSON.stringify(errorBody)}`;
-		} catch {
-			// Игнорируем ошибку парсинга тела ответа
+		if (!response.ok) {
+			yield* Effect.fail(new YandexCloudOperationAPIError(
+				`Operation API вернул ошибку: ${response.status} ${response.statusText}`
+			));
 		}
-		return err(new YandexCloudOperationAPIError(errorMessage));
-	}
 
-	let result: unknown;
-	try {
-		result = await response.json();
-	} catch (error) {
-		return err(
-			new YandexCloudOperationAPIError(
+		let result = yield* Effect.tryPromise({
+			try: async () => await response.json(),
+			catch: (error) => new YandexCloudOperationAPIError(
 				"Не удалось разобрать JSON ответ от Operation API",
 				error as Error
 			)
-		);
-	}
+		});
 
-	try {
-		const operation = YandexCloudOperationSchema.parse(result);
-		return ok(operation);
-	} catch (error) {
-		return err(
-			new YandexCloudOperationAPIError(
-				"Не удалось валидировать ответ Operation API как YandexCloudOperation",
-				error as Error
-			)
-		);
-	}
+		const operation = yield* parseZodSchema(result, YandexCloudOperationSchema);
+
+		return operation;
+	});
 }
 
-/**
- * Отменяет операцию Yandex Cloud по её ID
- *
- * @param operationId - ID операции для отмены
- * @param apiKey - API ключ Yandex Cloud
- * @returns Result с YandexCloudOperation при успехе или Error при ошибке
- */
-export async function cancelYandexCloudOperation(
-	operationId: string,
-	apiKey: string
-): Promise<Result<YandexCloudOperation, YandexCloudOperationAPIError>> {
-	const responseResult = await fetchStable(
-		CANCEL_OPERATION_ENDPOINT(operationId),
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Api-Key ${apiKey}`,
-				"Content-Type": "application/json"
-			}
-		},
-		30000, // timeout: 30 секунд
-		2 // maxRetries: 2 попытки при сетевых ошибках
-	);
 
-	if (responseResult.isErr()) {
-		return err(
-			new YandexCloudOperationAPIError(
-				`Не удалось выполнить запрос к Operation API: ${responseResult.error.message}`,
-				responseResult.error
-			)
+export function cancelYandexCloudOperation(operationId: string, apiKey: string):
+	Effect.Effect<YandexCloudOperation, Error> {
+	return Effect.gen(function* () {
+		const response = yield* fetchStable(CANCEL_OPERATION_ENDPOINT(operationId),
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Api-Key ${apiKey}`
+				}
+			},
+			30000, // timeout: 30 секунд
+			2 // maxRetries: 2 попытки при сетевых ошибках
 		);
-	}
 
-	const response = responseResult.value;
-
-	if (!response.ok) {
-		let errorMessage = `Operation API вернул ошибку: ${response.status} ${response.statusText}`;
-		try {
-			const errorBody = await response.json();
-			errorMessage += `. ${JSON.stringify(errorBody)}`;
-		} catch {
-			// Игнорируем ошибку парсинга тела ответа
+		if (!response.ok) {
+			yield* Effect.fail(new YandexCloudOperationAPIError(
+				`Operation API вернул ошибку: ${response.status} ${response.statusText}`
+			));
 		}
-		return err(new YandexCloudOperationAPIError(errorMessage));
-	}
 
-	let result: unknown;
-	try {
-		result = await response.json();
-	} catch (error) {
-		return err(
-			new YandexCloudOperationAPIError(
+		let result = yield* Effect.tryPromise({
+			try: async () => await response.json(),
+			catch: (error) => new YandexCloudOperationAPIError(
 				"Не удалось разобрать JSON ответ от Operation API",
 				error as Error
 			)
-		);
-	}
+		});
 
-	try {
-		const operation = YandexCloudOperationSchema.parse(result);
-		return ok(operation);
-	} catch (error) {
-		return err(
-			new YandexCloudOperationAPIError(
-				"Не удалось валидировать ответ Operation API как YandexCloudOperation",
-				error as Error
-			)
-		);
-	}
+		const operation = yield* parseZodSchema(result, YandexCloudOperationSchema);
+
+		return operation as YandexCloudOperation;
+	});
 }
