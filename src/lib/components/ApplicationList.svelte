@@ -9,7 +9,7 @@
 	import FileUpload from './FileUpload.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import { createEventDispatcher } from 'svelte';
-	import { Err, type Result } from 'neverthrow';
+	import { Effect, Option } from 'effect';
 
 	const dispatch = createEventDispatcher<{
 		select: { application: Application };
@@ -26,48 +26,43 @@
 		loadApplications();
 	});
 
-	function hasErr<T>(result: Result<T, Error>): result is Err<T, Error> {
-		if (result.isErr()) {
-			error = result.error instanceof Error ? result.error.message : 'Ошибка загрузки заявок';
-			return true;
-		}
-		return false;
-	}
-
 	async function loadApplications() {
 		isLoading = true;
 		error = null;
-		const applicationsResult = await getApplications();
-		if (hasErr(applicationsResult)) {
-			isLoading = false;
-			return;
-		}
-
-		// Загружаем статус для каждой заявки параллельно
-		const statusInfoResults = await Promise.all(
-			applicationsResult.value.map((app) => 
-				getApplicationStatusInfo(app.id).then(result => ({ result, app }))
-			)
-		);
-
-		applicationsStatusInfo = statusInfoResults
-			.map(({ result, app }) => {
-				if (result.isErr()) {
-					// Если не удалось загрузить статус, создаем базовую информацию
-					return {
-						application: app,
-						status: 'nothing' as const,
-						operations: []
-					};
-				}
-				return result.value;
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const applications = yield* getApplications();
+				const statusInfos = yield* Effect.all(
+					applications.map((app) =>
+						Effect.gen(function* () {
+							const statusInfo = yield* Effect.option(getApplicationStatusInfo(app.id));
+							if (Option.isSome(statusInfo)) {
+								return statusInfo.value;
+							}
+							// Если не удалось загрузить статус, создаем базовую информацию
+							return {
+								application: app,
+								status: 'nothing' as const,
+								operations: []
+							};
+						})
+					)
+				);
+				return statusInfos.filter((info): info is ApplicationStatusInfo => info !== null);
 			})
-			.filter((info): info is ApplicationStatusInfo => info !== null);
+		).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка загрузки заявок';
+			isLoading = false;
+			return null;
+		});
 
-		// Сортируем по дате загрузки (сверху самая поздняя)
-		applicationsStatusInfo.sort(
-			(a, b) => new Date(b.application.uploadDate).getTime() - new Date(a.application.uploadDate).getTime()
-		);
+		if (result) {
+			applicationsStatusInfo = result;
+			// Сортируем по дате загрузки (сверху самая поздняя)
+			applicationsStatusInfo.sort(
+				(a, b) => new Date(b.application.uploadDate).getTime() - new Date(a.application.uploadDate).getTime()
+			);
+		}
 		isLoading = false;
 	}
 
@@ -79,16 +74,21 @@
 	async function uploadFile(file: File) {
 		isLoading = true;
 		error = null;
-		const newApplicationResponse = await uploadApplication(file);
-		if (hasErr(newApplicationResponse)) {
+		const newApplication = await Effect.runPromise(uploadApplication(file)).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка загрузки файла';
 			isLoading = false;
+			return null;
+		});
+
+		if (!newApplication) {
 			return;
 		}
+
 		// Обновляем список заявок
 		await loadApplications();
 		// Находим загруженную заявку в списке
 		const uploadedStatusInfo = applicationsStatusInfo.find(
-			(info) => info.application.id === newApplicationResponse.value.id
+			(info) => info.application.id === newApplication.id
 		);
 		if (uploadedStatusInfo) {
 			selectApplication(uploadedStatusInfo.application.id);

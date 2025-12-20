@@ -4,7 +4,7 @@
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
-	import { Err, type Result } from 'neverthrow';
+	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
 
 	interface TechnicalSpec {
@@ -23,7 +23,6 @@
 	let error: string | null = null;
 	let operationsUpdateInterval: ReturnType<typeof setInterval> | null = null;
 	let fileInfo: FileInfo | null = null;
-	let isLoadingFileInfo = false;
 	let isRefreshing = false;
 	let runningOperations = new Set<ProcessingOperation['task']>();
 
@@ -47,14 +46,15 @@
 	});
 
 	async function loadTechnicalSpecs() {
-		const result = await getTechnicalSpecs();
-		if (result.isErr()) {
-			error = result.error.message;
-			return;
-		}
-		technicalSpecs = result.value as TechnicalSpec[];
-		if (technicalSpecs.length > 0 && !selectedTechnicalSpecId) {
-			selectedTechnicalSpecId = technicalSpecs[0].id;
+		const specs = await Effect.runPromise(getTechnicalSpecs()).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка загрузки технических условий';
+			return null;
+		});
+		if (specs) {
+			technicalSpecs = specs as TechnicalSpec[];
+			if (technicalSpecs.length > 0 && !selectedTechnicalSpecId) {
+				selectedTechnicalSpecId = technicalSpecs[0].id;
+			}
 		}
 	}
 
@@ -63,18 +63,23 @@
 
 		isLoading = true;
 		error = null;
-		const statusInfoResult = await getApplicationStatusInfo(applicationId);
-		if (statusInfoResult.isErr()) {
-			error = statusInfoResult.error.message;
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const status = yield* getApplicationStatusInfo(applicationId);
+				const file = yield* Effect.option(getFileInfo(applicationId));
+				return { status, file };
+			})
+		).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка загрузки заявки';
 			statusInfo = null;
 			fileInfo = null;
-			isLoading = false;
-			return;
+			return null;
+		});
+		
+		if (result) {
+			statusInfo = result.status;
+			fileInfo = Option.isSome(result.file) ? result.file.value : null;
 		}
-
-		statusInfo = statusInfoResult.value;
-		// Загружаем информацию о файле
-		await loadFileInfo();
 		isLoading = false;
 	}
 
@@ -84,30 +89,17 @@
 	async function refreshApplication() {
 		if (!applicationId) return;
 
-		const statusInfoResult = await getApplicationStatusInfo(applicationId);
-		if (statusInfoResult.isErr()) {
+		const result = await Effect.runPromise(getApplicationStatusInfo(applicationId)).catch((err) => {
 			// Игнорируем ошибки при фоновом обновлении
-			console.warn('Не удалось обновить заявку:', statusInfoResult.error);
-			return;
+			console.warn('Не удалось обновить заявку:', err);
+			return null;
+		});
+		
+		if (result) {
+			statusInfo = result;
 		}
-
-		statusInfo = statusInfoResult.value;
 	}
 
-	async function loadFileInfo() {
-		if (!applicationId) return;
-
-		isLoadingFileInfo = true;
-		const fileInfoResult = await getFileInfo(applicationId);
-		if (fileInfoResult.isErr()) {
-			// Игнорируем ошибки загрузки информации о файле, чтобы не блокировать отображение заявки
-			console.warn('Не удалось загрузить информацию о файле:', fileInfoResult.error);
-			fileInfo = null;
-		} else {
-			fileInfo = fileInfoResult.value;
-		}
-		isLoadingFileInfo = false;
-	}
 
 	/**
 	 * Проверяет, нужно ли обновлять данные заявки и операций
@@ -164,14 +156,27 @@
 
 		isProcessing = true;
 		error = null;
-		const processResult = await processApplication(applicationId, selectedTechnicalSpecId);
-		if (processResult.isErr()) {
-			error = processResult.error.message;
-		}
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				yield* processApplication(applicationId, selectedTechnicalSpecId);
+				const status = yield* getApplicationStatusInfo(applicationId);
+				const file = yield* Effect.option(getFileInfo(applicationId));
+				return { status, file };
+			})
+		).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка обработки заявки';
+			// Всегда обновляем данные после обработки, даже при ошибке
+			// Это обеспечит отображение частичных результатов
+			return null;
+		});
 		
-		// Всегда обновляем данные после обработки, даже при ошибке
-		// Это обеспечит отображение частичных результатов
-		await loadApplication();
+		if (result) {
+			statusInfo = result.status;
+			fileInfo = Option.isSome(result.file) ? result.file.value : null;
+		} else {
+			// Всегда обновляем данные после обработки, даже при ошибке
+			await loadApplication();
+		}
 		// Запускаем периодическое обновление, если нужно
 		startOperationsUpdate();
 		isProcessing = false;
@@ -182,12 +187,22 @@
 
 		isRefreshing = true;
 		error = null;
-		const fetchResult = await fetchApplication(applicationId);
-		if (fetchResult.isErr()) {
-			error = fetchResult.error.message;
-		} else {
-			// После успешного обновления загружаем актуальные данные
-			await loadApplication();
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				yield* fetchApplication(applicationId);
+				const status = yield* getApplicationStatusInfo(applicationId);
+				const file = yield* Effect.option(getFileInfo(applicationId));
+				return { status, file };
+			})
+		).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка обновления заявки';
+			isRefreshing = false;
+			return null;
+		});
+		
+		if (result) {
+			statusInfo = result.status;
+			fileInfo = Option.isSome(result.file) ? result.file.value : null;
 			// Запускаем периодическое обновление, если нужно
 			startOperationsUpdate();
 		}
@@ -206,28 +221,38 @@
 		runningOperations.add(task);
 		error = null;
 
-		let result: Result<void, Error>;
+		let operationEffect: Effect.Effect<void, Error>;
 		if (task === 'extractText') {
-			result = await extractText(applicationId);
+			operationEffect = extractText(applicationId);
 		} else if (task === 'resolveProductType') {
-			result = await resolveProductType(applicationId);
+			operationEffect = resolveProductType(applicationId);
 		} else if (task === 'resolveAbbreviation') {
-			result = await resolveAbbreviation(applicationId, selectedTechnicalSpecId);
+			operationEffect = resolveAbbreviation(applicationId, selectedTechnicalSpecId);
 		} else {
 			error = 'Неизвестная операция';
 			runningOperations.delete(task);
 			return;
 		}
 
-		if (result.isErr()) {
-			error = result.error.message;
-		} else {
-			// После успешного запуска обновляем данные
-			await loadApplication();
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				yield* operationEffect;
+				const status = yield* getApplicationStatusInfo(applicationId);
+				const file = yield* Effect.option(getFileInfo(applicationId));
+				return { status, file };
+			})
+		).catch((err) => {
+			error = err instanceof Error ? err.message : 'Ошибка выполнения операции';
+			runningOperations.delete(task);
+			return null;
+		});
+		
+		if (result) {
+			statusInfo = result.status;
+			fileInfo = Option.isSome(result.file) ? result.file.value : null;
 			// Запускаем периодическое обновление, если нужно
 			startOperationsUpdate();
 		}
-
 		runningOperations.delete(task);
 	}
 
@@ -350,9 +375,7 @@
 
 			<div class="section">
 				<h3>Информация о файле</h3>
-				{#if isLoadingFileInfo}
-					<div class="loading">Загрузка информации о файле...</div>
-				{:else if fileInfo}
+				{#if fileInfo}
 					<div class="field">
 						<label>Имя файла:</label>
 						<span>{fileInfo.name}</span>
