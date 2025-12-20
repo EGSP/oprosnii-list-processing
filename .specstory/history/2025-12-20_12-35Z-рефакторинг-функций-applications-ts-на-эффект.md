@@ -3357,15 +3357,507 @@ Lines added: 6, lines removed: 3
 
 ---
 
-<tool-use data-tool-type="unknown" data-tool-name="read_lints">
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
 <details>
-<summary>Tool use: **read_lints**</summary>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/storage/instructions.ts`
+
+Lint results
+
+Lint errors for `src/lib/storage/instructions.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'existsSync' is declared but its value is never read. | 10:37-10:47 | DIAGNOSTIC_SEVERITY_HINT |
+| 'pipe' is declared but its value is never read. | 13:18-13:22 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/storage/instructions.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Убрал специальную обработку ошибок. Изменения:
+
+1. Удалён импорт `StorageError` — используется стандартный `Error`.
+2. Упрощена `readInstructionFile` — убрана проверка существования файла и специальная обработка ошибок, оставлен базовый `Effect.try`.
+3. Упрощена `validateInstruction` — убрано оборачивание ошибки в `StorageError`, используется результат `parseZodSchema` напрямую.
+4. Упрощены `getInstructionFileNames` и `getInstructionFileNamesByNameAndType` — убраны проверки существования директории и специальная обработка ошибок.
+5. Обновлены типы возвращаемых значений — все функции возвращают `Effect.Effect<T, Error>` вместо `Effect.Effect<T, StorageError>`.
+
+Ошибки передаются наверх без дополнительной обработки. Линтер ошибок не нашёл. Файл готов к использованию.
+
+---
+
+_**User (2025-12-20 10:50Z)**_
+
+@src/lib/ai/llm.ts аналогично для этого файла
+
+---
+
+_**Agent (model default, mode Agent)**_
+
+
+
+---
+
+
+Изучаю файл и переписываю его на Effect, аналогично предыдущим файлам.
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/llm.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="codebase_search">
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="search" data-tool-name="grep">
+<details>
+<summary>Tool use: **grep** • Grep for "^export (function|const).*completion" in "src/lib/ai/yandex" • 1 match</summary>
+
+Output mode: content
+
+
+| File | Content | Line |
+|------|------|------|
+| `src/lib/ai/yandex\api-llm.ts` | `export function completion(apiKey: string, request: CompletionRequest): Effect.Effect<CompletionResult, Error> \{` | L251 |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю сигнатуру функции `completion`:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/yandex/api-llm.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Переписываю файл на Effect:
+
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -10,8 +10,9 @@
+  import type { Abbreviation, ProcessingOperation, ProductType } from "$lib/business/types";
+  import { AbbreviationSchema, getApplication, getOperation, ProductTypeSchema, readInstructionByNameAndType, updateApplication } from "$lib/storage";
+- import { err, errAsync, ok, okAsync, ResultAsync, type Result } from "neverthrow";
++ import { Effect, pipe } from "effect";
+  import { aiConfig } from "./config";
+  import { completion, getModelUri, type CompletionRequest, type CompletionResult } from "./yandex/api-llm";
+  import z from "zod";
++ import { parseZodSchema } from "$lib/utils/zod.js";
+  
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: undefined, lines removed: 9
+
+```diff
+@@ -17,13 +17,4 @@
+  
+  
+- export class LLMError extends Error {
+- 	constructor(
+- 		message: string,
+- 		public cause?: Error
+- 	) {
+- 		super(message);
+- 		this.name = 'LLMError';
+- 	}
+- }
+  
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 22, lines removed: 17
+
+```diff
+@@ -19,25 +19,30 @@
+  
+  
+- export function getProductTypeResolveData(processingOperation: ProcessingOperation): Result&lt;unknown, Error&gt; {
+- 	if (processingOperation.status !== 'completed')
+- 		return err(new LLMError('Операция не завершена'));
++ export function getProductTypeResolveData(processingOperation: ProcessingOperation): Effect.Effect&lt;unknown, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		if (processingOperation.status !== 'completed') {
++ 			return yield* Effect.fail(new Error('Операция не завершена'));
++ 		}
+  
+- 	const service = processingOperation.data.service;
+- 	if (!service)
+- 		return err(new LLMError('Не указан сервис'));
++ 		const service = processingOperation.data.service;
++ 		if (!service) {
++ 			return yield* Effect.fail(new Error('Не указан сервис'));
++ 		}
+  
+- 	switch (service) {
+- 		case 'yandex':
+- 			return getYandexLLMData(processingOperation.data as { service: string;[key: string]: unknown });
+- 		default:
+- 			return err(new LLMError('Неизвестный сервис'));
+- 	}
+- }
++ 		switch (service) {
++ 			case 'yandex':
++ 				return yield* getYandexLLMData(processingOperation.data as { service: string;[key: string]: unknown });
++ 			default:
++ 				return yield* Effect.fail(new Error('Неизвестный сервис'));
++ 		}
++ 	});
++ }
+  
+- function getYandexLLMData(data: { service: string;[key: string]: unknown }): Result&lt;unknown, Error&gt; {
+- 	if (!data.service || data.service !== 'yandex')
+- 		return err(new LLMError('Неверный сервис'));
++ function getYandexLLMData(data: { service: string;[key: string]: unknown }): Effect.Effect&lt;unknown, Error&gt; {
++ 	if (!data.service || data.service !== 'yandex') {
++ 		return Effect.fail(new Error('Неверный сервис'));
++ 	}
+  
+- 	return ok(data.data);
++ 	return Effect.succeed(data.data);
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 15, lines removed: 9
+
+```diff
+@@ -58,13 +58,19 @@
+  
+  function getParsedCompletionText&lt;T extends z.ZodType&gt;(completionResult: CompletionResult, schema: T):
+- 	Result&lt;z.infer&lt;T&gt;, Error&gt; {
+- 	const llmText = completionResult.alternatives[0].message.text;
+- 	if (!llmText)
+- 		return err(new LLMError('Не указан текст ответа LLM'));
+- 	const objectFromJson = JSON.parse(llmText);
+- 	const parsedResult = schema.safeParse(objectFromJson);
+- 	if (!parsedResult.success)
+- 		return err(new LLMError('Не удалось преобразовать ответ LLM в JSON:\n' + llmText));
+- 	return ok(parsedResult.data);
++ 	Effect.Effect&lt;z.infer&lt;T&gt;, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const llmText = completionResult.alternatives[0].message.text;
++ 		if (!llmText) {
++ 			return yield* Effect.fail(new Error('Не указан текст ответа LLM'));
++ 		}
++ 
++ 		const objectFromJson = yield* Effect.try({
++ 			try: () =&gt; JSON.parse(llmText),
++ 			catch: (error) =&gt; error as Error
++ 		});
++ 
++ 		const parsedData = yield* parseZodSchema(objectFromJson, schema);
++ 		return parsedData;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 25, lines removed: 22
+
+```diff
+@@ -75,26 +75,29 @@
+  }
+  
+- export function resolveProductType(applicationId: string, text: string): ResultAsync&lt;ProductType, Error&gt; {
+- 	const config = aiConfig.yandexGPT;
+- 	const stringify = JSON.stringify(text)
+- 	return readInstructionByNameAndType('Определение типа продукции', 'product-type')
+- 		.andThen((instruction) =&gt; {
+- 			return ok&lt;CompletionRequest&gt;({
+- 				modelUri: getModelUri(config.folderId!, 'yandexgpt-lite'),
+- 				messages: [
+- 					{
+- 						role: 'system',
+- 						text: getSystemMessage(JSON.stringify(instruction))
+- 					},
+- 					{
+- 						role: 'user',
+- 						text: text
+- 					}
+- 				],
+- 				jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema, {}) }
+- 			});
+- 		})
+- 		.asyncAndThen((completionRequest) =&gt; completion(config.apiKey, completionRequest))
+- 		.andThen((completionResult) =&gt; getParsedCompletionText(completionResult, ProductTypeSchema));
++ export function resolveProductType(applicationId: string, text: string): Effect.Effect&lt;ProductType, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		const config = aiConfig.yandexGPT;
++ 		const instruction = yield* readInstructionByNameAndType('Определение типа продукции', 'product-type');
++ 
++ 		const completionRequest: CompletionRequest = {
++ 			modelUri: getModelUri(config.folderId!, 'yandexgpt-lite'),
++ 			messages: [
++ 				{
++ 					role: 'system',
++ 					text: getSystemMessage(JSON.stringify(instruction))
++ 				},
++ 				{
++ 					role: 'user',
++ 					text: text
++ 				}
++ 			],
++ 			jsonSchema: { schema: z.toJSONSchema(ProductTypeSchema, {}) }
++ 		};
++ 
++ 		const completionResult = yield* completion(config.apiKey, completionRequest);
++ 		const productType = yield* getParsedCompletionText(completionResult, ProductTypeSchema);
++ 		
++ 		return productType;
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="write" data-tool-name="search_replace">
+
+<details><summary>Tool use: **search_replace** • Edit file: src/lib/ai/llm.ts</summary>
+
+**Chunk 1**
+Lines added: 26, lines removed: 19
+
+```diff
+@@ -102,25 +102,32 @@
+  }
+  
+- export function fetchLLMOperation(processingOperation: ProcessingOperation): ResultAsync&lt;void, Error&gt; {
+- 	if (processingOperation.status !== 'completed')
+- 		return errAsync(new LLMError('Операция должна быть завершена. Асинхронные операции не поддерживаются.'));
+- 
+- 	if (processingOperation.data.service === 'yandex')
+- 		if (processingOperation.task === 'resolveProductType')
+- 			return getApplication(processingOperation.applicationId)
+- 				.asyncAndThen((application) =&gt; updateApplication(
++ export function fetchLLMOperation(processingOperation: ProcessingOperation): Effect.Effect&lt;void, Error&gt; {
++ 	return Effect.gen(function* () {
++ 		if (processingOperation.status !== 'completed') {
++ 			return yield* Effect.fail(new Error('Операция должна быть завершена. Асинхронные операции не поддерживаются.'));
++ 		}
++ 
++ 		if (processingOperation.data.service === 'yandex') {
++ 			if (processingOperation.task === 'resolveProductType') {
++ 				const application = yield* getApplication(processingOperation.applicationId);
++ 				yield* updateApplication(
+  					application.id,
+- 					{ productType: processingOperation.data.productType as ProductType })
+- 					.asyncAndThen(() =&gt; okAsync(undefined)));
+- 		else if (processingOperation.task === 'resolveAbbreviation')
+- 			return getApplication(processingOperation.applicationId)
+- 				.asyncAndThen((application) =&gt; updateApplication(
++ 					{ productType: processingOperation.data.productType as ProductType }
++ 				);
++ 				return;
++ 			} else if (processingOperation.task === 'resolveAbbreviation') {
++ 				const application = yield* getApplication(processingOperation.applicationId);
++ 				yield* updateApplication(
+  					application.id,
+- 					{ abbreviation: processingOperation.data.abbreviation as Abbreviation })
+- 					.asyncAndThen(() =&gt; okAsync(undefined)));
+- 		else
+- 			return errAsync(new LLMError('Неизвестная задача'));
+- 	else
+- 		return errAsync(new LLMError('Неизвестный сервис'));
++ 					{ abbreviation: processingOperation.data.abbreviation as Abbreviation }
++ 				);
++ 				return;
++ 			} else {
++ 				return yield* Effect.fail(new Error('Неизвестная задача'));
++ 			}
++ 		} else {
++ 			return yield* Effect.fail(new Error('Неизвестный сервис'));
++ 		}
++ 	});
+  }
+  
+```
+
+</details>
+
+</tool-use>
+
+---
+
+<tool-use data-tool-type="generic" data-tool-name="read_lints">
+<details>
+          <summary>Tool use: **read_lints** • Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `src/lib/ai/llm.ts`
+
+Lint results
+
+Lint errors for `src/lib/ai/llm.ts`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'AbbreviationSchema' is declared but its value is never read. | 11:10-11:28 | DIAGNOSTIC_SEVERITY_HINT |
+| 'getOperation' is declared but its value is never read. | 11:46-11:58 | DIAGNOSTIC_SEVERITY_HINT |
+| 'pipe' is declared but its value is never read. | 12:18-12:22 | DIAGNOSTIC_SEVERITY_HINT |
+| 'applicationId' is declared but its value is never read. | 77:36-77:49 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+Проверяю финальную версию и убираю неиспользуемый код:
+
+
+---
+
+<tool-use data-tool-type="read" data-tool-name="read_file">
+<details><summary>Tool use: **read_file** • Read file: src/lib/ai/llm.ts</summary>
+
+</details>
+</tool-use>
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
+
+
+---
+
+<tool-use data-tool-type="unknown" data-tool-name="search_replace">
+<details>
+<summary>Tool use: **search_replace**</summary>
 
 Status: **loading**
 
 
 </details>
 </tool-use>
+
+---
+
+
 
 ---
 
