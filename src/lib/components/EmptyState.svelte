@@ -1,34 +1,48 @@
 <script lang="ts">
+	import { Tile } from 'carbon-components-svelte';
+	import { DocumentBlank } from 'carbon-icons-svelte';
+	
 	export let message: string;
 	export let icon: string | undefined = undefined;
 </script>
 
 <div class="empty-state">
-	{#if icon}
-		<div class="icon">{icon}</div>
-	{/if}
-	<p class="message">{message}</p>
+	<Tile>
+		<div class="empty-state-content">
+			{#if icon}
+				<div class="icon">
+					<DocumentBlank size={32} />
+				</div>
+			{/if}
+			<p class="message">{message}</p>
+		</div>
+	</Tile>
 </div>
 
 <style>
 	.empty-state {
 		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 12.5rem;
+	}
+
+	.empty-state-content {
+		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 3rem 1rem;
 		text-align: center;
-		color: var(--color-text-secondary);
+		gap: 1rem;
 	}
 
 	.icon {
-		font-size: 3rem;
-		margin-bottom: 1rem;
 		opacity: 0.5;
+		color: var(--cds-text-secondary);
 	}
 
 	.message {
-		font-size: 1rem;
 		margin: 0;
+		color: var(--cds-text-secondary);
 	}
 </style>

@@ -28,14 +28,16 @@
 		display: flex;
 		height: 100vh;
 		overflow: hidden;
+		background: var(--cds-background);
 	}
 
 	.left-panel {
-		width: 350px;
-		min-width: 300px;
+		width: 21.875rem;
+		min-width: 18.75rem;
 		flex-shrink: 0;
 		display: flex;
 		flex-direction: column;
+		border-right: 1px solid var(--cds-border-subtle);
 	}
 
 	.right-panel {
@@ -45,7 +47,7 @@
 		min-width: 0;
 	}
 
-	@media (max-width: 768px) {
+	@media (max-width: 48rem) {
 		.main-layout {
 			flex-direction: column;
 		}
@@ -53,6 +55,8 @@
 		.left-panel {
 			width: 100%;
 			height: 40vh;
+			border-right: none;
+			border-bottom: 1px solid var(--cds-border-subtle);
 		}
 
 		.right-panel {

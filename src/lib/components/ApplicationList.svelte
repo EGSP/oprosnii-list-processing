@@ -10,6 +10,7 @@
 	import EmptyState from './EmptyState.svelte';
 	import { createEventDispatcher } from 'svelte';
 	import { Effect, Option } from 'effect';
+	import { ClickableTile, Tag, Loading, InlineNotification } from 'carbon-components-svelte';
 
 	const dispatch = createEventDispatcher<{
 		select: { application: Application };
@@ -134,6 +135,20 @@
 				return 'Новая';
 		}
 	}
+
+	function getStatusType(status: ApplicationStatusInfo['status']): 'gray' | 'blue' | 'green' | 'red' {
+		switch (status) {
+			case 'completed':
+				return 'green';
+			case 'failed':
+				return 'red';
+			case 'processing':
+				return 'blue';
+			case 'nothing':
+			default:
+				return 'gray';
+		}
+	}
 </script>
 
 <div class="application-list">
@@ -146,32 +161,43 @@
 	</div>
 
 	{#if error}
-		<div class="error">{error}</div>
+		<div class="error-section">
+			<InlineNotification
+				kind="error"
+				title="Ошибка"
+				subtitle={error}
+				hideCloseButton={false}
+				on:close={() => error = null}
+			/>
+		</div>
 	{/if}
 
 	<div class="list-content">
 		{#if isLoading}
-			<div class="loading">Загрузка...</div>
+			<div class="loading-container">
+				<Loading description="Загрузка заявок..." />
+			</div>
 		{:else if applicationsStatusInfo.length === 0}
 			<EmptyState message="Нет загруженных заявок" />
 		{:else}
 			<div class="applications">
 				{#each applicationsStatusInfo as statusInfo (statusInfo.application.id)}
-					<button
+					<div
 						class="application-item"
 						class:selected={selectedId === statusInfo.application.id}
-						class:processed={statusInfo.status === 'completed'}
-						class:failed={statusInfo.status === 'failed'}
-						on:click={() => selectApplication(statusInfo.application.id)}
 					>
-						<div class="application-name">{statusInfo.application.originalFilename}</div>
-						<div class="application-meta">
-							<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
-							<span class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}>
-								{getStatusText(statusInfo.status)}
-							</span>
-						</div>
-					</button>
+						<ClickableTile
+							on:click={() => selectApplication(statusInfo.application.id)}
+						>
+							<div class="application-name">{statusInfo.application.originalFilename}</div>
+							<div class="application-meta">
+								<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
+								<Tag type={getStatusType(statusInfo.status)} size="sm">
+									{getStatusText(statusInfo.status)}
+								</Tag>
+							</div>
+						</ClickableTile>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -183,34 +209,29 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		background: var(--color-background);
-		border-right: 1px solid var(--color-border);
+		background: var(--cds-layer);
+		border-right: 1px solid var(--cds-border-subtle);
 	}
 
 	.header {
 		padding: 1rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--cds-border-subtle);
 	}
 
 	.header h2 {
 		margin: 0;
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--color-text);
+		color: var(--cds-text-primary);
 	}
 
 	.upload-section {
 		padding: 1rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--cds-border-subtle);
 	}
 
-	.error {
-		padding: 0.75rem 1rem;
-		background: var(--color-error-bg);
-		color: var(--color-error);
-		font-size: 0.875rem;
-		margin: 0 1rem;
-		border-radius: var(--border-radius);
+	.error-section {
+		padding: 1rem;
 	}
 
 	.list-content {
@@ -218,10 +239,11 @@
 		overflow-y: auto;
 	}
 
-	.loading {
+	.loading-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
 		padding: 2rem;
-		text-align: center;
-		color: var(--color-text-secondary);
 	}
 
 	.applications {
@@ -230,32 +252,29 @@
 	}
 
 	.application-item {
+		border-bottom: 1px solid var(--cds-border-subtle);
+	}
+
+	.application-item.selected {
+		background: var(--cds-layer-selected);
+		border-left: 3px solid var(--cds-link-primary);
+	}
+
+	:global(.application-item .bx--tile--clickable) {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		padding: 1rem;
-		border: none;
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-background);
-		cursor: pointer;
 		text-align: left;
-		transition: background 0.2s ease;
-	}
-
-	.application-item:hover {
-		background: var(--color-background-hover);
-	}
-
-	.application-item.selected {
-		background: var(--color-primary-light);
-		border-left: 3px solid var(--color-primary);
+		width: 100%;
 	}
 
 	.application-name {
 		font-weight: 500;
-		color: var(--color-text);
+		color: var(--cds-text-primary);
 		margin-bottom: 0.5rem;
 		word-break: break-word;
+		width: 100%;
 	}
 
 	.application-meta {
@@ -264,30 +283,10 @@
 		align-items: center;
 		width: 100%;
 		font-size: 0.875rem;
+		gap: 0.5rem;
 	}
 
 	.date {
-		color: var(--color-text-secondary);
-	}
-
-	.status {
-		padding: 0.25rem 0.5rem;
-		border-radius: var(--border-radius-sm);
-		background: var(--color-status-new);
-		color: var(--color-text);
-		font-size: 0.75rem;
-	}
-
-	.status.processed {
-		background: var(--color-status-processed);
-	}
-
-	.status.failed {
-		background: var(--color-error-bg);
-		color: var(--color-error);
-	}
-
-	.application-item.failed {
-		border-left-color: var(--color-error);
+		color: var(--cds-text-secondary);
 	}
 </style>

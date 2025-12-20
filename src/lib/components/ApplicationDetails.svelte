@@ -6,6 +6,8 @@
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
+	import { Button, Select, SelectItem, Form, FormGroup, TextInput, TextArea, Tile, Tag, Loading, InlineNotification } from 'carbon-components-svelte';
+	import { Renew } from 'carbon-icons-svelte';
 
 	interface TechnicalSpec {
 		id: string;
@@ -315,131 +317,185 @@
 	{#if !applicationId}
 		<EmptyState message="Выберите заявку для просмотра" />
 	{:else if isLoading}
-		<div class="loading">Загрузка...</div>
+		<div class="loading-container">
+			<Loading description="Загрузка заявки..." />
+		</div>
 	{:else if error && !statusInfo}
-		<div class="error">{error}</div>
+		<div class="error-section">
+			<InlineNotification
+				kind="error"
+				title="Ошибка"
+				subtitle={error}
+				hideCloseButton={false}
+				on:close={() => error = null}
+			/>
+		</div>
 	{:else if statusInfo}
 		<div class="details-content">
 			<div class="header">
 				<h2>Детали заявки</h2>
-				<button
-					class="refresh-button"
+				<Button
+					kind="ghost"
+					size="sm"
 					on:click={handleRefresh}
 					disabled={isRefreshing || isLoading}
 					title="Обновить данные заявки"
 				>
+					<Renew slot="icon" />
 					{isRefreshing ? 'Обновление...' : 'Обновить'}
-				</button>
+				</Button>
 			</div>
 
 			{#if error}
-				<div class="error">{error}</div>
+				<div class="error-section">
+					<InlineNotification
+						kind="error"
+						title="Ошибка"
+						subtitle={error}
+						hideCloseButton={false}
+						on:close={() => error = null}
+					/>
+				</div>
 			{/if}
 
-			<div class="section">
+			<Tile class="section">
 				<h3>Основная информация</h3>
-				{#if statusInfo.application.productType}
-					<div class="field">
-						<label for="product-type-display">Тип продукции:</label>
-						<span id="product-type-display">{statusInfo.application.productType.type}</span>
-					</div>
-				{/if}
-				<div class="field">
-					<label for="filename-display">Название файла:</label>
-					<span id="filename-display">{statusInfo.application.originalFilename}</span>
-				</div>
-				<div class="field">
-					<label for="arrival-date-display">Дата загрузки:</label>
-					<span id="arrival-date-display">{formatDate(statusInfo.application.uploadDate)}</span>
-				</div>
-				<div class="field">
-					<label for="status-display">Статус:</label>
-					<span id="status-display" class="status" class:processed={statusInfo.status === 'completed'} class:failed={statusInfo.status === 'failed'}>
-						{getStatusText(statusInfo.status)}
-					</span>
-				</div>
-				<div class="field operations-status">
-					<div class="field-label">Статусы операций:</div>
-					<div class="operations-list">
-						{#each getAllOperations() as operationOrPlaceholder}
-							<OperationStatusBadge 
-								operation={operationOrPlaceholder} 
-								applicationId={applicationId}
-								onRun={handleRunOperation}
-								isRunning={runningOperations.has(operationOrPlaceholder.task)}
+				<Form>
+					{#if statusInfo.application.productType}
+						<FormGroup>
+							<TextInput
+								id="product-type-display"
+								labelText="Тип продукции:"
+								value={statusInfo.application.productType.type}
+								readonly
 							/>
-						{/each}
-					</div>
-				</div>
-			</div>
+						</FormGroup>
+					{/if}
+					<FormGroup>
+						<TextInput
+							id="filename-display"
+							labelText="Название файла:"
+							value={statusInfo.application.originalFilename}
+							readonly
+						/>
+					</FormGroup>
+					<FormGroup>
+						<TextInput
+							id="arrival-date-display"
+							labelText="Дата загрузки:"
+							value={formatDate(statusInfo.application.uploadDate)}
+							readonly
+						/>
+					</FormGroup>
+					<FormGroup>
+						<label for="status-display" class="bx--label">Статус:</label>
+						{@const statusType = statusInfo.status === 'completed' ? 'green' : statusInfo.status === 'failed' ? 'red' : statusInfo.status === 'processing' ? 'blue' : 'gray'}
+						<Tag id="status-display" type={statusType} size="sm">
+							{getStatusText(statusInfo.status)}
+						</Tag>
+					</FormGroup>
+					<FormGroup>
+						<label class="bx--label">Статусы операций:</label>
+						<div class="operations-list">
+							{#each getAllOperations() as operationOrPlaceholder}
+								<OperationStatusBadge 
+									operation={operationOrPlaceholder} 
+									applicationId={applicationId}
+									onRun={handleRunOperation}
+									isRunning={runningOperations.has(operationOrPlaceholder.task)}
+								/>
+							{/each}
+						</div>
+					</FormGroup>
+				</Form>
+			</Tile>
 
-			<div class="section">
+			<Tile class="section">
 				<h3>Информация о файле</h3>
 				{#if fileInfo}
-					<div class="field">
-						<label>Имя файла:</label>
-						<span>{fileInfo.name}</span>
-					</div>
-					<div class="field">
-						<label>Тип файла:</label>
-						<span>{fileInfo.type}</span>
-					</div>
-					<div class="field">
-						<label>Количество страниц:</label>
-						<span>{fileInfo.pageCount}</span>
-					</div>
-					{#if fileInfo.extractedText}
-						<div class="field">
-							<label>Извлеченный текст:</label>
-							<div class="extracted-text-preview">
-								{fileInfo.extractedText.substring(0, 200)}
-								{#if fileInfo.extractedText.length > 200}
-									<span class="text-more">... (еще {fileInfo.extractedText.length - 200} символов)</span>
-								{/if}
-							</div>
-						</div>
-					{/if}
+					<Form>
+						<FormGroup>
+							<TextInput
+								labelText="Имя файла:"
+								value={fileInfo.name}
+								readonly
+							/>
+						</FormGroup>
+						<FormGroup>
+							<TextInput
+								labelText="Тип файла:"
+								value={fileInfo.type}
+								readonly
+							/>
+						</FormGroup>
+						<FormGroup>
+							<TextInput
+								labelText="Количество страниц:"
+								value={fileInfo.pageCount.toString()}
+								readonly
+							/>
+						</FormGroup>
+						{#if fileInfo.extractedText}
+							<FormGroup>
+								<label class="bx--label">Извлеченный текст:</label>
+								<TextArea
+									value={fileInfo.extractedText.substring(0, 200) + (fileInfo.extractedText.length > 200 ? `... (еще ${fileInfo.extractedText.length - 200} символов)` : '')}
+									readonly
+									rows={5}
+									class="extracted-text-preview"
+								/>
+							</FormGroup>
+						{/if}
+					</Form>
 				{:else}
-					<div class="field">Информация о файле недоступна</div>
+					<p>Информация о файле недоступна</p>
 				{/if}
-			</div>
+			</Tile>
 
-			<div class="section">
+			<Tile class="section">
 				<h3>Обработка</h3>
-				<div class="field">
-					<label for="technical-spec-select">Технические условия:</label>
-					<select
-						id="technical-spec-select"
-						bind:value={selectedTechnicalSpecId}
-						disabled={isProcessing || statusInfo.status === 'completed'}
-					>
-						{#each technicalSpecs as spec}
-							<option value={spec.id}>{spec.name}</option>
-						{/each}
-					</select>
-				</div>
-				<button
-					class="process-button"
-					on:click={handleProcess}
-					disabled={isProcessing || !selectedTechnicalSpecId || statusInfo.status === 'completed'}
-				>
-					{isProcessing ? 'Обработка...' : 'Обработать заявку'}
-				</button>
-			</div>
+				<Form>
+					<FormGroup>
+						<Select
+							id="technical-spec-select"
+							labelText="Технические условия:"
+							selectedItem={technicalSpecs.find(s => s.id === selectedTechnicalSpecId)}
+							disabled={isProcessing || statusInfo.status === 'completed'}
+							on:select={(e) => {
+								const selected = e.detail.selectedItem;
+								if (selected) {
+									selectedTechnicalSpecId = selected.id;
+								}
+							}}
+						>
+							{#each technicalSpecs as spec}
+								<SelectItem value={spec} text={spec.name} />
+							{/each}
+						</Select>
+					</FormGroup>
+					<FormGroup>
+						<Button
+							on:click={handleProcess}
+							disabled={isProcessing || !selectedTechnicalSpecId || statusInfo.status === 'completed'}
+						>
+							{isProcessing ? 'Обработка...' : 'Обработать заявку'}
+						</Button>
+					</FormGroup>
+				</Form>
+			</Tile>
 
 			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}
-				<div class="section">
+				<Tile class="section final-abbreviation">
 					<h3>Результаты обработки</h3>
-
-					<div class="field-group final-abbreviation">
-						<label for="final-abbreviation">Финальное обозначение продукции:</label>
+					<FormGroup>
+						<label for="final-abbreviation" class="bx--label">Финальное обозначение продукции:</label>
 						{#if getFinalAbbreviation()}
 							<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
 						{:else}
 							<div id="final-abbreviation" class="abbreviation-empty">Аббревиатура не сформирована</div>
 						{/if}
-					</div>
-				</div>
+					</FormGroup>
+				</Tile>
 			{/if}
 		</div>
 	{/if}
@@ -450,23 +506,19 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		background: var(--color-background);
+		background: var(--cds-layer);
 		overflow-y: auto;
 	}
 
-	.loading {
+	.loading-container {
+		display: flex;
+		justify-content: center;
+		align-items: center;
 		padding: 2rem;
-		text-align: center;
-		color: var(--color-text-secondary);
 	}
 
-	.error {
-		padding: 0.75rem 1rem;
-		background: var(--color-error-bg);
-		color: var(--color-error);
-		font-size: 0.875rem;
-		margin: 1rem;
-		border-radius: var(--border-radius);
+	.error-section {
+		padding: 1rem;
 	}
 
 	.details-content {
@@ -484,182 +536,58 @@
 		margin: 0;
 		font-size: 1.5rem;
 		font-weight: 600;
-		color: var(--color-text);
+		color: var(--cds-text-primary);
 	}
 
-	.refresh-button {
-		padding: 0.5rem 1rem;
-		background: var(--color-background-secondary);
-		color: var(--color-text);
-		border: 1px solid var(--color-border);
-		border-radius: var(--border-radius);
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.2s ease, border-color 0.2s ease;
-	}
-
-	.refresh-button:hover:not(:disabled) {
-		background: var(--color-background);
-		border-color: var(--color-primary);
-	}
-
-	.refresh-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.section {
+	:global(.section.bx--tile) {
 		margin-bottom: 2rem;
 		padding-bottom: 1.5rem;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--cds-border-subtle);
 	}
 
-	.section:last-child {
+	:global(.section.bx--tile:last-child) {
 		border-bottom: none;
 	}
 
-	.section h3 {
+	:global(.section.bx--tile h3) {
 		margin: 0 0 1rem 0;
 		font-size: 1.125rem;
 		font-weight: 600;
-		color: var(--color-text);
-	}
-
-	.field {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		margin-bottom: 0.75rem;
-		gap: 1rem;
-	}
-
-	.field label {
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		min-width: 150px;
-	}
-
-	.field span {
-		color: var(--color-text);
-		text-align: right;
-		flex: 1;
-	}
-
-	.field.operations-status {
-		flex-direction: column;
-		align-items: flex-start;
-	}
-
-	.field.operations-status .field-label {
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		margin-bottom: 0.75rem;
+		color: var(--cds-text-primary);
 	}
 
 	.operations-list {
 		width: 100%;
-	}
-
-	.field select {
-		flex: 1;
-		padding: 0.5rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--border-radius);
-		background: var(--color-background);
-		color: var(--color-text);
-		font-size: 1rem;
-	}
-
-	.field select:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.status {
-		padding: 0.25rem 0.75rem;
-		border-radius: var(--border-radius-sm);
-		background: var(--color-status-new);
-		color: var(--color-text);
-		font-size: 0.875rem;
-		font-weight: 500;
-	}
-
-	.status.processed {
-		background: var(--color-status-processed);
-	}
-
-	.process-button {
-		padding: 0.75rem 1.5rem;
-		background: var(--color-primary);
-		color: white;
-		border: none;
-		border-radius: var(--border-radius);
-		font-size: 1rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: background 0.2s ease;
-		margin-top: 1rem;
-	}
-
-	.process-button:hover:not(:disabled) {
-		background: var(--color-primary-dark);
-	}
-
-	.process-button:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.field-group {
-		margin-bottom: 1.5rem;
-	}
-
-	.field-group label {
-		display: block;
-		font-weight: 500;
-		color: var(--color-text-secondary);
-		margin-bottom: 0.5rem;
+		margin-top: 0.5rem;
 	}
 
 	.final-abbreviation {
-		background: var(--color-success-bg);
-		padding: 1rem;
-		border-radius: var(--border-radius);
-		border: 2px solid var(--color-success);
+		background: var(--cds-support-success-inverse);
+		border: 2px solid var(--cds-support-success);
 	}
 
 	.abbreviation-value {
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--color-success);
+		color: var(--cds-support-success);
 		margin-top: 0.5rem;
 	}
 
 	.abbreviation-empty {
 		font-size: 1rem;
-		color: var(--color-text-secondary);
+		color: var(--cds-text-secondary);
 		margin-top: 0.5rem;
 		font-style: italic;
 	}
 
-	.extracted-text-preview {
-		background: var(--color-background-secondary);
-		padding: 0.75rem;
-		border-radius: var(--border-radius);
-		border: 1px solid var(--color-border);
-		color: var(--color-text);
+	:global(.extracted-text-preview.bx--text-area) {
+		background: var(--cds-field);
+		border: 1px solid var(--cds-border-subtle);
 		font-size: 0.875rem;
 		line-height: 1.5;
-		max-height: 200px;
+		max-height: 12.5rem;
 		overflow-y: auto;
 		white-space: pre-wrap;
 		word-wrap: break-word;
-	}
-
-	.text-more {
-		color: var(--color-text-secondary);
-		font-style: italic;
-		font-size: 0.8rem;
 	}
 </style>
