@@ -11,7 +11,7 @@ import { FileStorageError } from './errors.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 import { findOperations, getOperation } from './processingOperations.js';
-import { err, Ok, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
+import { Effect, pipe } from 'effect';
 import { getOCRData } from '$lib/ai/ocr.js';
 
 
@@ -33,51 +33,59 @@ export type FileInfo = {
  * @param fileBuffer - Buffer с содержимым файла
  * @param applicationId - GUID заявки
  * @param originalFilename - Оригинальное имя файла (для сохранения расширения)
- * @returns Путь к сохраненному файлу
+ * @returns Effect с путем к сохраненному файлу
  */
 export function storeFile(
 	fileBuffer: Buffer,
 	applicationId: string,
 	originalFilename: string
-): string {
-	try {
-		// Создаем директорию для заявки
-		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
-		mkdirSync(applicationDir, { recursive: true });
+): Effect.Effect<string, FileStorageError> {
+	return Effect.try({
+		try: () => {
+			// Создаем директорию для заявки
+			const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
+			mkdirSync(applicationDir, { recursive: true });
 
-		// Сохраняем оригинальное расширение
-		const extension = originalFilename.split('.').pop() || '';
-		const filename = `${applicationId}.${extension}`;
-		const filePath = join(applicationDir, filename);
+			// Сохраняем оригинальное расширение
+			const extension = originalFilename.split('.').pop() || '';
+			const filename = `${applicationId}.${extension}`;
+			const filePath = join(applicationDir, filename);
 
-		writeFileSync(filePath, fileBuffer);
+			writeFileSync(filePath, fileBuffer);
 
-		return filePath;
-	} catch (error) {
-		throw new FileStorageError(`Failed to save file for application ${applicationId}`, error as Error);
-	}
+			return filePath;
+		},
+		catch: (error) => new FileStorageError(`Failed to save file for application ${applicationId}`, error as Error)
+	});
 }
 
 /**
  * Получает путь к файлу заявки. Файл должен иметь GUID в имени. GUID - это ID заявки.
  */
-export function getFilePath(applicationId: string): Result<string, Error> {
-	const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
+export function getFilePath(applicationId: string): Effect.Effect<string, FileStorageError> {
+	return Effect.gen(function* () {
+		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
 
-	if (!existsSync(applicationDir)) {
-		return err(new Error(`Application directory not found for application ${applicationId}`));
-	}
+		const dirExists = yield* Effect.sync(() => existsSync(applicationDir));
+		if (!dirExists) {
+			return yield* Effect.fail(new FileStorageError(`Application directory not found for application ${applicationId}`));
+		}
 
-	// Ищем файл в директории заявки
-	// Файл может иметь GUID как имя, с любым расширением
-	const files = readdirSync(applicationDir);
-	const file = files.find((f: string) => f.startsWith(applicationId));
+		// Ищем файл в директории заявки
+		// Файл может иметь GUID как имя, с любым расширением
+		const files = yield* Effect.try({
+			try: () => readdirSync(applicationDir),
+			catch: (error) => new FileStorageError(`Failed to read directory for application ${applicationId}`, error as Error)
+		});
+		
+		const file = files.find((f: string) => f.startsWith(applicationId));
 
-	if (!file) {
-		return err(new Error(`File not found for application ${applicationId}. Files: ${files.join(', ')}`));
-	}
+		if (!file) {
+			return yield* Effect.fail(new FileStorageError(`File not found for application ${applicationId}. Files: ${files.join(', ')}`));
+		}
 
-	return ok(join(applicationDir, file));
+		return join(applicationDir, file);
+	});
 }
 
 /**
@@ -95,87 +103,108 @@ export function getFileNameWithExtension(path: string): string {
  * @param path - Полный путь к файлу
  * @returns Имя файла без расширения
  */
-export function getFileNameWithoutExtension(path: string): Ok<string, Error> {
-	return ok(path.split('.').slice(0, -1).join('.'));
+export function getFileNameWithoutExtension(path: string): string {
+	return path.split('.').slice(0, -1).join('.');
 }
 
 
-function getFileType(path: string): Result<FileType, Error> {
-	const extension = path.split('.').pop()?.toLowerCase();
-	if (!extension) {
-		return err(new Error('Не удалось определить расширение файла'));
-	}
-	switch (extension) {
-		case 'pdf':
-			return ok('pdf');
-		case 'docx':
-		case 'doc':
-			return ok('document');
-		case 'xlsx':
-		case 'xls':
-			return ok('spreadsheet');
-		case 'jpeg':
-		case 'jpg':
-		case 'png':
-			return ok('image');
-		default:
-			return err(new Error(`Неизвестное расширение файла: ${extension}`));
-	}
+function getFileType(path: string): Effect.Effect<FileType, FileStorageError> {
+	return Effect.gen(function* () {
+		const extension = path.split('.').pop()?.toLowerCase();
+		if (!extension) {
+			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
+		}
+		
+		switch (extension) {
+			case 'pdf':
+				return 'pdf' as FileType;
+			case 'docx':
+			case 'doc':
+				return 'document' as FileType;
+			case 'xlsx':
+			case 'xls':
+				return 'spreadsheet' as FileType;
+			case 'jpeg':
+			case 'jpg':
+			case 'png':
+				return 'image' as FileType;
+			default:
+				return yield* Effect.fail(new FileStorageError(`Неизвестное расширение файла: ${extension}`));
+		}
+	});
 }
 
-function getFileExtension(path: string): Result<string, Error> {
-	const extension = path.split('.').pop()?.toLowerCase();
-	if (!extension) {
-		return err(new Error('Не удалось определить расширение файла'));
-	}
-	return ok(extension);
+function getFileExtension(path: string): Effect.Effect<string, FileStorageError> {
+	return Effect.gen(function* () {
+		const extension = path.split('.').pop()?.toLowerCase();
+		if (!extension) {
+			return yield* Effect.fail(new FileStorageError('Не удалось определить расширение файла'));
+		}
+		return extension;
+	});
 }
 
 /**
  * Читает файл
  */
-export function readFile(path: string): Result<Buffer, Error> {
-	if (!path || !existsSync(path)) {
-		return err(new Error(`File not found for path ${path}`));
-	}
+export function readFile(path: string): Effect.Effect<Buffer, FileStorageError> {
+	return Effect.gen(function* () {
+		if (!path) {
+			return yield* Effect.fail(new FileStorageError(`Invalid file path: ${path}`));
+		}
 
-	const buffer = readFileSync(path);
-	return ok(buffer);
+		const exists = yield* Effect.sync(() => existsSync(path));
+		if (!exists) {
+			return yield* Effect.fail(new FileStorageError(`File not found for path ${path}`));
+		}
+
+		const buffer = yield* Effect.try({
+			try: () => readFileSync(path),
+			catch: (error) => new FileStorageError(`Failed to read file at path ${path}`, error as Error)
+		});
+
+		return buffer;
+	});
 }
 
 /**
  * Читает файл заявки
  * @param applicationId - GUID заявки
- * @returns Buffer с содержимым файла
+ * @returns Effect с Buffer с содержимым файла
  */
-export function readApplicationFile(applicationId: string): Result<Buffer, Error> {
-	return getFilePath(applicationId).andThen(readFile);
+export function readApplicationFile(applicationId: string): Effect.Effect<Buffer, FileStorageError> {
+	return Effect.gen(function* () {
+		const filePath = yield* getFilePath(applicationId);
+		const buffer = yield* readFile(filePath);
+		return buffer;
+	});
 }
 
 /**
  * Определяет количество страниц в PDF файле
  */
-function getPDFPageCount(buffer: Buffer): ResultAsync<number, Error> {
+function getPDFPageCount(buffer: Buffer): Effect.Effect<number, FileStorageError> {
 	const uint8Array = new Uint8Array(buffer);
-	return ResultAsync.fromPromise(PDFDocument.load(uint8Array)
-		.then((pdfDoc) => {
+	return Effect.tryPromise({
+		try: async () => {
+			const pdfDoc = await PDFDocument.load(uint8Array);
 			const pages = pdfDoc.getPages();
 			return pages.length;
-		}),
-		(error) => {
+		},
+		catch: (error) => {
 			logger.warn('Не удалось определить количество страниц PDF', {
 				error: error instanceof Error ? error.message : String(error)
 			});
-			return error instanceof Error ? error : new Error(String(error));
+			return new FileStorageError('Не удалось определить количество страниц PDF', error as Error);
 		}
-	);
+	});
 }
 
-function getPageCount(fileType: FileType, buffer: Buffer): ResultAsync<number, Error> {
+function getPageCount(fileType: FileType, buffer: Buffer): Effect.Effect<number, FileStorageError> {
 	if (fileType === 'pdf') {
 		return getPDFPageCount(buffer);
 	}
-	return okAsync(1);
+	return Effect.succeed(1);
 }
 
 /**
@@ -186,47 +215,50 @@ function getPageCount(fileType: FileType, buffer: Buffer): ResultAsync<number, E
  * - extractedText формируется из операций
  *
  * @param applicationId - GUID заявки
- * @returns Информация о файле или null, если файл не найден
+ * @returns Effect с информацией о файле
  */
-export function getFileInfo(applicationId: string): ResultAsync<FileInfo, Error> {
-	return getFilePath(applicationId).asyncAndThen((filePath) => {
-		return readFile(filePath).asyncAndThen((buffer) => {
-			return getFileType(filePath).asyncAndThen((type) => {
-				return getFileExtension(filePath).asyncAndThen((extension) => {
-					return getPageCount(type, buffer).andThen((pageCount) => {
-						let extractedText: string | undefined;
-						const textExtractionOperations = findOperations(applicationId, 'extractText');
-				
-						if (textExtractionOperations.isOk() && textExtractionOperations.value.length > 0) {
-							extractedText = textExtractionOperations.value.map((operationId) => {
-								const operationResult = getOperation(operationId);
-								if (operationResult.isOk()) {
-									const operation = operationResult.value;
-									if (operation.status !== 'completed') return '';
-									if (operation.data.service) {
-										const ocrDataResult = getOCRData(operation);
-										if (ocrDataResult.isOk()) {
-											return ocrDataResult.value as string;
-										}
-									} else {
-										return operation.data?.result as string;
-									}
-								}
-								return '';
-							}).join('\n');
-						}
+export function getFileInfo(applicationId: string): Effect.Effect<FileInfo, FileStorageError | Error> {
+	return Effect.gen(function* () {
+		const filePath = yield* getFilePath(applicationId);
+		const buffer = yield* readFile(filePath);
+		const type = yield* getFileType(filePath);
+		const extension = yield* getFileExtension(filePath);
+		const pageCount = yield* getPageCount(type, buffer);
+		
+		let extractedText: string | undefined;
+		const textExtractionOperationIds = yield* findOperations(applicationId, 'extractText');
 
+		if (textExtractionOperationIds.length > 0) {
+			const texts = yield* Effect.all(
+				textExtractionOperationIds.map((operationId) =>
+					Effect.gen(function* () {
+						const operation = yield* getOperation(operationId);
+						if (operation.status !== 'completed') return '';
 						
-						return okAsync({
-							name: getFileNameWithoutExtension(filePath).value,
-							extension,
-							type,
-							pageCount,
-							extractedText
-						} as FileInfo);
-					});
-				});
-			});
-		});
+						if (operation.data.service) {
+							// Конвертируем Result в Effect для getOCRData
+							const ocrDataResult = getOCRData(operation);
+							if (ocrDataResult.isOk()) {
+								return ocrDataResult.value;
+							}
+							return '';
+						} else {
+							return operation.data?.result as string || '';
+						}
+					})
+				),
+				{ concurrency: 'unbounded' }
+			);
+			
+			extractedText = texts.filter((text) => text).join('\n');
+		}
+
+		return {
+			name: getFileNameWithoutExtension(filePath),
+			extension,
+			type,
+			pageCount,
+			extractedText
+		} as FileInfo;
 	});
 }
