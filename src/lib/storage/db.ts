@@ -40,7 +40,8 @@ function initializeDatabase(db: Database.Database): void {
 			original_filename TEXT NOT NULL,
 			product_type TEXT,
 			abbreviation TEXT,
-			upload_date TEXT NOT NULL
+			upload_date TEXT NOT NULL,
+			deleted INTEGER DEFAULT 0
 		)
 	`;
 
@@ -53,6 +54,7 @@ function initializeDatabase(db: Database.Database): void {
 			data TEXT NOT NULL,
 			start_date TEXT NOT NULL,
 			finish_date TEXT,
+			deleted INTEGER DEFAULT 0,
 			FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
 			UNIQUE(application_id, task)
 		)
@@ -60,6 +62,36 @@ function initializeDatabase(db: Database.Database): void {
 
 	db.exec(createApplicationsTableSQL);
 	db.exec(createOperationsTableSQL);
+
+	// Миграция: добавляем поле deleted к существующим таблицам, если его нет
+	migrateDatabase(db);
+}
+
+/**
+ * Выполняет миграции базы данных
+ */
+function migrateDatabase(db: Database.Database): void {
+	// Проверяем наличие колонки deleted в таблице applications
+	try {
+		const appsInfo = db.prepare("PRAGMA table_info(applications)").all() as Array<{ name: string }>;
+		const hasDeletedInApps = appsInfo.some((col) => col.name === 'deleted');
+		if (!hasDeletedInApps) {
+			db.exec('ALTER TABLE applications ADD COLUMN deleted INTEGER DEFAULT 0');
+		}
+	} catch (error) {
+		// Игнорируем ошибки, если таблица не существует или колонка уже есть
+	}
+
+	// Проверяем наличие колонки deleted в таблице processing_operations
+	try {
+		const opsInfo = db.prepare("PRAGMA table_info(processing_operations)").all() as Array<{ name: string }>;
+		const hasDeletedInOps = opsInfo.some((col) => col.name === 'deleted');
+		if (!hasDeletedInOps) {
+			db.exec('ALTER TABLE processing_operations ADD COLUMN deleted INTEGER DEFAULT 0');
+		}
+	} catch (error) {
+		// Игнорируем ошибки, если таблица не существует или колонка уже есть
+	}
 }
 
 /**

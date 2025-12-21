@@ -5,6 +5,9 @@ import { StorageError, ApplicationNotFoundError } from './errors.js';
 import { Effect, pipe } from 'effect';
 import { safeJsonParse } from '$lib/utils/json.js';
 import { parseZodSchema } from '$lib/utils/zod.js';
+import { rmSync } from 'fs';
+import { join } from 'path';
+import { config } from '../config.js';
 
 /**
  * Интерфейс строки из БД для Application
@@ -15,6 +18,7 @@ export interface ApplicationRow {
 	product_type: string | null;
 	abbreviation: string | null;
 	upload_date: string;
+	deleted: number;
 }
 
 /**
@@ -26,7 +30,8 @@ export function rowToApplication(row: ApplicationRow): Application {
 		originalFilename: row.original_filename,
 		productType: safeJsonParse<ProductType>(row.product_type),
 		abbreviation: safeJsonParse<Abbreviation>(row.abbreviation),
-		uploadDate: row.upload_date
+		uploadDate: row.upload_date,
+		deleted: (row.deleted ?? 0) !== 0
 	};
 }
 
@@ -39,17 +44,22 @@ export function applicationToRow(application: Application): ApplicationRow {
 		original_filename: application.originalFilename,
 		product_type: application.productType ? JSON.stringify(application.productType) : null,
 		abbreviation: application.abbreviation ? JSON.stringify(application.abbreviation) : null,
-		upload_date: application.uploadDate
+		upload_date: application.uploadDate,
+		deleted: application.deleted ? 1 : 0
 	};
 }
 
 /**
  * Получает заявку по GUID
  */
-export function getApplication(guid: string): Effect.Effect<Application, StorageError> {
+export function getApplication(guid: string, includeDeleted: boolean = false): Effect.Effect<Application, StorageError> {
 	return Effect.gen(function* () {
 		const db = getDatabase();
-		const stmt = db.prepare('SELECT * FROM applications WHERE id = ?');
+		let query = 'SELECT * FROM applications WHERE id = ?';
+		if (!includeDeleted) {
+			query += ' AND (deleted IS NULL OR deleted = 0)';
+		}
+		const stmt = db.prepare(query);
 		const row = yield* Effect.try({
 			try: () => stmt.get(guid) as ApplicationRow | undefined,
 			catch: (error) => new StorageError('Failed to get application', error as Error)
@@ -77,7 +87,8 @@ export function createApplication(originalFilename: string, guid?: string): Effe
 			originalFilename,
 			productType: null,
 			abbreviation: null,
-			uploadDate: now
+			uploadDate: now,
+			deleted: false
 		};
 
 		// Валидация через Zod
@@ -91,9 +102,9 @@ export function createApplication(originalFilename: string, guid?: string): Effe
 			try: () => {
 				const stmt = db.prepare(`
 					INSERT INTO applications (
-						id, original_filename, product_type, abbreviation, upload_date
+						id, original_filename, product_type, abbreviation, upload_date, deleted
 					) VALUES (
-						:id, :original_filename, :product_type, :abbreviation, :upload_date
+						:id, :original_filename, :product_type, :abbreviation, :upload_date, :deleted
 					)
 				`);
 				stmt.run(row);
@@ -108,12 +119,12 @@ export function createApplication(originalFilename: string, guid?: string): Effe
 /**
  * Обновляет заявку
  */
-export function updateApplication(guid: string, updates: ApplicationUpdate): Effect.Effect<Application, StorageError> {
+export function updateApplication(guid: string, updates: ApplicationUpdate & { deleted?: boolean }): Effect.Effect<Application, StorageError> {
 	return Effect.gen(function* () {
 		const db = getDatabase();
 
-		// Получаем текущую заявку
-		const current = yield* getApplication(guid);
+		// Получаем текущую заявку (включая удаленные, чтобы можно было обновить)
+		const current = yield* getApplication(guid, true);
 
 		// Объединяем обновления с текущими данными
 		const updated = { ...current, ...updates };
@@ -130,10 +141,16 @@ export function updateApplication(guid: string, updates: ApplicationUpdate): Eff
 				const stmt = db.prepare(`
 					UPDATE applications SET
 						product_type = :product_type,
-						abbreviation = :abbreviation
+						abbreviation = :abbreviation,
+						deleted = :deleted
 					WHERE id = :id
 				`);
-				stmt.run({ product_type: row.product_type, abbreviation: row.abbreviation, id: row.id });
+				stmt.run({ 
+					product_type: row.product_type, 
+					abbreviation: row.abbreviation, 
+					deleted: row.deleted,
+					id: row.id 
+				});
 			},
 			catch: (error) => new StorageError('Failed to update application', error as Error)
 		});
@@ -143,17 +160,45 @@ export function updateApplication(guid: string, updates: ApplicationUpdate): Eff
 }
 
 /**
- * Удаляет заявку (опционально, для административных задач)
+ * Мягкое удаление заявки (устанавливает deleted = 1)
  */
-export function deleteApplication(applicationId: string): Effect.Effect<boolean, StorageError> {
-	return Effect.try({
-		try: () => {
-			const db = getDatabase();
-			const stmt = db.prepare('DELETE FROM applications WHERE id = ?');
-			const result = stmt.run(applicationId);
-			return result.changes > 0;
-		},
-		catch: (error) => new StorageError('Failed to delete application', error as Error)
+export function deleteApplication(applicationId: string): Effect.Effect<Application, StorageError> {
+	return updateApplication(applicationId, { deleted: true });
+}
+
+/**
+ * Полное удаление заявки из БД и удаление файлов (hard delete)
+ */
+export function purgeApplication(applicationId: string): Effect.Effect<boolean, StorageError> {
+	return Effect.gen(function* () {
+		const db = getDatabase();
+		
+		// Удаляем запись из БД
+		const stmt = db.prepare('DELETE FROM applications WHERE id = ?');
+		const result = stmt.run(applicationId);
+		
+		if (result.changes === 0) {
+			return false;
+		}
+
+		// Удаляем директорию с файлами заявки
+		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
+		
+		yield* Effect.try({
+			try: () => {
+				rmSync(applicationDir, { recursive: true, force: true });
+			},
+			catch: (error) => {
+				// Игнорируем ошибки, если директория не существует
+				const err = error as NodeJS.ErrnoException;
+				if (err.code !== 'ENOENT') {
+					return new StorageError('Failed to delete application files', error as Error);
+				}
+				return null;
+			}
+		});
+
+		return true;
 	});
 }
 
@@ -177,6 +222,10 @@ export function getApplications(filters?: ApplicationFilters): Effect.Effect<App
 				// Фильтрация по типу изделия требует поиска в JSON
 				query += ' AND product_type LIKE ?';
 				params.push(`%"type":"${filters.productType}"%`);
+			}
+
+			if (!filters?.includeDeleted) {
+				query += ' AND (deleted IS NULL OR deleted = 0)';
 			}
 
 			query += ' ORDER BY upload_date DESC';

@@ -5,8 +5,8 @@
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
-	import { Button, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification } from 'carbon-components-svelte';
-	import { Renew } from 'carbon-icons-svelte';
+	import { Button, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification, Modal } from 'carbon-components-svelte';
+	import { Renew, TrashCan, Undo, Archive } from 'carbon-icons-svelte';
 
 	export let applicationId: string | null = null;
 
@@ -14,6 +14,9 @@
 	let error: string | null = null;
 	let fileInfo: FileInfo | null = null;
 	let isRefreshing = false;
+	let isPurging = false;
+	let isTogglingDelete = false;
+	let purgeModalOpen = false;
 	let runningOperations = new Set<ProcessingOperation['task']>();
 	let currentApplicationId: string | null = null;
 
@@ -89,6 +92,84 @@
 		isRefreshing = false;
 	}
 
+	async function handleToggleDelete(checked: boolean) {
+		if (!applicationId || !statusInfo) return;
+
+		isTogglingDelete = true;
+		error = null;
+
+		try {
+			const response = await fetch(`/api/applications/${applicationId}`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ deleted: checked })
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error || 'Ошибка при изменении статуса удаления');
+			}
+
+			// Обновляем локальное состояние
+			if (statusInfo) {
+				statusInfo = {
+					...statusInfo,
+					application: {
+						...statusInfo.application,
+						deleted: checked
+					}
+				};
+			}
+
+			// Обновляем данные после изменения
+			await loadApplication();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Ошибка при изменении статуса удаления';
+			// Откатываем изменение в UI
+			await loadApplication();
+		} finally {
+			isTogglingDelete = false;
+		}
+	}
+
+	function handleOpenPurgeModal() {
+		purgeModalOpen = true;
+	}
+
+	function handleClosePurgeModal() {
+		purgeModalOpen = false;
+	}
+
+	async function handlePurge() {
+		if (!applicationId) return;
+
+		isPurging = true;
+		error = null;
+
+		try {
+			const response = await fetch(`/api/applications/${applicationId}/purge`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error || 'Ошибка при очистке заявки');
+			}
+
+			// Очищаем данные и сбрасываем applicationId
+			statusInfo = null;
+			fileInfo = null;
+			applicationId = null;
+			purgeModalOpen = false;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Ошибка при очистке заявки';
+		} finally {
+			isPurging = false;
+		}
+	}
+
 	async function handleRunOperation(task: ProcessingOperation['task']) {
 		if (!applicationId) return;
 
@@ -119,6 +200,52 @@
 		// Обновляем данные после операции
 		await loadApplication();
 		runningOperations.delete(task);
+	}
+
+	async function handleToggleOperationDelete(operationId: string, deleted: boolean) {
+		if (!applicationId) return;
+
+		try {
+			const response = await fetch(`/api/applications/${applicationId}/operations/${operationId}`, {
+				method: 'PATCH',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ deleted })
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error || 'Ошибка при изменении статуса удаления операции');
+			}
+
+			// Обновляем данные после изменения
+			await loadApplication();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Ошибка при изменении статуса удаления операции';
+			// Откатываем изменение в UI
+			await loadApplication();
+		}
+	}
+
+	async function handlePurgeOperation(operationId: string) {
+		if (!applicationId) return;
+
+		try {
+			const response = await fetch(`/api/applications/${applicationId}/operations/${operationId}/purge`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.error || 'Ошибка при очистке операции');
+			}
+
+			// Обновляем данные после очистки
+			await loadApplication();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Ошибка при очистке операции';
+		}
 	}
 
 	function formatDate(dateString: string): string {
@@ -159,6 +286,12 @@
 		return statusInfo.application.abbreviation.abbreviation || null;
 	}
 
+	function isRealOperation(
+		operation: ProcessingOperation | { task: ProcessingOperation['task']; status: ProcessingOperation['status'] }
+	): operation is ProcessingOperation {
+		return 'id' in operation;
+	}
+
 	// Получаем все операции, включая те, которых еще нет
 	// Реактивная переменная, которая обновляется при изменении statusInfo
 	$: allOperations = (() => {
@@ -194,16 +327,55 @@
 		<div class="details-content">
 			<div class="header">
 				<h2>Детали заявки</h2>
-				<Button
-					kind="ghost"
-					size="small"
-					on:click={handleRefresh}
-					disabled={isRefreshing}
-					title="Обновить данные заявки"
-					icon={Renew}
-				>
-					{isRefreshing ? 'Обновление...' : 'Обновить'}
-				</Button>
+				<div class="header-actions">
+					<Button
+						kind="ghost"
+						size="small"
+						on:click={handleRefresh}
+						disabled={isRefreshing || isPurging || isTogglingDelete}
+						icon={Renew}
+						title="Обновить данные заявки и статусы операций"
+						aria-label="Обновить данные заявки и статусы операций"
+					>
+						{isRefreshing ? 'Обновление...' : 'Обновить'}
+					</Button>
+					{#if statusInfo.application.deleted || false}
+						<Button
+							kind="secondary"
+							size="small"
+							on:click={() => handleToggleDelete(false)}
+							disabled={isRefreshing || isPurging || isTogglingDelete}
+							icon={Undo}
+							title="Вернуть заявку из удаленных. Заявка снова появится в списке."
+							aria-label="Вернуть заявку из удаленных"
+						>
+							Вернуть
+						</Button>
+					{:else}
+						<Button
+							kind="secondary"
+							size="small"
+							on:click={() => handleToggleDelete(true)}
+							disabled={isRefreshing || isPurging || isTogglingDelete}
+							icon={Archive}
+							title="Пометить заявку как удаленную. Заявка скроется из списка, но останется в базе данных."
+							aria-label="Пометить заявку как удаленную"
+						>
+							Архив
+						</Button>
+					{/if}
+					<Button
+						kind="danger"
+						size="small"
+						on:click={handleOpenPurgeModal}
+						disabled={isRefreshing || isPurging || isTogglingDelete}
+						icon={TrashCan}
+						title="Полностью удалить заявку и все связанные файлы из системы. Это действие необратимо."
+						aria-label="Полностью удалить заявку"
+						hideTooltip={true}
+					>
+					</Button>
+				</div>
 			</div>
 
 			{#if error}
@@ -263,6 +435,8 @@
 									applicationId={applicationId}
 									onRun={handleRunOperation}
 									isRunning={runningOperations.has(operationOrPlaceholder.task)}
+									onToggleDelete={isRealOperation(operationOrPlaceholder) ? (id, deleted) => handleToggleOperationDelete(id, deleted) : null}
+									onPurge={isRealOperation(operationOrPlaceholder) ? (id) => handlePurgeOperation(id) : null}
 								/>
 							{/each}
 						</div>
@@ -327,6 +501,21 @@
 			{/if}
 		</div>
 	{/if}
+
+	<Modal
+		open={purgeModalOpen}
+		on:close={handleClosePurgeModal}
+		modalHeading="Подтверждение очистки заявки"
+		primaryButtonText="Очистить"
+		secondaryButtonText="Отмена"
+		danger={true}
+		on:click:button--primary={handlePurge}
+		on:click:button--secondary={handleClosePurgeModal}
+	>
+		<p>
+			Вы уверены, что хотите полностью удалить эту заявку? Это действие удалит заявку из базы данных и все связанные файлы. Это действие необратимо.
+		</p>
+	</Modal>
 </div>
 
 <style>
@@ -351,6 +540,18 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+	}
+
+	.header-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		flex-wrap: nowrap;
+	}
+
+	:global(.header-actions .bx--btn) {
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	.header h2 {

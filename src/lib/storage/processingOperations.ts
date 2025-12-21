@@ -22,6 +22,7 @@ export interface ProcessingOperationRow {
 	data: string;
 	start_date: string;
 	finish_date: string | null;
+	deleted: number;
 }
 
 /**
@@ -35,7 +36,8 @@ export function rowToOperation(row: ProcessingOperationRow): ProcessingOperation
 		status: row.status as ProcessingOperation['status'],
 		data: safeJsonParse<ProcessingOperation['data']>(row.data) || {},
 		startDate: row.start_date,
-		finishDate: row.finish_date || null
+		finishDate: row.finish_date || null,
+		deleted: (row.deleted ?? 0) !== 0
 	};
 }
 
@@ -50,17 +52,22 @@ export function operationToRow(operation: ProcessingOperation): ProcessingOperat
 		status: operation.status,
 		data: JSON.stringify(operation.data),
 		start_date: operation.startDate,
-		finish_date: operation.finishDate ?? null
+		finish_date: operation.finishDate ?? null,
+		deleted: operation.deleted ? 1 : 0
 	};
 }
 
 /**
  * Получает операцию по ID
  */
-export function getOperation(id: string): Effect.Effect<ProcessingOperation, StorageError> {
+export function getOperation(id: string, includeDeleted: boolean = false): Effect.Effect<ProcessingOperation, StorageError> {
 	return Effect.gen(function* () {
 		const db = getDatabase();
-		const stmt = db.prepare('SELECT * FROM processing_operations WHERE id = ?');
+		let query = 'SELECT * FROM processing_operations WHERE id = ?';
+		if (!includeDeleted) {
+			query += ' AND (deleted IS NULL OR deleted = 0)';
+		}
+		const stmt = db.prepare(query);
 		const row = yield* Effect.try({
 			try: () => stmt.get(id) as ProcessingOperationRow | undefined,
 			catch: (error) => new StorageError('Failed to get operation', error as Error)
@@ -77,10 +84,14 @@ export function getOperation(id: string): Effect.Effect<ProcessingOperation, Sto
 /**
  * Получает операции по фильтру
  * @param filter - Фильтр
+ * @param includeDeleted - Включать ли удаленные операции
  * @returns Effect с ошибкой или массивом операций
  */
-export function getOperationsByFilter(applicationId: string, filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }):
-	Effect.Effect<ProcessingOperation[], StorageError> {
+export function getOperationsByFilter(
+	applicationId: string, 
+	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus },
+	includeDeleted: boolean = false
+): Effect.Effect<ProcessingOperation[], StorageError> {
 	return Effect.try({
 		try: () => {
 			const db = getDatabase();
@@ -95,6 +106,10 @@ export function getOperationsByFilter(applicationId: string, filter: { task?: Pr
 			if (filter.status) {
 				query += ' AND status = ?';
 				params.push(filter.status);
+			}
+
+			if (!includeDeleted) {
+				query += ' AND (deleted IS NULL OR deleted = 0)';
 			}
 
 			query += ' ORDER BY start_date DESC';
@@ -119,8 +134,8 @@ export function createOperation(
 	status: ProcessingOperationStatus = 'started'
 ): Effect.Effect<ProcessingOperation, StorageError> {
 	return Effect.gen(function* () {
-		// Проверяем, существует ли операция с таким типом для заявки
-		const existingIds = yield* findOperationsByFilter(applicationId, { task });
+		// Проверяем, существует ли операция с таким типом для заявки (только не удаленные)
+		const existingIds = yield* findOperationsByFilter(applicationId, { task }, false);
 		if (existingIds.length > 0) {
 			return yield* Effect.fail(new OperationAlreadyExistsError(applicationId, task));
 		}
@@ -134,7 +149,8 @@ export function createOperation(
 			status,
 			data,
 			startDate: now,
-			finishDate: status === 'completed' || status === 'failed' ? now : null
+			finishDate: status === 'completed' || status === 'failed' ? now : null,
+			deleted: false
 		};
 
 		const operation = yield* parseZodSchema(operationData, ProcessingOperationSchema).pipe(
@@ -148,9 +164,9 @@ export function createOperation(
 				const db = getDatabase();
 				const stmt = db.prepare(`
 					INSERT INTO processing_operations (
-						id, application_id, task, status, data, start_date, finish_date
+						id, application_id, task, status, data, start_date, finish_date, deleted
 					) VALUES (
-						:id, :application_id, :task, :status, :data, :start_date, :finish_date
+						:id, :application_id, :task, :status, :data, :start_date, :finish_date, :deleted
 					)
 				`);
 				stmt.run(row);
@@ -168,11 +184,11 @@ export function createOperation(
  */
 export function updateOperation(
 	id: string,
-	updates: Partial<Pick<ProcessingOperation, 'status' | 'data' | 'finishDate'>>
+	updates: Partial<Pick<ProcessingOperation, 'status' | 'data' | 'finishDate' | 'deleted'>>
 ): Effect.Effect<ProcessingOperation, StorageError> {
 	return Effect.gen(function* () {
-		// Получаем текущую операцию
-		const current = yield* getOperation(id);
+		// Получаем текущую операцию (включая удаленные, чтобы можно было обновить)
+		const current = yield* getOperation(id, true);
 
 		// Объединяем обновления с текущими данными
 		const updated: ProcessingOperation = {
@@ -194,13 +210,15 @@ export function updateOperation(
 					UPDATE processing_operations SET
 						status = :status,
 						data = :data,
-						finish_date = :finish_date
+						finish_date = :finish_date,
+						deleted = :deleted
 					WHERE id = :id
 				`);
 				stmt.run({
 					status: row.status,
 					data: row.data,
 					finish_date: row.finish_date,
+					deleted: row.deleted,
 					id: row.id
 				});
 			},
@@ -211,25 +229,51 @@ export function updateOperation(
 	});
 }
 
-export function deleteOperation(id: string): Effect.Effect<void, StorageError> {
+/**
+ * Мягкое удаление операции (устанавливает deleted = 1)
+ */
+export function deleteOperation(id: string): Effect.Effect<ProcessingOperation, StorageError> {
+	return updateOperation(id, { deleted: true });
+}
+
+/**
+ * Мягкое удаление нескольких операций (устанавливает deleted = 1)
+ */
+export function deleteOperations(ids: string[]): Effect.Effect<void, StorageError> {
+	return Effect.gen(function* () {
+		for (const id of ids) {
+			yield* deleteOperation(id);
+		}
+	});
+}
+
+/**
+ * Полное удаление операции из БД (hard delete)
+ */
+export function purgeOperation(id: string): Effect.Effect<void, StorageError> {
 	return Effect.try({
 		try: () => {
 			const db = getDatabase();
 			const stmt = db.prepare('DELETE FROM processing_operations WHERE id = ?');
 			stmt.run(id);
 		},
-		catch: (error) => new StorageError('Failed to delete operation', error as Error)
+		catch: (error) => new StorageError('Failed to purge operation', error as Error)
 	});
 }
 
-export function deleteOperations(ids: string[]): Effect.Effect<void, StorageError> {
+/**
+ * Полное удаление нескольких операций из БД (hard delete)
+ */
+export function purgeOperations(ids: string[]): Effect.Effect<void, StorageError> {
 	return Effect.try({
 		try: () => {
 			const db = getDatabase();
-			const stmt = db.prepare('DELETE FROM processing_operations WHERE id IN (?)');
-			stmt.run(ids);
+			// Используем IN для удаления нескольких записей
+			const placeholders = ids.map(() => '?').join(',');
+			const stmt = db.prepare(`DELETE FROM processing_operations WHERE id IN (${placeholders})`);
+			stmt.run(...ids);
 		},
-		catch: (error) => new StorageError('Failed to delete operations', error as Error)
+		catch: (error) => new StorageError('Failed to purge operations', error as Error)
 	});
 }
 
@@ -238,7 +282,8 @@ export function deleteOperations(ids: string[]): Effect.Effect<void, StorageErro
  */
 export function findOperations(
 	applicationId: string,
-	task?: ProcessingOperationTask
+	task?: ProcessingOperationTask,
+	includeDeleted: boolean = false
 ): Effect.Effect<string[], StorageError> {
 	return Effect.try({
 		try: () => {
@@ -249,6 +294,10 @@ export function findOperations(
 			if (task) {
 				query += ' AND task = ?';
 				params.push(task);
+			}
+
+			if (!includeDeleted) {
+				query += ' AND (deleted IS NULL OR deleted = 0)';
 			}
 
 			query += ' ORDER BY start_date DESC';
@@ -262,8 +311,11 @@ export function findOperations(
 	});
 }
 
-export function findOperationsByFilter(applicationId: string,
-	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus }): Effect.Effect<string[], StorageError> {
+export function findOperationsByFilter(
+	applicationId: string,
+	filter: { task?: ProcessingOperationTask, status?: ProcessingOperationStatus },
+	includeDeleted: boolean = false
+): Effect.Effect<string[], StorageError> {
 	return Effect.try({
 		try: () => {
 			const db = getDatabase();
@@ -278,6 +330,10 @@ export function findOperationsByFilter(applicationId: string,
 			if (filter.status) {
 				query += ' AND status = ?';
 				params.push(filter.status);
+			}
+
+			if (!includeDeleted) {
+				query += ' AND (deleted IS NULL OR deleted = 0)';
 			}
 
 			query += ' ORDER BY start_date DESC';

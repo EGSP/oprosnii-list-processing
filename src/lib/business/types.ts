@@ -46,7 +46,8 @@ export const ApplicationSchema = z.object({
 	originalFilename: z.string(),
 	productType: ProductTypeSchema.nullable().optional(),
 	abbreviation: AbbreviationSchema.nullable().optional(),
-	uploadDate: z.string().datetime()
+	uploadDate: z.string().datetime(),
+	deleted: z.boolean().optional().default(false)
 });
 
 export type Application = z.infer<typeof ApplicationSchema>;
@@ -57,6 +58,7 @@ export type Application = z.infer<typeof ApplicationSchema>;
 export interface ApplicationFilters {
 	endDate?: Date;
 	productType?: string;
+	includeDeleted?: boolean;
 }
 
 /**
@@ -88,7 +90,8 @@ export const ProcessingOperationSchema = z.object({
 		service: z.string().optional()
 	}).passthrough(),
 	startDate: z.string().datetime().describe('Дата и время начала операции'),
-	finishDate: z.string().datetime().nullable().optional().describe('Дата и время окончания операции')
+	finishDate: z.string().datetime().nullable().optional().describe('Дата и время окончания операции'),
+	deleted: z.boolean().optional().default(false)
 }).describe('Операция обработки');
 
 /**
