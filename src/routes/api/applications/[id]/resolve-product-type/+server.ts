@@ -21,7 +21,7 @@ export const POST: RequestHandler = async ({ params }) => {
 	const result = await Effect.runPromise(
 		Effect.gen(function* () {
 			const application = yield* getApplication(id);
-			yield* processProductTypeResolve(application.id);
+			yield* processProductTypeResolve(application);
 		})
 	).catch((error) => handleStorageError(error));
 	

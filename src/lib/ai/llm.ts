@@ -75,7 +75,7 @@ function getParsedCompletionText<T extends z.ZodType>(completionResult: Completi
 	});
 }
 
-export function resolveProductType(applicationId: string, text: string): Effect.Effect<ProductType, Error> {
+export function resolveProductType(text: string): Effect.Effect<ProductType, Error> {
 	return Effect.gen(function* () {
 		const config = aiConfig.yandexGPT;
 		const instruction = yield* readInstructionByNameAndType('Определение типа продукции', 'product-type');

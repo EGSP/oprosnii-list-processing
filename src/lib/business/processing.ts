@@ -17,7 +17,8 @@ import {
 	findOperationsByFilter,
 	updateOperation,
 	getOperationsByFilter,
-	deleteOperations
+	deleteOperations,
+	type Application
 } from '../storage/index.js';
 import { Effect } from 'effect';
 import { extractTextFromApplicationFile } from '$lib/utils/content.js';
@@ -94,23 +95,26 @@ export function getExtractedText(applicationId: string): Effect.Effect<string, E
 	});
 }
 
-export function processProductTypeResolve(applicationId: string): Effect.Effect<void, Error> {
+export function processProductTypeResolve(application: Application): Effect.Effect<void, Error> {
 	return Effect.gen(function* () {
-		const application = yield* getApplication(applicationId);
 		if (application.productType) {
 			return;
 		}
 
-		const operationsId = yield* findOperations(applicationId, 'resolveProductType');
+		const operationsId = yield* findOperations(application.id, 'resolveProductType');
 		if (operationsId.length > 0) {
 			logger.info(`Удаляем операции перед определением типа изделия ${operationsId.join(', ')}`);
 			yield* deleteOperations(operationsId);
 		}
 
 		// Create fresh operation
-		const text = yield* getExtractedText(applicationId);
-		const processingOperation = yield* createOperation(applicationId, 'resolveProductType');
-		const productType = yield* resolveProductType(applicationId, text);
+		const text = yield* getExtractedText(application.id);
+		if (!text || text.length === 0) 
+			return yield* Effect.fail(new Error('Текст извлеченный из базы данных заявки - пустой.'));
+
+		const processingOperation = yield* createOperation(application.id, 'resolveProductType');
+		const productType = yield* resolveProductType(text);
+
 		yield* updateOperation(processingOperation.id, {
 			status: 'completed',
 			data: {
