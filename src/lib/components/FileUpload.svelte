@@ -74,7 +74,7 @@
 <div class="file-upload-container" class:dragging={isDragging}>
 	<Card>
 		<div
-			class="flex flex-col items-center gap-2 p-8 text-center"
+			class="flex flex-col items-center gap-1.5 p-4 text-center"
 			role="button"
 			tabindex="0"
 			onclick={openFileDialog}
@@ -83,12 +83,12 @@
 			ondragleave={handleDragLeave}
 			ondrop={handleDrop}
 		>
-			<Upload size={32} class="opacity-50 text-muted-foreground mb-2" />
-			<p class="text-base font-medium m-0 text-foreground">
+			<Upload size={24} class="opacity-50 text-muted-foreground mb-1" />
+			<p class="text-sm font-medium m-0 text-foreground">
 				Перетащите файл сюда или нажмите для выбора
 			</p>
-			<p class="text-sm m-0 text-muted-foreground">
-				Поддерживаются: PDF, DOCX, XLSX, PNG, JPG, JPEG (до {config.maxFileSizeMB} МБ)
+			<p class="text-xs m-0 text-muted-foreground">
+				PDF, DOCX, XLSX, PNG, JPG, JPEG (до {config.maxFileSizeMB} МБ)
 			</p>
 		</div>
 		<input

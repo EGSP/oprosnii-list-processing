@@ -32,8 +32,8 @@
 	}
 
 	.left-panel {
-		width: 21.875rem;
-		min-width: 18.75rem;
+		width: 20rem;
+		min-width: 16rem;
 		flex-shrink: 0;
 		display: flex;
 		flex-direction: column;

@@ -158,16 +158,16 @@
 </script>
 
 <div class="application-list">
-	<div class="p-4 border-b border-border">
-		<h2 class="m-0 text-xl font-semibold text-foreground">Заявки</h2>
+	<div class="px-3 py-2 border-b border-border">
+		<h2 class="m-0 text-base font-semibold text-foreground">Заявки</h2>
 	</div>
 
-	<div class="p-4 border-b border-border">
+	<div class="px-3 py-2 border-b border-border">
 		<FileUpload on:upload={handleUpload} on:error={handleError} />
 	</div>
 
 	{#if error}
-		<div class="p-4">
+		<div class="px-3 py-2">
 			<Alert variant="destructive">
 				<AlertTitle>Ошибка</AlertTitle>
 				<AlertDescription>
@@ -188,11 +188,11 @@
 
 	<div class="flex-1 overflow-y-auto">
 		{#if isLoading}
-			<div class="flex justify-center items-center p-8">
-				<div class="flex flex-col gap-2 w-full px-4">
-					<Skeleton class="h-16 w-full" />
-					<Skeleton class="h-16 w-full" />
-					<Skeleton class="h-16 w-full" />
+			<div class="flex justify-center items-center p-4">
+				<div class="flex flex-col gap-2 w-full px-3">
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-12 w-full" />
+					<Skeleton class="h-12 w-full" />
 				</div>
 			</div>
 		{:else if applicationsStatusInfo.length === 0}
@@ -200,23 +200,22 @@
 		{:else}
 			<div class="flex flex-col">
 				{#each applicationsStatusInfo as statusInfo (statusInfo.application.id)}
-					<div
-						class="border-b border-border"
+					<button
+						type="button"
+						class="application-item"
 						class:selected={selectedId === statusInfo.application.id}
 						onclick={() => selectApplication(statusInfo.application.id)}
 					>
-						<Card class="cursor-pointer">
-							<div class="flex flex-col items-start p-4 text-left w-full">
-								<div class="font-medium text-foreground mb-2 break-words w-full">{statusInfo.application.originalFilename}</div>
-								<div class="flex justify-between items-center w-full text-sm gap-2">
-									<span class="text-muted-foreground">{formatDate(statusInfo.application.uploadDate)}</span>
-									<Badge variant={getStatusVariant(statusInfo.status)}>
-										{getStatusText(statusInfo.status)}
-									</Badge>
-								</div>
+						<div class="flex flex-col items-start px-3 py-2 text-left w-full">
+							<div class="font-medium text-sm text-foreground mb-1 break-words w-full">{statusInfo.application.originalFilename}</div>
+							<div class="flex justify-between items-center w-full text-xs gap-2">
+								<span class="text-muted-foreground">{formatDate(statusInfo.application.uploadDate)}</span>
+								<Badge variant={getStatusVariant(statusInfo.status)}>
+									{getStatusText(statusInfo.status)}
+								</Badge>
 							</div>
-						</Card>
-					</div>
+						</div>
+					</button>
 				{/each}
 			</div>
 		{/if}
@@ -229,11 +228,25 @@
 		flex-direction: column;
 		height: 100%;
 		background: hsl(var(--background));
-		border-right: 1px solid hsl(var(--border));
 	}
 
-	:global(.application-item.selected div[class*="rounded-none"]) {
+	.application-item {
+		width: 100%;
+		text-align: left;
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid hsl(var(--border));
+		cursor: pointer;
+		padding: 0;
+		margin: 0;
+	}
+
+	.application-item:hover {
 		background: hsl(var(--accent));
-		border-left: 3px solid hsl(var(--primary));
+	}
+
+	.application-item.selected {
+		background: hsl(var(--accent));
+		border-left: 2px solid hsl(var(--primary));
 	}
 </style>
