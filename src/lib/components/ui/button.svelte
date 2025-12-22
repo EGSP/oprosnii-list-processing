@@ -11,6 +11,11 @@
 		size?: ButtonSize;
 		asChild?: boolean;
 		children?: Snippet;
+		// Explicitly include common HTML button attributes for TypeScript
+		disabled?: boolean;
+		onclick?: ((event: MouseEvent) => void) | null | undefined;
+		title?: string;
+		"aria-label"?: string;
 	}
 
 	let {
