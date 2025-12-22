@@ -1,17 +1,17 @@
 <script lang="ts">
-	import * as AccordionPrimitive from "bits-ui";
+	import { Accordion } from "bits-ui";
 	import { cn } from "$lib/utils/cn";
+	import type { Snippet } from "svelte";
 
-	const {
+	let {
 		type = "single",
 		collapsible = false,
+		children,
 		...restProps
-	}: AccordionPrimitive.RootProps = $props();
-
-	let root: AccordionPrimitive.AccordionRoot;
+	} = $props<Accordion.RootProps & { children?: Snippet }>();
 </script>
 
-<AccordionPrimitive.Root bind:root type={type} collapsible={collapsible} {...restProps}>
-	<slot />
-</AccordionPrimitive.Root>
+<Accordion.Root type={type} collapsible={collapsible} {...restProps}>
+	{@render children?.()}
+</Accordion.Root>
 

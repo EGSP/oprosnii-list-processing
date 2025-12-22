@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { cn } from "$lib/utils/cn";
 	import type { ButtonHTMLAttributes } from "svelte/elements";
+	import type { Snippet } from "svelte";
 
 	type ButtonVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
 	type ButtonSize = "default" | "sm" | "lg" | "icon";
@@ -9,6 +10,7 @@
 		variant?: ButtonVariant;
 		size?: ButtonSize;
 		asChild?: boolean;
+		children?: Snippet;
 	}
 
 	let {
@@ -16,6 +18,7 @@
 		variant = "default",
 		size = "default",
 		asChild = false,
+		children,
 		...restProps
 	}: $$Props = $props();
 </script>
@@ -39,6 +42,6 @@
 	)}
 	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 </button>
 

@@ -470,7 +470,7 @@
 							</Badge>
 						</div>
 						<div class="form-group">
-							<label class="block text-sm font-medium mb-2">Статусы операций:</label>
+							<div class="block text-sm font-medium mb-2">Статусы операций:</div>
 							<div class="operations-list">
 								{#each allOperations as operationOrPlaceholder}
 									<OperationStatusBadge 
@@ -494,30 +494,34 @@
 					{#if fileInfo}
 						<form class="space-y-4 mt-4">
 							<div class="form-group">
-								<label class="block text-sm font-medium mb-2">Имя файла:</label>
+								<label for="file-name-display" class="block text-sm font-medium mb-2">Имя файла:</label>
 								<Input
+									id="file-name-display"
 									value={fileInfo.name}
 									readonly
 								/>
 							</div>
 							<div class="form-group">
-								<label class="block text-sm font-medium mb-2">Тип файла:</label>
+								<label for="file-type-display" class="block text-sm font-medium mb-2">Тип файла:</label>
 								<Input
+									id="file-type-display"
 									value={fileInfo.type}
 									readonly
 								/>
 							</div>
 							<div class="form-group">
-								<label class="block text-sm font-medium mb-2">Количество страниц:</label>
+								<label for="file-page-count-display" class="block text-sm font-medium mb-2">Количество страниц:</label>
 								<Input
+									id="file-page-count-display"
 									value={fileInfo.pageCount.toString()}
 									readonly
 								/>
 							</div>
 							{#if fileInfo.extractedText}
 								<div class="form-group">
-									<label class="block text-sm font-medium mb-2">Извлеченный текст:</label>
+									<label for="extracted-text-display" class="block text-sm font-medium mb-2">Извлеченный текст:</label>
 									<Textarea
+										id="extracted-text-display"
 										value={fileInfo.extractedText.substring(0, 200) + (fileInfo.extractedText.length > 200 ? `... (еще ${fileInfo.extractedText.length - 200} символов)` : '')}
 										readonly
 										rows={5}
@@ -613,15 +617,15 @@
 		color: hsl(var(--foreground));
 	}
 
-	.section {
+	:global(.section) {
 		margin-bottom: 2rem;
 	}
 
-	.section:last-child {
+	:global(.section:last-child) {
 		margin-bottom: 0;
 	}
 
-	.section h3 {
+	:global(.section h3) {
 		margin: 0 0 1rem 0;
 		font-size: 1.125rem;
 		font-weight: 600;
@@ -637,7 +641,7 @@
 		margin-top: 0.5rem;
 	}
 
-	.final-abbreviation {
+	:global(.final-abbreviation) {
 		background: hsl(var(--primary) / 0.1);
 		border: 2px solid hsl(var(--primary));
 	}

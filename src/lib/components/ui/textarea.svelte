@@ -18,5 +18,5 @@
 		className
 	)}
 	{...restProps}
-/>
+></textarea>
 

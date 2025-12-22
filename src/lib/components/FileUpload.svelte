@@ -77,11 +77,11 @@
 			class="upload-content"
 			role="button"
 			tabindex="0"
-			on:click={openFileDialog}
-			on:keydown={(e) => e.key === 'Enter' && openFileDialog()}
-			on:dragover={handleDragOver}
-			on:dragleave={handleDragLeave}
-			on:drop={handleDrop}
+			onclick={openFileDialog}
+			onkeydown={(e) => e.key === 'Enter' && openFileDialog()}
+			ondragover={handleDragOver}
+			ondragleave={handleDragLeave}
+			ondrop={handleDrop}
 		>
 			<Upload size={32} class="upload-icon" />
 			<p class="upload-text">
@@ -95,7 +95,7 @@
 			type="file"
 			bind:this={fileInput}
 			accept={acceptedTypes}
-			on:change={handleFileInputChange}
+			onchange={handleFileInputChange}
 			style="display: none;"
 		/>
 	</Card>
@@ -131,7 +131,7 @@
 		text-align: center;
 	}
 
-	.upload-icon {
+	:global(.upload-icon) {
 		opacity: 0.5;
 		color: hsl(var(--muted-foreground));
 		margin-bottom: 0.5rem;

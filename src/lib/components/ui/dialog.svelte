@@ -1,16 +1,16 @@
 <script lang="ts">
-	import * as DialogPrimitive from "bits-ui";
+	import { Dialog } from "bits-ui";
+	import type { Snippet } from "svelte";
 
-	const {
+	// @ts-expect-error - Svelte 5 runes ($bindable, $props)
+	let {
 		open = $bindable(false),
-		modal = true,
+		children,
 		...restProps
-	}: DialogPrimitive.DialogRootProps = $props();
-
-	let root: DialogPrimitive.DialogRoot;
+	} = $props<Dialog.RootProps & { children?: Snippet }>();
 </script>
 
-<DialogPrimitive.Root bind:open bind:root {modal} {...restProps}>
-	<slot />
-</DialogPrimitive.Root>
+<Dialog.Root bind:open {...restProps}>
+	{@render children?.()}
+</Dialog.Root>
 

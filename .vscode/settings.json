@@ -1,0 +1,17 @@
+{
+    "dbcode.connections": [
+        {
+            "connectionId": "1pJIzcPgRS8MHzWVMfbNs",
+            "name": "applications",
+            "driver": "sqlite",
+            "connectionType": "socket",
+            "socket": "oprosnii-list-processing/data/db/applications.db",
+            "readOnly": false,
+            "postConnectionSqlType": "inline",
+            "driverOptions": {
+                "extensions": []
+            },
+            "idleTimeout": 0
+        }
+    ]
+}

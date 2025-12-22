@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { cn } from "$lib/utils/cn";
+	import type { Snippet } from "svelte";
 
 	type AlertVariant = "default" | "destructive";
 
 	interface $$Props {
 		class?: string;
 		variant?: AlertVariant;
+		children?: Snippet;
 	}
 
 	let {
 		class: className = "",
-		variant = "default"
+		variant = "default",
+		children
 	}: $$Props = $props();
 </script>
 
@@ -25,6 +28,6 @@
 		className
 	)}
 >
-	<slot />
+	{@render children?.()}
 </div>
 

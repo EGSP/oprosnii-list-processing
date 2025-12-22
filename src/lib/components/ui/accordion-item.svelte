@@ -1,21 +1,24 @@
 <script lang="ts">
-	import * as AccordionPrimitive from "bits-ui";
+	import { Accordion } from "bits-ui";
 	import { cn } from "$lib/utils/cn";
+	import type { Snippet } from "svelte";
 
-	interface $$Props extends AccordionPrimitive.ItemProps {
+	interface $$Props extends Accordion.ItemProps {
 		class?: string;
+		children?: Snippet;
 	}
 
 	let {
 		class: className = "",
+		children,
 		...restProps
 	}: $$Props = $props();
 </script>
 
-<AccordionPrimitive.Item
+<Accordion.Item
 	class={cn("border-b", className)}
 	{...restProps}
 >
-	<slot />
-</AccordionPrimitive.Item>
+	{@render children?.()}
+</Accordion.Item>
 

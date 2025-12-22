@@ -203,11 +203,9 @@
 					<div
 						class="application-item"
 						class:selected={selectedId === statusInfo.application.id}
+						onclick={() => selectApplication(statusInfo.application.id)}
 					>
-						<Card
-							class="cursor-pointer hover:bg-accent transition-colors"
-							onclick={() => selectApplication(statusInfo.application.id)}
-						>
+						<Card class="cursor-pointer hover:bg-accent transition-colors">
 							<div class="application-content">
 								<div class="application-name">{statusInfo.application.originalFilename}</div>
 								<div class="application-meta">
