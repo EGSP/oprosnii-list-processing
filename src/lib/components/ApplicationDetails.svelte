@@ -5,8 +5,22 @@
 	import OperationStatusBadge from './OperationStatusBadge.svelte';
 	import { Effect, Option } from 'effect';
 	import type { FileInfo } from '$lib/storage/files.js';
-	import { Button, Form, FormGroup, TextInput, TextArea, Tile, Tag, InlineNotification, Modal } from 'carbon-components-svelte';
-	import { Renew, TrashCan, Undo, Archive } from 'carbon-icons-svelte';
+	import Button from '$lib/components/ui/button.svelte';
+	import Input from '$lib/components/ui/input.svelte';
+	import Textarea from '$lib/components/ui/textarea.svelte';
+	import Card from '$lib/components/ui/card.svelte';
+	import CardContent from '$lib/components/ui/card-content.svelte';
+	import Badge from '$lib/components/ui/badge.svelte';
+	import Alert from '$lib/components/ui/alert.svelte';
+	import AlertTitle from '$lib/components/ui/alert-title.svelte';
+	import AlertDescription from '$lib/components/ui/alert-description.svelte';
+	import Dialog from '$lib/components/ui/dialog.svelte';
+	import DialogContent from '$lib/components/ui/dialog-content.svelte';
+	import DialogHeader from '$lib/components/ui/dialog-header.svelte';
+	import DialogTitle from '$lib/components/ui/dialog-title.svelte';
+	import DialogDescription from '$lib/components/ui/dialog-description.svelte';
+	import DialogFooter from '$lib/components/ui/dialog-footer.svelte';
+	import { RefreshCw, Trash2, Undo2, Archive, X } from 'lucide-svelte';
 
 	export let applicationId: string | null = null;
 
@@ -281,6 +295,20 @@
 		}
 	}
 
+	function getStatusVariant(status: ApplicationStatusInfo['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
+		switch (status) {
+			case 'completed':
+				return 'default';
+			case 'failed':
+				return 'destructive';
+			case 'processing':
+				return 'secondary';
+			case 'nothing':
+			default:
+				return 'outline';
+		}
+	}
+
 	function getFinalAbbreviation(): string | null {
 		if (!statusInfo?.application?.abbreviation) return null;
 		return statusInfo.application.abbreviation.abbreviation || null;
@@ -315,13 +343,21 @@
 		<EmptyState message="Выберите заявку для просмотра" />
 	{:else if error && !statusInfo}
 		<div class="error-section">
-			<InlineNotification
-				kind="error"
-				title="Ошибка"
-				subtitle={error}
-				hideCloseButton={false}
-				on:close={() => error = null}
-			/>
+			<Alert variant="destructive">
+				<AlertTitle>Ошибка</AlertTitle>
+				<AlertDescription>
+					<div class="flex items-center justify-between">
+						<span>{error}</span>
+						<button
+							onclick={() => error = null}
+							class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+							aria-label="Закрыть"
+						>
+							<X class="h-4 w-4" />
+						</button>
+					</div>
+				</AlertDescription>
+			</Alert>
 		</div>
 	{:else if statusInfo}
 		<div class="details-content">
@@ -329,193 +365,209 @@
 				<h2>Детали заявки</h2>
 				<div class="header-actions">
 					<Button
-						kind="ghost"
-						size="small"
-						on:click={handleRefresh}
+						variant="ghost"
+						size="sm"
+						onclick={handleRefresh}
 						disabled={isRefreshing || isPurging || isTogglingDelete}
-						icon={Renew}
 						title="Обновить данные заявки и статусы операций"
 						aria-label="Обновить данные заявки и статусы операций"
 					>
+						<RefreshCw class="mr-2 h-4 w-4" />
 						{isRefreshing ? 'Обновление...' : 'Обновить'}
 					</Button>
 					{#if statusInfo.application.deleted || false}
 						<Button
-							kind="secondary"
-							size="small"
-							on:click={() => handleToggleDelete(false)}
+							variant="secondary"
+							size="sm"
+							onclick={() => handleToggleDelete(false)}
 							disabled={isRefreshing || isPurging || isTogglingDelete}
-							icon={Undo}
 							title="Вернуть заявку из удаленных. Заявка снова появится в списке."
 							aria-label="Вернуть заявку из удаленных"
 						>
+							<Undo2 class="mr-2 h-4 w-4" />
 							Вернуть
 						</Button>
 					{:else}
 						<Button
-							kind="secondary"
-							size="small"
-							on:click={() => handleToggleDelete(true)}
+							variant="secondary"
+							size="sm"
+							onclick={() => handleToggleDelete(true)}
 							disabled={isRefreshing || isPurging || isTogglingDelete}
-							icon={Archive}
 							title="Пометить заявку как удаленную. Заявка скроется из списка, но останется в базе данных."
 							aria-label="Пометить заявку как удаленную"
 						>
+							<Archive class="mr-2 h-4 w-4" />
 							Архив
 						</Button>
 					{/if}
 					<Button
-						kind="danger"
-						size="small"
-						on:click={handleOpenPurgeModal}
+						variant="destructive"
+						size="sm"
+						onclick={handleOpenPurgeModal}
 						disabled={isRefreshing || isPurging || isTogglingDelete}
-						icon={TrashCan}
 						title="Полностью удалить заявку и все связанные файлы из системы. Это действие необратимо."
 						aria-label="Полностью удалить заявку"
-						hideTooltip={true}
 					>
+						<Trash2 class="h-4 w-4" />
 					</Button>
 				</div>
 			</div>
 
 			{#if error}
 				<div class="error-section">
-					<InlineNotification
-						kind="error"
-						title="Ошибка"
-						subtitle={error}
-						hideCloseButton={false}
-						on:close={() => error = null}
-					/>
+					<Alert variant="destructive">
+						<AlertTitle>Ошибка</AlertTitle>
+						<AlertDescription>
+							<div class="flex items-center justify-between">
+								<span>{error}</span>
+								<button
+									onclick={() => error = null}
+									class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+									aria-label="Закрыть"
+								>
+									<X class="h-4 w-4" />
+								</button>
+							</div>
+						</AlertDescription>
+					</Alert>
 				</div>
 			{/if}
 
-			<Tile class="section">
-				<h3>Основная информация</h3>
-				<Form>
-					{#if statusInfo.application.productType}
-						<FormGroup>
-							<TextInput
-								id="product-type-display"
-								labelText="Тип продукции:"
-								value={statusInfo.application.productType.type}
-								readonly
-							/>
-						</FormGroup>
-					{/if}
-					<FormGroup>
-						<TextInput
-							id="filename-display"
-							labelText="Название файла:"
-							value={statusInfo.application.originalFilename}
-							readonly
-						/>
-					</FormGroup>
-					<FormGroup>
-						<TextInput
-							id="arrival-date-display"
-							labelText="Дата загрузки:"
-							value={formatDate(statusInfo.application.uploadDate)}
-							readonly
-						/>
-					</FormGroup>
-					<FormGroup>
-						<label for="status-display" class="bx--label">Статус:</label>
-						{@const statusType = statusInfo.status === 'completed' ? 'green' : statusInfo.status === 'failed' ? 'red' : statusInfo.status === 'processing' ? 'blue' : 'gray'}
-						<Tag id="status-display" type={statusType} size="sm">
-							{getStatusText(statusInfo.status)}
-						</Tag>
-					</FormGroup>
-					<FormGroup>
-						<label class="bx--label">Статусы операций:</label>
-						<div class="operations-list">
-							{#each allOperations as operationOrPlaceholder}
-								<OperationStatusBadge 
-									operation={operationOrPlaceholder} 
-									applicationId={applicationId}
-									onRun={handleRunOperation}
-									isRunning={runningOperations.has(operationOrPlaceholder.task)}
-									onToggleDelete={isRealOperation(operationOrPlaceholder) ? (id, deleted) => handleToggleOperationDelete(id, deleted) : null}
-									onPurge={isRealOperation(operationOrPlaceholder) ? (id) => handlePurgeOperation(id) : null}
-								/>
-							{/each}
-						</div>
-					</FormGroup>
-				</Form>
-			</Tile>
-
-			<Tile class="section">
-				<h3>Информация о файле</h3>
-				{#if fileInfo}
-					<Form>
-						<FormGroup>
-							<TextInput
-								labelText="Имя файла:"
-								value={fileInfo.name}
-								readonly
-							/>
-						</FormGroup>
-						<FormGroup>
-							<TextInput
-								labelText="Тип файла:"
-								value={fileInfo.type}
-								readonly
-							/>
-						</FormGroup>
-						<FormGroup>
-							<TextInput
-								labelText="Количество страниц:"
-								value={fileInfo.pageCount.toString()}
-								readonly
-							/>
-						</FormGroup>
-						{#if fileInfo.extractedText}
-							<FormGroup>
-								<label class="bx--label">Извлеченный текст:</label>
-								<TextArea
-									value={fileInfo.extractedText.substring(0, 200) + (fileInfo.extractedText.length > 200 ? `... (еще ${fileInfo.extractedText.length - 200} символов)` : '')}
+			<Card class="section">
+				<CardContent>
+					<h3>Основная информация</h3>
+					<form class="space-y-4 mt-4">
+						{#if statusInfo.application.productType}
+							<div class="form-group">
+								<label for="product-type-display" class="block text-sm font-medium mb-2">Тип продукции:</label>
+								<Input
+									id="product-type-display"
+									value={statusInfo.application.productType.type}
 									readonly
-									rows={5}
-									class="extracted-text-preview"
 								/>
-							</FormGroup>
+							</div>
 						{/if}
-					</Form>
-				{:else}
-					<p>Информация о файле недоступна</p>
-				{/if}
-			</Tile>
+						<div class="form-group">
+							<label for="filename-display" class="block text-sm font-medium mb-2">Название файла:</label>
+							<Input
+								id="filename-display"
+								value={statusInfo.application.originalFilename}
+								readonly
+							/>
+						</div>
+						<div class="form-group">
+							<label for="arrival-date-display" class="block text-sm font-medium mb-2">Дата загрузки:</label>
+							<Input
+								id="arrival-date-display"
+								value={formatDate(statusInfo.application.uploadDate)}
+								readonly
+							/>
+						</div>
+						<div class="form-group">
+							<label for="status-display" class="block text-sm font-medium mb-2">Статус:</label>
+							<Badge id="status-display" variant={getStatusVariant(statusInfo.status)}>
+								{getStatusText(statusInfo.status)}
+							</Badge>
+						</div>
+						<div class="form-group">
+							<label class="block text-sm font-medium mb-2">Статусы операций:</label>
+							<div class="operations-list">
+								{#each allOperations as operationOrPlaceholder}
+									<OperationStatusBadge 
+										operation={operationOrPlaceholder} 
+										applicationId={applicationId}
+										onRun={handleRunOperation}
+										isRunning={runningOperations.has(operationOrPlaceholder.task)}
+										onToggleDelete={isRealOperation(operationOrPlaceholder) ? (id, deleted) => handleToggleOperationDelete(id, deleted) : null}
+										onPurge={isRealOperation(operationOrPlaceholder) ? (id) => handlePurgeOperation(id) : null}
+									/>
+								{/each}
+							</div>
+						</div>
+					</form>
+				</CardContent>
+			</Card>
+
+			<Card class="section">
+				<CardContent>
+					<h3>Информация о файле</h3>
+					{#if fileInfo}
+						<form class="space-y-4 mt-4">
+							<div class="form-group">
+								<label class="block text-sm font-medium mb-2">Имя файла:</label>
+								<Input
+									value={fileInfo.name}
+									readonly
+								/>
+							</div>
+							<div class="form-group">
+								<label class="block text-sm font-medium mb-2">Тип файла:</label>
+								<Input
+									value={fileInfo.type}
+									readonly
+								/>
+							</div>
+							<div class="form-group">
+								<label class="block text-sm font-medium mb-2">Количество страниц:</label>
+								<Input
+									value={fileInfo.pageCount.toString()}
+									readonly
+								/>
+							</div>
+							{#if fileInfo.extractedText}
+								<div class="form-group">
+									<label class="block text-sm font-medium mb-2">Извлеченный текст:</label>
+									<Textarea
+										value={fileInfo.extractedText.substring(0, 200) + (fileInfo.extractedText.length > 200 ? `... (еще ${fileInfo.extractedText.length - 200} символов)` : '')}
+										readonly
+										rows={5}
+										class="extracted-text-preview"
+									/>
+								</div>
+							{/if}
+						</form>
+					{:else}
+						<p class="mt-4">Информация о файле недоступна</p>
+					{/if}
+				</CardContent>
+			</Card>
 
 			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}
-				<Tile class="section final-abbreviation">
-					<h3>Результаты обработки</h3>
-					<FormGroup>
-						<label for="final-abbreviation" class="bx--label">Финальное обозначение продукции:</label>
-						{#if getFinalAbbreviation()}
-							<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
-						{:else}
-							<div id="final-abbreviation" class="abbreviation-empty">Аббревиатура не сформирована</div>
-						{/if}
-					</FormGroup>
-				</Tile>
+				<Card class="section final-abbreviation">
+					<CardContent>
+						<h3>Результаты обработки</h3>
+						<div class="form-group mt-4">
+							<label for="final-abbreviation" class="block text-sm font-medium mb-2">Финальное обозначение продукции:</label>
+							{#if getFinalAbbreviation()}
+								<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
+							{:else}
+								<div id="final-abbreviation" class="abbreviation-empty">Аббревиатура не сформирована</div>
+							{/if}
+						</div>
+					</CardContent>
+				</Card>
 			{/if}
 		</div>
 	{/if}
 
-	<Modal
-		open={purgeModalOpen}
-		on:close={handleClosePurgeModal}
-		modalHeading="Подтверждение очистки заявки"
-		primaryButtonText="Очистить"
-		secondaryButtonText="Отмена"
-		danger={true}
-		on:click:button--primary={handlePurge}
-		on:click:button--secondary={handleClosePurgeModal}
-	>
-		<p>
-			Вы уверены, что хотите полностью удалить эту заявку? Это действие удалит заявку из базы данных и все связанные файлы. Это действие необратимо.
-		</p>
-	</Modal>
+	<Dialog bind:open={purgeModalOpen}>
+		<DialogContent>
+			<DialogHeader>
+				<DialogTitle>Подтверждение очистки заявки</DialogTitle>
+				<DialogDescription>
+					Вы уверены, что хотите полностью удалить эту заявку? Это действие удалит заявку из базы данных и все связанные файлы. Это действие необратимо.
+				</DialogDescription>
+			</DialogHeader>
+			<DialogFooter>
+				<Button variant="outline" onclick={handleClosePurgeModal}>
+					Отмена
+				</Button>
+				<Button variant="destructive" onclick={handlePurge}>
+					Очистить
+				</Button>
+			</DialogFooter>
+		</DialogContent>
+	</Dialog>
 </div>
 
 <style>
@@ -523,7 +575,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		background: var(--cds-layer);
+		background: hsl(var(--background));
 		overflow-y: auto;
 	}
 
@@ -549,7 +601,7 @@
 		flex-wrap: nowrap;
 	}
 
-	:global(.header-actions .bx--btn) {
+	.header-actions :global(button) {
 		flex-shrink: 0;
 		white-space: nowrap;
 	}
@@ -558,24 +610,26 @@
 		margin: 0;
 		font-size: 1.5rem;
 		font-weight: 600;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 	}
 
-	:global(.section.bx--tile) {
+	.section {
 		margin-bottom: 2rem;
-		padding-bottom: 1.5rem;
-		border-bottom: 1px solid var(--cds-border-subtle);
 	}
 
-	:global(.section.bx--tile:last-child) {
-		border-bottom: none;
+	.section:last-child {
+		margin-bottom: 0;
 	}
 
-	:global(.section.bx--tile h3) {
+	.section h3 {
 		margin: 0 0 1rem 0;
 		font-size: 1.125rem;
 		font-weight: 600;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
+	}
+
+	.form-group {
+		margin-bottom: 1rem;
 	}
 
 	.operations-list {
@@ -584,27 +638,27 @@
 	}
 
 	.final-abbreviation {
-		background: var(--cds-support-success-inverse);
-		border: 2px solid var(--cds-support-success);
+		background: hsl(var(--primary) / 0.1);
+		border: 2px solid hsl(var(--primary));
 	}
 
 	.abbreviation-value {
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--cds-support-success);
+		color: hsl(var(--primary));
 		margin-top: 0.5rem;
 	}
 
 	.abbreviation-empty {
 		font-size: 1rem;
-		color: var(--cds-text-secondary);
+		color: hsl(var(--muted-foreground));
 		margin-top: 0.5rem;
 		font-style: italic;
 	}
 
-	:global(.extracted-text-preview.bx--text-area) {
-		background: var(--cds-field);
-		border: 1px solid var(--cds-border-subtle);
+	.extracted-text-preview {
+		background: hsl(var(--muted));
+		border: 1px solid hsl(var(--border));
 		font-size: 0.875rem;
 		line-height: 1.5;
 		max-height: 12.5rem;

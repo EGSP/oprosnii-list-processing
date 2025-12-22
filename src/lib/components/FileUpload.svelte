@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { config } from '$lib/config.js';
 	import { createEventDispatcher } from 'svelte';
-	import { Tile } from 'carbon-components-svelte';
-	import { Upload } from 'carbon-icons-svelte';
+	import Card from '$lib/components/ui/card.svelte';
+	import { Upload } from 'lucide-svelte';
 
 	const dispatch = createEventDispatcher<{
 		upload: { file: File };
@@ -72,7 +72,7 @@
 </script>
 
 <div class="file-upload-container" class:dragging={isDragging}>
-	<Tile>
+	<Card>
 		<div
 			class="upload-content"
 			role="button"
@@ -98,7 +98,7 @@
 			on:change={handleFileInputChange}
 			style="display: none;"
 		/>
-	</Tile>
+	</Card>
 </div>
 
 <style>
@@ -106,20 +106,20 @@
 		cursor: pointer;
 	}
 
-	:global(.file-upload-container .bx--tile) {
-		border: 2px dashed var(--cds-border-subtle);
-		border-radius: 0.25rem;
+	:global(.file-upload-container div[class*="rounded-lg"]) {
+		border: 2px dashed hsl(var(--border));
+		border-radius: 0.5rem;
 		transition: all 0.2s ease;
 	}
 
-	.file-upload-container:hover :global(.bx--tile) {
-		border-color: var(--cds-link-primary);
-		background: var(--cds-layer-hover);
+	.file-upload-container:hover :global(div[class*="rounded-lg"]) {
+		border-color: hsl(var(--primary));
+		background: hsl(var(--accent));
 	}
 
-	.file-upload-container.dragging :global(.bx--tile) {
-		border-color: var(--cds-link-primary);
-		background: var(--cds-layer-selected);
+	.file-upload-container.dragging :global(div[class*="rounded-lg"]) {
+		border-color: hsl(var(--primary));
+		background: hsl(var(--accent));
 	}
 
 	.upload-content {
@@ -133,7 +133,7 @@
 
 	.upload-icon {
 		opacity: 0.5;
-		color: var(--cds-icon-secondary);
+		color: hsl(var(--muted-foreground));
 		margin-bottom: 0.5rem;
 	}
 
@@ -141,12 +141,12 @@
 		font-size: 1rem;
 		font-weight: 500;
 		margin: 0;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 	}
 
 	.upload-hint {
 		font-size: 0.875rem;
 		margin: 0;
-		color: var(--cds-text-secondary);
+		color: hsl(var(--muted-foreground));
 	}
 </style>

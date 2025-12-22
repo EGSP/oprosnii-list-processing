@@ -28,7 +28,7 @@
 		display: flex;
 		height: 100vh;
 		overflow: hidden;
-		background: var(--cds-background);
+		background: hsl(var(--background));
 	}
 
 	.left-panel {
@@ -37,7 +37,7 @@
 		flex-shrink: 0;
 		display: flex;
 		flex-direction: column;
-		border-right: 1px solid var(--cds-border-subtle);
+		border-right: 1px solid hsl(var(--border));
 	}
 
 	.right-panel {
@@ -56,7 +56,7 @@
 			width: 100%;
 			height: 40vh;
 			border-right: none;
-			border-bottom: 1px solid var(--cds-border-subtle);
+			border-bottom: 1px solid hsl(var(--border));
 		}
 
 		.right-panel {

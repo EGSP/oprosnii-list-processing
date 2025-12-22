@@ -1,7 +1,18 @@
 <script lang="ts">
 	import type { ProcessingOperation } from '$lib/business/types.js';
-	import { Tag, Button, Accordion, AccordionItem, Modal } from 'carbon-components-svelte';
-	import { ChevronDown, Checkmark, Error, Time, Play, TrashCan, Undo, Archive } from 'carbon-icons-svelte';
+	import Badge from '$lib/components/ui/badge.svelte';
+	import Button from '$lib/components/ui/button.svelte';
+	import Accordion from '$lib/components/ui/accordion.svelte';
+	import AccordionItem from '$lib/components/ui/accordion-item.svelte';
+	import AccordionTrigger from '$lib/components/ui/accordion-trigger.svelte';
+	import AccordionContent from '$lib/components/ui/accordion-content.svelte';
+	import Dialog from '$lib/components/ui/dialog.svelte';
+	import DialogContent from '$lib/components/ui/dialog-content.svelte';
+	import DialogHeader from '$lib/components/ui/dialog-header.svelte';
+	import DialogTitle from '$lib/components/ui/dialog-title.svelte';
+	import DialogDescription from '$lib/components/ui/dialog-description.svelte';
+	import DialogFooter from '$lib/components/ui/dialog-footer.svelte';
+	import { Play, Trash2, Undo2, Archive } from 'lucide-svelte';
 
 	export let operation:
 		| ProcessingOperation
@@ -56,18 +67,18 @@
 		}
 	}
 
-	function getStatusType(): 'gray' | 'blue' | 'green' | 'red' {
+	function getStatusVariant(): 'default' | 'secondary' | 'destructive' | 'outline' {
 		if (!isRealOperation(operation)) {
-			return 'gray';
+			return 'outline';
 		}
 
 		switch (operation.status) {
 			case 'started':
-				return 'blue';
+				return 'secondary';
 			case 'completed':
-				return 'green';
+				return 'default';
 			case 'failed':
-				return 'red';
+				return 'destructive';
 		}
 	}
 
@@ -154,98 +165,101 @@
 	<div class="badge-header">
 		<div class="badge-label">
 			<span class="operation-type">{getOperationTypeLabel()}:</span>
-			<Tag type={getStatusType()} size="sm">
+			<Badge variant={getStatusVariant()}>
 				{getStatusLabel()}
-			</Tag>
+			</Badge>
 		</div>
 		<div class="badge-actions">
 			{#if canRun}
 				<Button
-					size="small"
-					kind="primary"
+					size="sm"
+					variant="default"
 					disabled={isRunning || isTogglingDelete || isPurging}
-					on:click={handleRunClick}
-					icon={Play}
+					onclick={handleRunClick}
 					title="Запустить операцию обработки"
 					aria-label="Запустить операцию обработки"
 				>
+					<Play class="mr-2 h-4 w-4" />
 					{getRunButtonLabel()}
 				</Button>
 			{/if}
 			{#if isRealOperation(operation) && onToggleDelete && applicationId && onPurge}
 				{#if operation.deleted || false}
 					<Button
-						kind="secondary"
-						size="small"
-						on:click={handleToggleDelete}
+						variant="secondary"
+						size="sm"
+						onclick={handleToggleDelete}
 						disabled={isRunning || isTogglingDelete || isPurging}
-						icon={Undo}
 						title="Вернуть операцию из удаленных. Операция снова появится в списке."
 						aria-label="Вернуть операцию из удаленных"
 					>
+						<Undo2 class="mr-2 h-4 w-4" />
 						Вернуть
 					</Button>
 				{:else}
 					<Button
-						kind="secondary"
-						size="small"
-						on:click={handleToggleDelete}
+						variant="secondary"
+						size="sm"
+						onclick={handleToggleDelete}
 						disabled={isRunning || isTogglingDelete || isPurging}
-						icon={Archive}
 						title="Пометить операцию как удаленную. Операция скроется, но останется в базе данных."
 						aria-label="Пометить операцию как удаленную"
 					>
+						<Archive class="mr-2 h-4 w-4" />
 						Архив
 					</Button>
 				{/if}
 				<Button
-					kind="danger"
-					size="small"
-					on:click={handleOpenPurgeModal}
+					variant="destructive"
+					size="sm"
+					onclick={handleOpenPurgeModal}
 					disabled={isRunning || isTogglingDelete || isPurging}
-					icon={TrashCan}
 					title="Полностью удалить операцию из базы данных. Это действие необратимо."
 					aria-label="Полностью удалить операцию"
-					hideTooltip={true}
 				>
+					<Trash2 class="h-4 w-4" />
 				</Button>
 			{/if}
 		</div>
 	</div>
 	{#if hasContent}
-		<Accordion>
-			<AccordionItem
-				title="Детали операции"
-				bind:open={isExpanded}
-			>
-				<pre class="result-json">{getOperationData()}</pre>
+		<Accordion type="single" collapsible>
+			<AccordionItem value="details">
+				<AccordionTrigger>Детали операции</AccordionTrigger>
+				<AccordionContent>
+					<pre class="result-json">{getOperationData()}</pre>
+				</AccordionContent>
 			</AccordionItem>
 		</Accordion>
 	{/if}
 
 	{#if isRealOperation(operation) && onPurge}
-		<Modal
-			open={purgeModalOpen}
-			on:close={handleClosePurgeModal}
-			modalHeading="Подтверждение очистки операции"
-			primaryButtonText="Очистить"
-			secondaryButtonText="Отмена"
-			danger={true}
-			on:click:button--primary={handlePurge}
-			on:click:button--secondary={handleClosePurgeModal}
-		>
-			<p>
-				Вы уверены, что хотите полностью удалить эту операцию? Это действие необратимо.
-			</p>
-		</Modal>
+		<Dialog bind:open={purgeModalOpen}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Подтверждение очистки операции</DialogTitle>
+					<DialogDescription>
+						Вы уверены, что хотите полностью удалить эту операцию? Это действие необратимо.
+					</DialogDescription>
+				</DialogHeader>
+				<DialogFooter>
+					<Button variant="outline" onclick={handleClosePurgeModal}>
+						Отмена
+					</Button>
+					<Button variant="destructive" onclick={handlePurge}>
+						Очистить
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	{/if}
 </div>
 
 <style>
 	.operation-badge {
-		background: var(--cds-layer);
-		border: 1px solid var(--cds-border-subtle);
-		border-radius: 0.25rem;
+		background: hsl(var(--card));
+		border: 1px solid hsl(var(--border));
+		border-radius: 0.5rem;
 		margin-bottom: 0.75rem;
 		overflow: hidden;
 		transition: box-shadow 0.2s ease;
@@ -277,14 +291,14 @@
 		flex-wrap: nowrap;
 	}
 
-	:global(.badge-actions .bx--btn) {
+	.badge-actions :global(button) {
 		flex-shrink: 0;
 		white-space: nowrap;
 	}
 
 	.operation-type {
 		font-weight: 500;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 	}
 
 	.result-json {
@@ -292,12 +306,12 @@
 		padding: 0;
 		font-size: 0.875rem;
 		font-family: 'IBM Plex Mono', 'Courier New', monospace;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		overflow-x: auto;
-		background: var(--cds-layer-01);
+		background: hsl(var(--muted));
 		padding: 1rem;
-		border-radius: 0.25rem;
+		border-radius: 0.5rem;
 	}
 </style>

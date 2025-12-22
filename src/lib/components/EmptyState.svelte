@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { Tile } from 'carbon-components-svelte';
-	import { DocumentBlank } from 'carbon-icons-svelte';
+	import Card from '$lib/components/ui/card.svelte';
+	import { FileText } from 'lucide-svelte';
 	
 	export let message: string;
 	export let icon: string | undefined = undefined;
 </script>
 
 <div class="empty-state">
-	<Tile>
+	<Card>
 		<div class="empty-state-content">
 			{#if icon}
 				<div class="icon">
-					<DocumentBlank size={32} />
+					<FileText size={32} />
 				</div>
 			{/if}
 			<p class="message">{message}</p>
 		</div>
-	</Tile>
+	</Card>
 </div>
 
 <style>
@@ -34,15 +34,16 @@
 		justify-content: center;
 		text-align: center;
 		gap: 1rem;
+		padding: 2rem;
 	}
 
 	.icon {
 		opacity: 0.5;
-		color: var(--cds-text-secondary);
+		color: hsl(var(--muted-foreground));
 	}
 
 	.message {
 		margin: 0;
-		color: var(--cds-text-secondary);
+		color: hsl(var(--muted-foreground));
 	}
 </style>

@@ -10,7 +10,13 @@
 	import EmptyState from './EmptyState.svelte';
 	import { createEventDispatcher } from 'svelte';
 	import { Effect, Option } from 'effect';
-	import { ClickableTile, Tag, Loading, InlineNotification } from 'carbon-components-svelte';
+	import Card from '$lib/components/ui/card.svelte';
+	import Badge from '$lib/components/ui/badge.svelte';
+	import Skeleton from '$lib/components/ui/skeleton.svelte';
+	import Alert from '$lib/components/ui/alert.svelte';
+	import AlertTitle from '$lib/components/ui/alert-title.svelte';
+	import AlertDescription from '$lib/components/ui/alert-description.svelte';
+	import { X } from 'lucide-svelte';
 
 	const dispatch = createEventDispatcher<{
 		select: { application: Application };
@@ -136,17 +142,17 @@
 		}
 	}
 
-	function getStatusType(status: ApplicationStatusInfo['status']): 'gray' | 'blue' | 'green' | 'red' {
+	function getStatusVariant(status: ApplicationStatusInfo['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
 		switch (status) {
 			case 'completed':
-				return 'green';
+				return 'default';
 			case 'failed':
-				return 'red';
+				return 'destructive';
 			case 'processing':
-				return 'blue';
+				return 'secondary';
 			case 'nothing':
 			default:
-				return 'gray';
+				return 'outline';
 		}
 	}
 </script>
@@ -162,20 +168,32 @@
 
 	{#if error}
 		<div class="error-section">
-			<InlineNotification
-				kind="error"
-				title="Ошибка"
-				subtitle={error}
-				hideCloseButton={false}
-				on:close={() => error = null}
-			/>
+			<Alert variant="destructive">
+				<AlertTitle>Ошибка</AlertTitle>
+				<AlertDescription>
+					<div class="flex items-center justify-between">
+						<span>{error}</span>
+						<button
+							onclick={() => error = null}
+							class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+							aria-label="Закрыть"
+						>
+							<X class="h-4 w-4" />
+						</button>
+					</div>
+				</AlertDescription>
+			</Alert>
 		</div>
 	{/if}
 
 	<div class="list-content">
 		{#if isLoading}
 			<div class="loading-container">
-				<Loading description="Загрузка заявок..." />
+				<div class="flex flex-col gap-2 w-full px-4">
+					<Skeleton class="h-16 w-full" />
+					<Skeleton class="h-16 w-full" />
+					<Skeleton class="h-16 w-full" />
+				</div>
 			</div>
 		{:else if applicationsStatusInfo.length === 0}
 			<EmptyState message="Нет загруженных заявок" />
@@ -186,17 +204,20 @@
 						class="application-item"
 						class:selected={selectedId === statusInfo.application.id}
 					>
-						<ClickableTile
-							on:click={() => selectApplication(statusInfo.application.id)}
+						<Card
+							class="cursor-pointer hover:bg-accent transition-colors"
+							onclick={() => selectApplication(statusInfo.application.id)}
 						>
-							<div class="application-name">{statusInfo.application.originalFilename}</div>
-							<div class="application-meta">
-								<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
-								<Tag type={getStatusType(statusInfo.status)} size="sm">
-									{getStatusText(statusInfo.status)}
-								</Tag>
+							<div class="application-content">
+								<div class="application-name">{statusInfo.application.originalFilename}</div>
+								<div class="application-meta">
+									<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
+									<Badge variant={getStatusVariant(statusInfo.status)}>
+										{getStatusText(statusInfo.status)}
+									</Badge>
+								</div>
 							</div>
-						</ClickableTile>
+						</Card>
 					</div>
 				{/each}
 			</div>
@@ -209,25 +230,25 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		background: var(--cds-layer);
-		border-right: 1px solid var(--cds-border-subtle);
+		background: hsl(var(--background));
+		border-right: 1px solid hsl(var(--border));
 	}
 
 	.header {
 		padding: 1rem;
-		border-bottom: 1px solid var(--cds-border-subtle);
+		border-bottom: 1px solid hsl(var(--border));
 	}
 
 	.header h2 {
 		margin: 0;
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 	}
 
 	.upload-section {
 		padding: 1rem;
-		border-bottom: 1px solid var(--cds-border-subtle);
+		border-bottom: 1px solid hsl(var(--border));
 	}
 
 	.error-section {
@@ -252,15 +273,15 @@
 	}
 
 	.application-item {
-		border-bottom: 1px solid var(--cds-border-subtle);
+		border-bottom: 1px solid hsl(var(--border));
 	}
 
-	.application-item.selected {
-		background: var(--cds-layer-selected);
-		border-left: 3px solid var(--cds-link-primary);
+	.application-item.selected :global(div[class*="rounded-lg"]) {
+		background: hsl(var(--accent));
+		border-left: 3px solid hsl(var(--primary));
 	}
 
-	:global(.application-item .bx--tile--clickable) {
+	.application-content {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
@@ -271,7 +292,7 @@
 
 	.application-name {
 		font-weight: 500;
-		color: var(--cds-text-primary);
+		color: hsl(var(--foreground));
 		margin-bottom: 0.5rem;
 		word-break: break-word;
 		width: 100%;
@@ -287,6 +308,6 @@
 	}
 
 	.date {
-		color: var(--cds-text-secondary);
+		color: hsl(var(--muted-foreground));
 	}
 </style>
