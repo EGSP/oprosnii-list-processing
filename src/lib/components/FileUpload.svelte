@@ -74,7 +74,7 @@
 <div class="file-upload-container" class:dragging={isDragging}>
 	<Card>
 		<div
-			class="upload-content"
+			class="flex flex-col items-center gap-2 p-8 text-center"
 			role="button"
 			tabindex="0"
 			onclick={openFileDialog}
@@ -83,11 +83,11 @@
 			ondragleave={handleDragLeave}
 			ondrop={handleDrop}
 		>
-			<Upload size={32} class="upload-icon" />
-			<p class="upload-text">
+			<Upload size={32} class="opacity-50 text-muted-foreground mb-2" />
+			<p class="text-base font-medium m-0 text-foreground">
 				Перетащите файл сюда или нажмите для выбора
 			</p>
-			<p class="upload-hint">
+			<p class="text-sm m-0 text-muted-foreground">
 				Поддерживаются: PDF, DOCX, XLSX, PNG, JPG, JPEG (до {config.maxFileSizeMB} МБ)
 			</p>
 		</div>
@@ -120,33 +120,5 @@
 	.file-upload-container.dragging :global(div[class*="rounded-lg"]) {
 		border-color: hsl(var(--primary));
 		background: hsl(var(--accent));
-	}
-
-	.upload-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 2rem;
-		text-align: center;
-	}
-
-	:global(.upload-icon) {
-		opacity: 0.5;
-		color: hsl(var(--muted-foreground));
-		margin-bottom: 0.5rem;
-	}
-
-	.upload-text {
-		font-size: 1rem;
-		font-weight: 500;
-		margin: 0;
-		color: hsl(var(--foreground));
-	}
-
-	.upload-hint {
-		font-size: 0.875rem;
-		margin: 0;
-		color: hsl(var(--muted-foreground));
 	}
 </style>

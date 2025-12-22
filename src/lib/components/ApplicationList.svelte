@@ -158,16 +158,16 @@
 </script>
 
 <div class="application-list">
-	<div class="header">
-		<h2>Заявки</h2>
+	<div class="p-4 border-b border-border">
+		<h2 class="m-0 text-xl font-semibold text-foreground">Заявки</h2>
 	</div>
 
-	<div class="upload-section">
+	<div class="p-4 border-b border-border">
 		<FileUpload on:upload={handleUpload} on:error={handleError} />
 	</div>
 
 	{#if error}
-		<div class="error-section">
+		<div class="p-4">
 			<Alert variant="destructive">
 				<AlertTitle>Ошибка</AlertTitle>
 				<AlertDescription>
@@ -186,9 +186,9 @@
 		</div>
 	{/if}
 
-	<div class="list-content">
+	<div class="flex-1 overflow-y-auto">
 		{#if isLoading}
-			<div class="loading-container">
+			<div class="flex justify-center items-center p-8">
 				<div class="flex flex-col gap-2 w-full px-4">
 					<Skeleton class="h-16 w-full" />
 					<Skeleton class="h-16 w-full" />
@@ -198,18 +198,18 @@
 		{:else if applicationsStatusInfo.length === 0}
 			<EmptyState message="Нет загруженных заявок" />
 		{:else}
-			<div class="applications">
+			<div class="flex flex-col">
 				{#each applicationsStatusInfo as statusInfo (statusInfo.application.id)}
 					<div
-						class="application-item"
+						class="border-b border-border"
 						class:selected={selectedId === statusInfo.application.id}
 						onclick={() => selectApplication(statusInfo.application.id)}
 					>
 						<Card class="cursor-pointer hover:bg-accent transition-colors">
-							<div class="application-content">
-								<div class="application-name">{statusInfo.application.originalFilename}</div>
-								<div class="application-meta">
-									<span class="date">{formatDate(statusInfo.application.uploadDate)}</span>
+							<div class="flex flex-col items-start p-4 text-left w-full">
+								<div class="font-medium text-foreground mb-2 break-words w-full">{statusInfo.application.originalFilename}</div>
+								<div class="flex justify-between items-center w-full text-sm gap-2">
+									<span class="text-muted-foreground">{formatDate(statusInfo.application.uploadDate)}</span>
 									<Badge variant={getStatusVariant(statusInfo.status)}>
 										{getStatusText(statusInfo.status)}
 									</Badge>
@@ -232,80 +232,8 @@
 		border-right: 1px solid hsl(var(--border));
 	}
 
-	.header {
-		padding: 1rem;
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.header h2 {
-		margin: 0;
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-	}
-
-	.upload-section {
-		padding: 1rem;
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.error-section {
-		padding: 1rem;
-	}
-
-	.list-content {
-		flex: 1;
-		overflow-y: auto;
-	}
-
-	.loading-container {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		padding: 2rem;
-	}
-
-	.applications {
-		display: flex;
-		flex-direction: column;
-	}
-
-	.application-item {
-		border-bottom: 1px solid hsl(var(--border));
-	}
-
-	.application-item.selected :global(div[class*="rounded-lg"]) {
+	:global(.application-item.selected div[class*="rounded-lg"]) {
 		background: hsl(var(--accent));
 		border-left: 3px solid hsl(var(--primary));
-	}
-
-	.application-content {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		padding: 1rem;
-		text-align: left;
-		width: 100%;
-	}
-
-	.application-name {
-		font-weight: 500;
-		color: hsl(var(--foreground));
-		margin-bottom: 0.5rem;
-		word-break: break-word;
-		width: 100%;
-	}
-
-	.application-meta {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		width: 100%;
-		font-size: 0.875rem;
-		gap: 0.5rem;
-	}
-
-	.date {
-		color: hsl(var(--muted-foreground));
 	}
 </style>

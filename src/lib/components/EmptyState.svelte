@@ -6,44 +6,16 @@
 	export let icon: string | undefined = undefined;
 </script>
 
-<div class="empty-state">
+<div class="flex items-center justify-center min-h-[12.5rem]">
 	<Card>
-		<div class="empty-state-content">
+		<div class="flex flex-col items-center justify-center text-center gap-4 p-8">
 			{#if icon}
-				<div class="icon">
+				<div class="opacity-50 text-muted-foreground">
 					<FileText size={32} />
 				</div>
 			{/if}
-			<p class="message">{message}</p>
+			<p class="m-0 text-muted-foreground">{message}</p>
 		</div>
 	</Card>
 </div>
 
-<style>
-	.empty-state {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 12.5rem;
-	}
-
-	.empty-state-content {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		text-align: center;
-		gap: 1rem;
-		padding: 2rem;
-	}
-
-	.icon {
-		opacity: 0.5;
-		color: hsl(var(--muted-foreground));
-	}
-
-	.message {
-		margin: 0;
-		color: hsl(var(--muted-foreground));
-	}
-</style>

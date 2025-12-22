@@ -342,7 +342,7 @@
 	{#if !applicationId}
 		<EmptyState message="Выберите заявку для просмотра" />
 	{:else if error && !statusInfo}
-		<div class="error-section">
+		<div class="p-4">
 			<Alert variant="destructive">
 				<AlertTitle>Ошибка</AlertTitle>
 				<AlertDescription>
@@ -360,10 +360,10 @@
 			</Alert>
 		</div>
 	{:else if statusInfo}
-		<div class="details-content">
-			<div class="header">
-				<h2>Детали заявки</h2>
-				<div class="header-actions">
+		<div class="p-6">
+			<div class="mb-6 flex justify-between items-center">
+				<h2 class="m-0 text-2xl font-semibold text-foreground">Детали заявки</h2>
+				<div class="flex gap-2 items-center flex-nowrap">
 					<Button
 						variant="ghost"
 						size="sm"
@@ -414,7 +414,7 @@
 			</div>
 
 			{#if error}
-				<div class="error-section">
+				<div class="p-4">
 					<Alert variant="destructive">
 						<AlertTitle>Ошибка</AlertTitle>
 						<AlertDescription>
@@ -433,12 +433,12 @@
 				</div>
 			{/if}
 
-			<Card class="section">
+			<Card class="mb-8 last:mb-0">
 				<CardContent>
-					<h3>Основная информация</h3>
+					<h3 class="m-0 mb-4 text-lg font-semibold text-foreground">Основная информация</h3>
 					<form class="space-y-4 mt-4">
 						{#if statusInfo.application.productType}
-							<div class="form-group">
+							<div class="mb-4">
 								<label for="product-type-display" class="block text-sm font-medium mb-2">Тип продукции:</label>
 								<Input
 									id="product-type-display"
@@ -447,7 +447,7 @@
 								/>
 							</div>
 						{/if}
-						<div class="form-group">
+						<div class="mb-4">
 							<label for="filename-display" class="block text-sm font-medium mb-2">Название файла:</label>
 							<Input
 								id="filename-display"
@@ -455,7 +455,7 @@
 								readonly
 							/>
 						</div>
-						<div class="form-group">
+						<div class="mb-4">
 							<label for="arrival-date-display" class="block text-sm font-medium mb-2">Дата загрузки:</label>
 							<Input
 								id="arrival-date-display"
@@ -463,15 +463,15 @@
 								readonly
 							/>
 						</div>
-						<div class="form-group">
+						<div class="mb-4">
 							<label for="status-display" class="block text-sm font-medium mb-2">Статус:</label>
 							<Badge id="status-display" variant={getStatusVariant(statusInfo.status)}>
 								{getStatusText(statusInfo.status)}
 							</Badge>
 						</div>
-						<div class="form-group">
+						<div class="mb-4">
 							<div class="block text-sm font-medium mb-2">Статусы операций:</div>
-							<div class="operations-list">
+							<div class="w-full mt-2">
 								{#each allOperations as operationOrPlaceholder}
 									<OperationStatusBadge 
 										operation={operationOrPlaceholder} 
@@ -488,12 +488,12 @@
 				</CardContent>
 			</Card>
 
-			<Card class="section">
+			<Card class="mb-8 last:mb-0">
 				<CardContent>
-					<h3>Информация о файле</h3>
+					<h3 class="m-0 mb-4 text-lg font-semibold text-foreground">Информация о файле</h3>
 					{#if fileInfo}
 						<form class="space-y-4 mt-4">
-							<div class="form-group">
+							<div class="mb-4">
 								<label for="file-name-display" class="block text-sm font-medium mb-2">Имя файла:</label>
 								<Input
 									id="file-name-display"
@@ -501,7 +501,7 @@
 									readonly
 								/>
 							</div>
-							<div class="form-group">
+							<div class="mb-4">
 								<label for="file-type-display" class="block text-sm font-medium mb-2">Тип файла:</label>
 								<Input
 									id="file-type-display"
@@ -509,7 +509,7 @@
 									readonly
 								/>
 							</div>
-							<div class="form-group">
+							<div class="mb-4">
 								<label for="file-page-count-display" class="block text-sm font-medium mb-2">Количество страниц:</label>
 								<Input
 									id="file-page-count-display"
@@ -518,14 +518,14 @@
 								/>
 							</div>
 							{#if fileInfo.extractedText}
-								<div class="form-group">
+								<div class="mb-4">
 									<label for="extracted-text-display" class="block text-sm font-medium mb-2">Извлеченный текст:</label>
 									<Textarea
 										id="extracted-text-display"
 										value={fileInfo.extractedText.substring(0, 200) + (fileInfo.extractedText.length > 200 ? `... (еще ${fileInfo.extractedText.length - 200} символов)` : '')}
 										readonly
 										rows={5}
-										class="extracted-text-preview"
+										class="bg-muted border border-border text-sm leading-relaxed max-h-[12.5rem] overflow-y-auto whitespace-pre-wrap break-words"
 									/>
 								</div>
 							{/if}
@@ -537,15 +537,15 @@
 			</Card>
 
 			{#if statusInfo.status === 'completed' || statusInfo.status === 'processing'}
-				<Card class="section final-abbreviation">
+				<Card class="mb-8 last:mb-0 bg-primary/10 border-2 border-primary">
 					<CardContent>
-						<h3>Результаты обработки</h3>
-						<div class="form-group mt-4">
+						<h3 class="m-0 mb-4 text-lg font-semibold text-foreground">Результаты обработки</h3>
+						<div class="mb-4 mt-4">
 							<label for="final-abbreviation" class="block text-sm font-medium mb-2">Финальное обозначение продукции:</label>
 							{#if getFinalAbbreviation()}
-								<div id="final-abbreviation" class="abbreviation-value">{getFinalAbbreviation()}</div>
+								<div id="final-abbreviation" class="text-xl font-semibold text-primary mt-2">{getFinalAbbreviation()}</div>
 							{:else}
-								<div id="final-abbreviation" class="abbreviation-empty">Аббревиатура не сформирована</div>
+								<div id="final-abbreviation" class="text-base text-muted-foreground mt-2 italic">Аббревиатура не сформирована</div>
 							{/if}
 						</div>
 					</CardContent>
@@ -583,91 +583,8 @@
 		overflow-y: auto;
 	}
 
-	.error-section {
-		padding: 1rem;
-	}
-
-	.details-content {
-		padding: 1.5rem;
-	}
-
-	.header {
-		margin-bottom: 1.5rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.header-actions {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-		flex-wrap: nowrap;
-	}
-
-	.header-actions :global(button) {
+	:global(.header-actions button) {
 		flex-shrink: 0;
 		white-space: nowrap;
-	}
-
-	.header h2 {
-		margin: 0;
-		font-size: 1.5rem;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-	}
-
-	:global(.section) {
-		margin-bottom: 2rem;
-	}
-
-	:global(.section:last-child) {
-		margin-bottom: 0;
-	}
-
-	:global(.section h3) {
-		margin: 0 0 1rem 0;
-		font-size: 1.125rem;
-		font-weight: 600;
-		color: hsl(var(--foreground));
-	}
-
-	.form-group {
-		margin-bottom: 1rem;
-	}
-
-	.operations-list {
-		width: 100%;
-		margin-top: 0.5rem;
-	}
-
-	:global(.final-abbreviation) {
-		background: hsl(var(--primary) / 0.1);
-		border: 2px solid hsl(var(--primary));
-	}
-
-	.abbreviation-value {
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: hsl(var(--primary));
-		margin-top: 0.5rem;
-	}
-
-	.abbreviation-empty {
-		font-size: 1rem;
-		color: hsl(var(--muted-foreground));
-		margin-top: 0.5rem;
-		font-style: italic;
-	}
-
-	.extracted-text-preview {
-		background: hsl(var(--muted));
-		border: 1px solid hsl(var(--border));
-		font-size: 0.875rem;
-		line-height: 1.5;
-		max-height: 12.5rem;
-		overflow-y: auto;
-		white-space: pre-wrap;
-		word-wrap: break-word;
 	}
 </style>

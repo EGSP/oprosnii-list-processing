@@ -161,15 +161,15 @@
 	$: canRun = canRunOperation();
 </script>
 
-<div class="operation-badge">
-	<div class="badge-header">
-		<div class="badge-label">
-			<span class="operation-type">{getOperationTypeLabel()}:</span>
+<div class="bg-card border border-border rounded-md mb-3 overflow-hidden transition-shadow hover:shadow-sm">
+	<div class="flex justify-between items-center px-4 py-3">
+		<div class="flex items-center gap-2 flex-1">
+			<span class="font-medium text-foreground">{getOperationTypeLabel()}:</span>
 			<Badge variant={getStatusVariant()}>
 				{getStatusLabel()}
 			</Badge>
 		</div>
-		<div class="badge-actions">
+		<div class="flex items-center gap-2 ml-2 flex-nowrap">
 			{#if canRun}
 				<Button
 					size="sm"
@@ -225,9 +225,9 @@
 	{#if hasContent}
 		<Accordion type="single" collapsible>
 			<AccordionItem value="details">
-				<AccordionTrigger>Детали операции</AccordionTrigger>
+				<AccordionTrigger class="px-4">Детали операции</AccordionTrigger>
 				<AccordionContent>
-					<pre class="result-json">{getOperationData()}</pre>
+					<pre class="m-0 p-4 text-sm font-mono text-foreground whitespace-pre-wrap break-words overflow-x-auto bg-muted rounded-md">{getOperationData()}</pre>
 				</AccordionContent>
 			</AccordionItem>
 		</Accordion>
@@ -256,62 +256,8 @@
 </div>
 
 <style>
-	.operation-badge {
-		background: hsl(var(--card));
-		border: 1px solid hsl(var(--border));
-		border-radius: 0.5rem;
-		margin-bottom: 0.75rem;
-		overflow: hidden;
-		transition: box-shadow 0.2s ease;
-	}
-
-	.operation-badge:hover {
-		box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.1);
-	}
-
-	.badge-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.75rem 1rem;
-	}
-
-	.badge-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex: 1;
-	}
-
-	.badge-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-left: 0.5rem;
-		flex-wrap: nowrap;
-	}
-
-	.badge-actions :global(button) {
+	:global(.badge-actions button) {
 		flex-shrink: 0;
 		white-space: nowrap;
-	}
-
-	.operation-type {
-		font-weight: 500;
-		color: hsl(var(--foreground));
-	}
-
-	.result-json {
-		margin: 0;
-		padding: 0;
-		font-size: 0.875rem;
-		font-family: 'IBM Plex Mono', 'Courier New', monospace;
-		color: hsl(var(--foreground));
-		white-space: pre-wrap;
-		word-wrap: break-word;
-		overflow-x: auto;
-		background: hsl(var(--muted));
-		padding: 1rem;
-		border-radius: 0.5rem;
 	}
 </style>
