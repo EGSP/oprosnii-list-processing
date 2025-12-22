@@ -20,7 +20,7 @@
 <div
 	role="alert"
 	class={cn(
-		"relative w-full rounded-lg border p-4",
+		"relative w-full rounded-none border p-4",
 		{
 			"bg-background text-foreground": variant === "default",
 			"border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive": variant === "destructive"

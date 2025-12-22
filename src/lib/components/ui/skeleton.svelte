@@ -10,7 +10,7 @@
 	let { class: className = "", children }: $$Props = $props();
 </script>
 
-<div class={cn("animate-pulse rounded-md bg-muted", className)}>
+<div class={cn("animate-pulse rounded-none bg-muted", className)}>
 	{@render children?.()}
 </div>
 

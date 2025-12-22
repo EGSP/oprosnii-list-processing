@@ -350,7 +350,7 @@
 						<span>{error}</span>
 						<button
 							onclick={() => error = null}
-							class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+							class="ml-4 rounded-none opacity-70 focus:outline-none focus:ring-2 focus:ring-ring"
 							aria-label="Закрыть"
 						>
 							<X class="h-4 w-4" />
@@ -422,7 +422,7 @@
 								<span>{error}</span>
 								<button
 									onclick={() => error = null}
-									class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+									class="ml-4 rounded-none opacity-70 focus:outline-none focus:ring-2 focus:ring-ring"
 									aria-label="Закрыть"
 								>
 									<X class="h-4 w-4" />

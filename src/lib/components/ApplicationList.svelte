@@ -175,7 +175,7 @@
 						<span>{error}</span>
 						<button
 							onclick={() => error = null}
-							class="ml-4 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring"
+							class="ml-4 rounded-none opacity-70 focus:outline-none focus:ring-2 focus:ring-ring"
 							aria-label="Закрыть"
 						>
 							<X class="h-4 w-4" />
@@ -205,7 +205,7 @@
 						class:selected={selectedId === statusInfo.application.id}
 						onclick={() => selectApplication(statusInfo.application.id)}
 					>
-						<Card class="cursor-pointer hover:bg-accent transition-colors">
+						<Card class="cursor-pointer">
 							<div class="flex flex-col items-start p-4 text-left w-full">
 								<div class="font-medium text-foreground mb-2 break-words w-full">{statusInfo.application.originalFilename}</div>
 								<div class="flex justify-between items-center w-full text-sm gap-2">
@@ -232,7 +232,7 @@
 		border-right: 1px solid hsl(var(--border));
 	}
 
-	:global(.application-item.selected div[class*="rounded-lg"]) {
+	:global(.application-item.selected div[class*="rounded-none"]) {
 		background: hsl(var(--accent));
 		border-left: 3px solid hsl(var(--primary));
 	}

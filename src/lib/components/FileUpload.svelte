@@ -106,18 +106,16 @@
 		cursor: pointer;
 	}
 
-	:global(.file-upload-container div[class*="rounded-lg"]) {
-		border: 2px dashed hsl(var(--border));
-		border-radius: 0.5rem;
-		transition: all 0.2s ease;
+	:global(.file-upload-container div[class*="rounded-none"]) {
+		border: 1px dashed hsl(var(--border));
 	}
 
-	.file-upload-container:hover :global(div[class*="rounded-lg"]) {
+	.file-upload-container:hover :global(div[class*="rounded-none"]) {
 		border-color: hsl(var(--primary));
 		background: hsl(var(--accent));
 	}
 
-	.file-upload-container.dragging :global(div[class*="rounded-lg"]) {
+	.file-upload-container.dragging :global(div[class*="rounded-none"]) {
 		border-color: hsl(var(--primary));
 		background: hsl(var(--accent));
 	}

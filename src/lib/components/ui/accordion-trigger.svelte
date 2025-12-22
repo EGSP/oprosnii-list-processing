@@ -19,13 +19,13 @@
 <Accordion.Header>
 	<Accordion.Trigger
 		class={cn(
-			"flex flex-1 items-center justify-between py-4 font-medium transition-all hover:underline [&[data-state=open]>svg]:rotate-180",
+			"flex flex-1 items-center justify-between py-4 font-medium [&[data-state=open]>svg]:rotate-180",
 			className
 		)}
 		{...restProps}
 	>
 		{@render children?.()}
-		<ChevronDown class="h-4 w-4 shrink-0 transition-transform duration-200" />
+		<ChevronDown class="h-4 w-4 shrink-0" />
 	</Accordion.Trigger>
 </Accordion.Header>
 

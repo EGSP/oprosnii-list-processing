@@ -15,7 +15,7 @@
 	}: $$Props = $props();
 </script>
 
-<div class={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...restProps}>
+<div class={cn("rounded-none border bg-card text-card-foreground", className)} {...restProps}>
 	{@render children?.()}
 </div>
 

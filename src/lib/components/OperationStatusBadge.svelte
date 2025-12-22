@@ -161,7 +161,7 @@
 	$: canRun = canRunOperation();
 </script>
 
-<div class="bg-card border border-border rounded-md mb-3 overflow-hidden transition-shadow hover:shadow-sm">
+<div class="bg-card border border-border rounded-none mb-3 overflow-hidden">
 	<div class="flex justify-between items-center px-4 py-3">
 		<div class="flex items-center gap-2 flex-1">
 			<span class="font-medium text-foreground">{getOperationTypeLabel()}:</span>
@@ -227,7 +227,7 @@
 			<AccordionItem value="details">
 				<AccordionTrigger class="px-4">Детали операции</AccordionTrigger>
 				<AccordionContent>
-					<pre class="m-0 p-4 text-sm font-mono text-foreground whitespace-pre-wrap break-words overflow-x-auto bg-muted rounded-md">{getOperationData()}</pre>
+					<pre class="m-0 p-4 text-sm font-mono text-foreground whitespace-pre-wrap break-words overflow-x-auto bg-muted rounded-none">{getOperationData()}</pre>
 				</AccordionContent>
 			</AccordionItem>
 		</Accordion>
