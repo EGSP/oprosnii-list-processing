@@ -1,24 +1,18 @@
 <script lang="ts">
+	import { getContext } from "svelte";
 	import { cn } from "$lib/utils/cn";
-	import { Dialog } from "bits-ui";
 	import type { Snippet } from "svelte";
 
-	interface $$Props extends Dialog.TitleProps {
+	interface $$Props {
 		class?: string;
 		children?: Snippet;
 	}
 
-	let {
-		class: className = "",
-		children,
-		...restProps
-	}: $$Props = $props();
+	let { class: className = "", children }: $$Props = $props();
+
+	const { titleId } = getContext<{ titleId: string }>("dialog");
 </script>
 
-<Dialog.Title
-	class={cn("text-lg font-semibold leading-none tracking-tight", className)}
-	{...restProps}
->
+<h2 id={titleId} class={cn("text-lg font-semibold leading-none tracking-tight", className)}>
 	{@render children?.()}
-</Dialog.Title>
-
+</h2>

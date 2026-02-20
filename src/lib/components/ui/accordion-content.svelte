@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Accordion } from "bits-ui";
+	import { getContext } from "svelte";
 	import { cn } from "$lib/utils/cn";
 	import type { Snippet } from "svelte";
 
@@ -8,22 +8,23 @@
 		children?: Snippet;
 	}
 
-	let {
-		class: className = "",
-		children,
-		...restProps
-	}: $$Props = $props();
+	let { class: className = "", children }: $$Props = $props();
+
+	const accordion = getContext<{
+		openValues: import("svelte/store").Writable<string[]>;
+	}>("accordion");
+	const { value } = getContext<{ value: string }>("accordion-item");
+	const openValues = accordion.openValues;
+
+	const isOpen = $derived($openValues.includes(value));
 </script>
 
-<Accordion.Content
-	class={cn(
-		"overflow-hidden text-sm data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down",
-		className
-	)}
-	{...restProps}
->
-	<div class="pb-4 pt-0">
-		{@render children?.()}
+{#if isOpen}
+	<div
+		class={cn("overflow-hidden text-sm", className)}
+	>
+		<div class="pb-4 pt-0">
+			{@render children?.()}
+		</div>
 	</div>
-</Accordion.Content>
-
+{/if}
