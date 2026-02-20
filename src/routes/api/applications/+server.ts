@@ -1,14 +1,12 @@
-import { json } from '@sveltejs/kit';
+import { error, fail, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { createApplication, getApplications } from '$lib/storage/index.js';
-import { storeFile } from '$lib/storage/index.js';
+import { DB, saveUploadedFile } from '$lib/storage/index.js';
 import {
-    handleStorageError,
-    parseApplicationFilters,
-    validateFileSize,
-    validateFileType
+	validateFileSize,
+	validateFileType
 } from '$lib/api/utils.js';
 import { Effect } from 'effect';
+import { createApplication, getApplications, type ApplicationGetProperties } from '$lib/storage/applications.js';
 
 /**
  * POST /api/applications - Загрузка файла заявки
@@ -41,15 +39,14 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Создаем заявку в БД и сохраняем файл
 	const application = await Effect.runPromise(
 		Effect.gen(function* () {
-			const app = yield* createApplication(file.name);
-			yield* storeFile(buffer, app.id, file.name);
-			return app;
+			const application = yield* createApplication(file.name);
+			yield* saveUploadedFile(buffer, application.id, file.name);
+			return application;
 		})
-	).catch((error) => handleStorageError(error));
-	
-	if (application instanceof Response) {
-		return application;
-	}
+	).catch((error) => new Error(error.message));
+
+	if (application instanceof Error)
+		return json({ error: application.message }, { status: 500 });
 
 	// Возвращаем ответ
 	return json(
@@ -65,24 +62,16 @@ export const POST: RequestHandler = async ({ request }) => {
 /**
  * GET /api/applications - Список заявок
  */
-export const GET: RequestHandler = async (event) => {
-    // Парсим фильтры из query параметров
-    const filters = parseApplicationFilters(event);
-    if (filters.error) {
-        return filters.error;
-    }
+export const GET: RequestHandler = async ({ request }) => {
 
-    // Получаем список заявок
-    const applications = await Effect.runPromise(
-        getApplications({
-            endDate: filters.endDate,
-            productType: filters.productType
-        })
-    ).catch((error) => handleStorageError(error));
+	const applicationGetParameters = await request.json() as ApplicationGetProperties;
 
-    if (applications instanceof Response) {
-        return applications;
-    }
+	// Получаем список заявок
+	const applications = await Effect.runPromise(getApplications(applicationGetParameters))
+		.catch((error) => new Error(error.message));
 
-    return json(applications);
+	if (applications instanceof Error)
+		return error(500, applications.message);
+
+	return json(applications);
 };

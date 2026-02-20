@@ -4,11 +4,10 @@
 		getApplications,
 		uploadApplication,
 		getApplicationStatusInfo
-	} from '$lib/business/rest.js';
+	} from '../../routes/api/rest.js';
 	import type { Application, ApplicationStatusInfo } from '$lib/business/types.js';
 	import FileUpload from './FileUpload.svelte';
 	import EmptyState from './EmptyState.svelte';
-	import { createEventDispatcher } from 'svelte';
 	import { Effect, Option } from 'effect';
 	import Card from '$lib/components/ui/card.svelte';
 	import Badge from '$lib/components/ui/badge.svelte';
@@ -18,59 +17,51 @@
 	import AlertDescription from '$lib/components/ui/alert-description.svelte';
 	import { X } from 'lucide-svelte';
 
-	const dispatch = createEventDispatcher<{
-		select: { application: Application };
-		upload: { application: Application };
-		error: { message: string };
-	}>();
+	let { select, upload } = $props();
 
-	let applicationsStatusInfo: ApplicationStatusInfo[] = [];
-	let selectedId: string | null = null;
-	let isLoading = false;
-	let error: string | null = null;
+	let selectedApplicationId: string | undefined = $state(undefined);
+	let isLoadingApplications = $state(false);
+	let errors: string[] | undefined = $state(undefined);
 
 	onMount(() => {
 		loadApplications();
 	});
 
 	async function loadApplications() {
-		isLoading = true;
-		error = null;
-		const result = await Effect.runPromise(
-			Effect.gen(function* () {
-				const applications = yield* getApplications();
-				const statusInfos = yield* Effect.all(
-					applications.map((app) =>
-						Effect.gen(function* () {
-							const statusInfo = yield* Effect.option(getApplicationStatusInfo(app.id));
-							if (Option.isSome(statusInfo)) {
-								return statusInfo.value;
-							}
-							// Если не удалось загрузить статус, создаем базовую информацию
-							return {
-								application: app,
-								status: 'nothing' as const,
-								operations: []
-							};
-						})
-					)
-				);
-				return statusInfos.filter((info): info is ApplicationStatusInfo => info !== null);
-			})
-		).catch((err) => {
-			error = err instanceof Error ? err.message : 'Ошибка загрузки заявок';
-			isLoading = false;
-			return null;
+		isLoadingApplications = true;
+		errors = undefined;
+
+		const result = await Effect.gen(function* () {
+			const applications = yield* getApplications({options: {simplify: true}});
+			const statusInfos = yield* Effect.all(
+				applications.map((app) =>
+					Effect.gen(function* () {
+						const statusInfo = yield* Effect.option(getApplicationStatusInfo(app.id));
+						if (Option.isSome(statusInfo)) {
+							return statusInfo.value;
+						}
+						// Если не удалось загрузить статус, создаем базовую информацию
+						return {
+							application: app,
+							status: 'nothing' as const,
+							operations: []
+						};
+					})
+				)
+			);
+			return statusInfos.filter((info): info is ApplicationStatusInfo => info !== null);
 		});
 
 		if (result) {
 			applicationsStatusInfo = result;
 			// Сортируем по дате загрузки (сверху самая поздняя)
 			applicationsStatusInfo.sort(
-				(a, b) => new Date(b.application.uploadDate).getTime() - new Date(a.application.uploadDate).getTime()
+				(a, b) =>
+					new Date(b.application.uploadDate).getTime() -
+					new Date(a.application.uploadDate).getTime()
 			);
 		}
-		isLoading = false;
+		isLoadingApplications = false;
 	}
 
 	function handleUpload(event: CustomEvent<{ file: File }>) {
@@ -79,11 +70,11 @@
 	}
 
 	async function uploadFile(file: File) {
-		isLoading = true;
+		isLoadingApplications = true;
 		error = null;
 		const newApplication = await Effect.runPromise(uploadApplication(file)).catch((err) => {
 			error = err instanceof Error ? err.message : 'Ошибка загрузки файла';
-			isLoading = false;
+			isLoadingApplications = false;
 			return null;
 		});
 
@@ -101,7 +92,7 @@
 			selectApplication(uploadedStatusInfo.application.id);
 			dispatch('upload', { application: uploadedStatusInfo.application });
 		}
-		isLoading = false;
+		isLoadingApplications = false;
 	}
 
 	function handleError(event: CustomEvent<{ message: string }>) {
@@ -110,7 +101,7 @@
 	}
 
 	function selectApplication(id: string) {
-		selectedId = id;
+		selectedApplicationId = id;
 		const statusInfo = applicationsStatusInfo.find((info) => info.application.id === id);
 		if (statusInfo) {
 			dispatch('select', { application: statusInfo.application });
@@ -142,7 +133,9 @@
 		}
 	}
 
-	function getStatusVariant(status: ApplicationStatusInfo['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
+	function getStatusVariant(
+		status: ApplicationStatusInfo['status']
+	): 'default' | 'secondary' | 'destructive' | 'outline' {
 		switch (status) {
 			case 'completed':
 				return 'default';
@@ -174,7 +167,7 @@
 					<div class="flex items-center justify-between">
 						<span>{error}</span>
 						<button
-							onclick={() => error = null}
+							onclick={() => (error = null)}
 							class="ml-4 rounded-none opacity-70 focus:outline-none focus:ring-2 focus:ring-ring"
 							aria-label="Закрыть"
 						>
@@ -187,7 +180,7 @@
 	{/if}
 
 	<div class="flex-1 overflow-y-auto">
-		{#if isLoading}
+		{#if isLoadingApplications}
 			<div class="flex justify-center items-center p-4">
 				<div class="flex flex-col gap-2 w-full px-3">
 					<Skeleton class="h-12 w-full" />
@@ -203,13 +196,17 @@
 					<button
 						type="button"
 						class="application-item"
-						class:selected={selectedId === statusInfo.application.id}
+						class:selected={selectedApplicationId === statusInfo.application.id}
 						onclick={() => selectApplication(statusInfo.application.id)}
 					>
 						<div class="flex flex-col items-start px-3 py-2 text-left w-full">
-							<div class="font-medium text-sm text-foreground mb-1 break-words w-full">{statusInfo.application.originalFilename}</div>
+							<div class="font-medium text-sm text-foreground mb-1 break-words w-full">
+								{statusInfo.application.originalFilename}
+							</div>
 							<div class="flex justify-between items-center w-full text-xs gap-2">
-								<span class="text-muted-foreground">{formatDate(statusInfo.application.uploadDate)}</span>
+								<span class="text-muted-foreground"
+									>{formatDate(statusInfo.application.uploadDate)}</span
+								>
 								<Badge variant={getStatusVariant(statusInfo.status)}>
 									{getStatusText(statusInfo.status)}
 								</Badge>

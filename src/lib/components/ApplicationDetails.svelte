@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getApplicationStatusInfo, getFileInfo, fetchApplication, extractText, resolveProductType, resolveAbbreviation } from '$lib/business/rest.js';
+	import { getApplicationStatusInfo, getFileInfo, fetchApplication, extractText, resolveProductType, resolveAbbreviation } from '../../routes/api/rest.js';
 	import type { ApplicationStatusInfo, ProcessingOperation } from '$lib/business/types.js';
 	import EmptyState from './EmptyState.svelte';
 	import OperationStatusBadge from './OperationStatusBadge.svelte';

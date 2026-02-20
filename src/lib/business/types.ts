@@ -71,7 +71,7 @@ export const ApplicationSchema = z.looseObject({
 	originalFilename: z.string(),
 	uploadDate: z.iso.datetime(),
 
-	operations: z.array(ProcessingOperationSchema),
+	operations: z.array(ProcessingOperationSchema).optional(),
 
 	productType: ProductTypeSchema.nullable().optional(),
 	abbreviation: AbbreviationSchema.nullable().optional(),

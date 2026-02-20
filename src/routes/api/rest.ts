@@ -4,7 +4,6 @@
 
 import type {
 	Application,
-	ApplicationFilters,
 	ApplicationStatusInfo,
 	ProcessingOperation
 } from '$lib/business/types.js';
@@ -14,6 +13,7 @@ import { fetchStable } from '$lib/utils/fetchStable.js';
 import { responseToZodSchema } from '$lib/utils/zod.js';
 import type { FileInfo } from '$lib/storage/files';
 import { z } from 'zod';
+import type { ApplicationGetProperties } from '$lib/storage/applications';
 
 /**
  * Базовый URL для API (в SvelteKit это относительные пути)
@@ -70,17 +70,12 @@ export function uploadApplication(file: File): Effect.Effect<CreateApplicationRe
 /**
  * Получение списка заявок
  */
-export function getApplications(filters?: ApplicationFilters): Effect.Effect<Application[], Error> {
-	const params = new URLSearchParams();
-	if (filters?.endDate) {
-		params.append('endDate', filters.endDate.toISOString());
-	}
-	if (filters?.productType) {
-		params.append('productType', filters.productType);
-	}
+export function getApplications(properties: ApplicationGetProperties): Effect.Effect<Application[], Error> {
 
-	const url = `${API_BASE}/applications${params.toString() ? `?${params.toString()}` : ''}`;
-	return fetchStableJson<Application[]>(url);
+	return fetchStableJson<Application[]>(`${API_BASE}/applications`, {
+		method: 'GET',
+		body: JSON.stringify(properties)
+	});
 }
 
 /**
