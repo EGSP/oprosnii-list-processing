@@ -28,7 +28,7 @@ export const config = {
 	instructionsDirectory: 'data/instructions',
 
 	// Путь к базе данных
-	dbPath: 'data/db/applications.db',
+	dbPath: 'data/db/applications.json',
 
 	// Путь к хранилищу файлов заявок
 	uploadsDirectory: 'data/uploads'

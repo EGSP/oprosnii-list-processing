@@ -39,73 +39,52 @@ export const AbbreviationSchema = z.object({
 export type Abbreviation = z.infer<typeof AbbreviationSchema>;
 
 /**
- * Схема валидации для заявки
- */
-export const ApplicationSchema = z.object({
-	id: z.string().uuid(),
-	originalFilename: z.string(),
-	productType: ProductTypeSchema.nullable().optional(),
-	abbreviation: AbbreviationSchema.nullable().optional(),
-	uploadDate: z.string().datetime(),
-	deleted: z.boolean().optional().default(false)
-});
-
-export type Application = z.infer<typeof ApplicationSchema>;
-
-/**
- * Фильтры для списка заявок
- */
-export interface ApplicationFilters {
-	endDate?: Date;
-	productType?: string;
-	includeDeleted?: boolean;
-}
-
-/**
- * Обновления для заявки
- */
-export type ApplicationUpdate = Partial<
-	Pick<Application, 'productType' | 'abbreviation'>
->;
-
-/**
  * Типы операций обработки
  */
-export type ProcessingOperationTask = z.infer<typeof ProcessingOperationTaskSchema>;
 export const ProcessingOperationTaskSchema = z.enum(['extractText', 'resolveProductType', 'resolveAbbreviation']);
+export type ProcessingOperationTask = z.infer<typeof ProcessingOperationTaskSchema>;
+export const ProcessingOperationStatusSchema = z.object({
+	name: z.enum(['started', 'completed', 'failed']),
+	date: z.iso.datetime()
+});
 export type ProcessingOperationStatus = z.infer<typeof ProcessingOperationStatusSchema>;
-export const ProcessingOperationStatusSchema = z.enum(['started', 'completed', 'failed']);
+
+export const ProcessingOperationTagsSchema = z.enum(['deleted']);
+export type ProcessingOperationTags = z.infer<typeof ProcessingOperationTagsSchema>;
 
 export type ProcessingOperation = z.infer<typeof ProcessingOperationSchema>;
-/**
- * Схема валидации для операции обработки
- */
-export const ProcessingOperationSchema = z.object({
-	id: z.string().uuid(),
-	applicationId: z.string().uuid(),
+export const ProcessingOperationSchema = z.looseObject({
+	id: z.uuid(),
+	applicationId: z.uuid(),
+
 	task: ProcessingOperationTaskSchema,
 	status: ProcessingOperationStatusSchema,
-	data: z.object({
-		result: z.unknown().optional(),
-		service: z.string().optional()
-	}).passthrough(),
-	startDate: z.string().datetime().describe('Дата и время начала операции'),
-	finishDate: z.string().datetime().nullable().optional().describe('Дата и время окончания операции'),
-	deleted: z.boolean().optional().default(false)
-}).describe('Операция обработки');
 
-/**
- * Обновления для операции обработки
- */
-export type ProcessingOperationUpdate = Partial<
-	Pick<ProcessingOperation, 'status' | 'data' | 'finishDate'>
->;
+	tags: z.array(ProcessingOperationTagsSchema).optional()
+});
+
+
+export const ApplicationTagsSchema = z.enum(['deleted']);
+export type ApplicationTags = z.infer<typeof ApplicationTagsSchema>;
+export const ApplicationSchema = z.looseObject({
+	id: z.uuid(),
+	originalFilename: z.string(),
+	uploadDate: z.iso.datetime(),
+
+	operations: z.array(ProcessingOperationSchema),
+
+	productType: ProductTypeSchema.nullable().optional(),
+	abbreviation: AbbreviationSchema.nullable().optional(),
+
+	tags: z.array(ApplicationTagsSchema).optional()
+});
+export type Application = z.infer<typeof ApplicationSchema>;
+
 
 /// META TYPES
-
 export const ApplicationStatusInfoSchema = z.object({
 	application: ApplicationSchema,
-	status: z.enum(['nothing','processing', 'completed', 'failed']),
+	status: z.enum(['nothing', 'processing', 'completed', 'failed']),
 	operations: z.array(ProcessingOperationSchema).optional()
 }).describe('Информация о статусе обработки заявки');
 export type ApplicationStatusInfo = z.infer<typeof ApplicationStatusInfoSchema>;

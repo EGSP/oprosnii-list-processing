@@ -10,7 +10,6 @@ import { config } from '../config.js';
 import { FileStorageError } from './errors.js';
 import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
-import { findOperations, getOperation } from './processingOperations.js';
 import { Effect, pipe } from 'effect';
 import { getOCRData } from '$lib/ai/ocr.js';
 
