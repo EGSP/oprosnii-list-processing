@@ -34,7 +34,7 @@ function isNetworkError(error: unknown): boolean {
 export function fetchStable(
 	url: string,
 	options: RequestInit,
-	timeout: number = 30000,
+	timeout: number = 3000,
 	maxRetries: number = 2,
 	retryDelay: number = 1000
 ): Effect.Effect<Response, Error> {
