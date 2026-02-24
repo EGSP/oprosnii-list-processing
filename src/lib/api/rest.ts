@@ -9,10 +9,8 @@ import type {
 } from '$lib/business/types.js';
 import type { CreateApplicationResponse } from '$lib/api/types.js';
 import { Effect } from 'effect';
-import { fetchStable } from '$lib/utils/fetchStable.js';
-import { responseToZodSchema } from '$lib/utils/zod.js';
+import { fetchJson, fetchStable } from '$lib/utils/fetchStable.js';
 import type { FileInfo } from '$lib/storage/files';
-import { z } from 'zod';
 import type { ApplicationGetProperties } from '$lib/storage/applications';
 
 /**
@@ -20,62 +18,22 @@ import type { ApplicationGetProperties } from '$lib/storage/applications';
  */
 const API_BASE = '/api';
 
-/**
- * Обертка над fetchStable для работы с JSON API
- * Обрабатывает сетевые ошибки, проверяет HTTP статус и парсит JSON
- */
-function fetchStableJson<T>(url: string, options: RequestInit = {}, schema?: z.ZodType<T>): Effect.Effect<T, Error> {
-	return Effect.gen(function* () {
-		const response = yield* fetchStable(url, options);
 
-		if (!response.ok) {
-			const errorText = yield* Effect.tryPromise({
-				try: async () => {
-					const errorData: { error?: string } = await response.json().catch(() => ({}));
-					return errorData.error || `HTTP ${response.status}: ${response.statusText}`;
-				},
-				catch: (error) => new Error(`HTTP ${response.status}: ${response.statusText}`)
-			}).pipe(
-				Effect.map((text) => new Error(text))
-			);
-			return yield* Effect.fail(errorText);
-		}
-
-		if (schema) {
-			return yield* responseToZodSchema(response, schema);
-		}
-
-		const data = yield* Effect.tryPromise({
-			try: () => response.json(),
-			catch: (error) => new Error(`Failed to parse JSON: ${error instanceof Error ? error.message : String(error)}`)
+export const Applications = {
+	upload: (file: File): Effect.Effect<CreateApplicationResponse, Error> => {
+		const formData = new FormData();
+		formData.append('file', file);
+		return fetchJson(`${API_BASE}/applications?method=upload`, {
+			method: 'POST',
+			body: formData
 		});
-
-		return data as T;
-	});
-}
-
-/**
- * Загрузка файла заявки
- */
-export function uploadApplication(file: File): Effect.Effect<CreateApplicationResponse, Error> {
-	const formData = new FormData();
-	formData.append('file', file);
-
-	return fetchStableJson<CreateApplicationResponse>(`${API_BASE}/applications`, {
-		method: 'POST',
-		body: formData
-	});
-}
-
-/**
- * Получение списка заявок
- */
-export function getApplications(properties: ApplicationGetProperties): Effect.Effect<Application[], Error> {
-
-	return fetchStableJson<Application[]>(`${API_BASE}/applications`, {
-		method: 'GET',
-		body: JSON.stringify(properties)
-	});
+	},
+	get: (properties: ApplicationGetProperties): Effect.Effect<Application[], Error> => {
+		return fetchJson(`${API_BASE}/applications?method=get`, {
+			method: 'POST',
+			body: JSON.stringify(properties)
+		});
+	}
 }
 
 /**

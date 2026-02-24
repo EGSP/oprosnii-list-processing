@@ -1,25 +1,24 @@
 <script lang="ts">
 	import ApplicationList from '$lib/components/ApplicationList.svelte';
-	import ApplicationDetails from '$lib/components/ApplicationDetails.svelte';
 	import type { Application } from '$lib/business/types.js';
 
 	let selectedApplication: Application | null = null;
 
-	function handleSelect(event: CustomEvent<{ application: Application }>) {
-		selectedApplication = event.detail.application;
+	function handleSelect(application: Application) {
+		selectedApplication = application;
 	}
 
-	function handleUpload(event: CustomEvent<{ application: Application }>) {
-		selectedApplication = event.detail.application;
+	function handleUpload(application: Application) {
+		selectedApplication =application;
 	}
 </script>
 
 <div class="main-layout">
 	<div class="left-panel">
-		<ApplicationList on:select={handleSelect} on:upload={handleUpload} />
+		<ApplicationList select={handleSelect} upload={handleUpload} />
 	</div>
 	<div class="right-panel">
-		<ApplicationDetails applicationId={selectedApplication?.id || null} />
+		<!-- <ApplicationDetails applicationId={selectedApplication?.id || null} /> -->
 	</div>
 </div>
 

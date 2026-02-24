@@ -6,31 +6,42 @@ import {
 	validateFileType
 } from '$lib/api/utils.js';
 import { Effect } from 'effect';
-import { createApplication, getApplications, type ApplicationGetProperties } from '$lib/storage/applications.js';
+import { ApplicationsDB, type ApplicationGetProperties } from '$lib/storage/applications.js';
+import { StatusCodes } from 'http-status-codes';
 
 /**
  * POST /api/applications - Загрузка файла заявки
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ url, request }) => {
+
+	const method = url.searchParams.get('method');
+	if (method === 'upload') {
+		return await UPLOAD_HANDLER(request);
+	} else if (method === 'get') {
+		return await GET_HANDLER(request);
+	}
+
+	return error(StatusCodes.BAD_REQUEST, 'Неизвестный метод');
+};
+
+
+const UPLOAD_HANDLER = async (request: Request) => {
 	// Получаем данные формы
 	const formData = await request.formData();
 	const file = formData.get('file') as File | null;
 
-	if (!file) {
-		return json({ error: 'Файл не указан' }, { status: 400 });
-	}
+	if (!file)
+		return error(StatusCodes.BAD_REQUEST, 'Файл не указан');
 
 	// Валидация типа файла
 	const fileTypeError = validateFileType(file.type);
-	if (fileTypeError) {
+	if (fileTypeError)
 		return fileTypeError;
-	}
 
 	// Валидация размера файла
 	const fileSizeError = validateFileSize(file.size);
-	if (fileSizeError) {
+	if (fileSizeError)
 		return fileSizeError;
-	}
 
 	// Конвертируем File в Buffer
 	const arrayBuffer = await file.arrayBuffer();
@@ -39,14 +50,14 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Создаем заявку в БД и сохраняем файл
 	const application = await Effect.runPromise(
 		Effect.gen(function* () {
-			const application = yield* createApplication(file.name);
+			const application = yield* ApplicationsDB.create(file.name);
 			yield* saveUploadedFile(buffer, application.id, file.name);
 			return application;
 		})
 	).catch((error) => new Error(error.message));
 
 	if (application instanceof Error)
-		return json({ error: application.message }, { status: 500 });
+		return error(StatusCodes.INTERNAL_SERVER_ERROR, application.message);
 
 	// Возвращаем ответ
 	return json(
@@ -55,23 +66,23 @@ export const POST: RequestHandler = async ({ request }) => {
 			originalFilename: application.originalFilename,
 			uploadDate: application.uploadDate
 		},
-		{ status: 201 }
+		{ status: StatusCodes.CREATED }
 	);
 };
 
 /**
  * GET /api/applications - Список заявок
  */
-export const GET: RequestHandler = async ({ request }) => {
+const GET_HANDLER = async (request: Request) => {
 
 	const applicationGetParameters = await request.json() as ApplicationGetProperties;
 
 	// Получаем список заявок
-	const applications = await Effect.runPromise(getApplications(applicationGetParameters))
+	const applications = await Effect.runPromise(ApplicationsDB.get(applicationGetParameters))
 		.catch((error) => new Error(error.message));
 
 	if (applications instanceof Error)
-		return error(500, applications.message);
+		return error(StatusCodes.INTERNAL_SERVER_ERROR, applications.message);
 
-	return json(applications);
+	return json(applications, { status: StatusCodes.OK });
 };

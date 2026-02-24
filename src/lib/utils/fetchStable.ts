@@ -12,38 +12,13 @@ function isNetworkError(error: unknown): boolean {
 		error instanceof TypeError ||
 		error instanceof DOMException ||
 		(error instanceof Error &&
-			(error.message.includes('fetch') ||
+			(
+				error.message.includes('fetch') ||
 				error.message.includes('network') ||
 				error.message.includes('timeout') ||
-				error.message.includes('aborted')))
+				error.message.includes('aborted')
+			))
 	);
-}
-
-/**
- * Выполняет fetch запрос с таймаутом
- */
-function fetchWithTimeout(
-	url: string,
-	options: RequestInit,
-	timeout: number
-): Effect.Effect<Response, Error> {
-	return Effect.tryPromise({
-		try: async () => {
-			const controller = new AbortController();
-			const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-			try {
-				const response = await fetch(url, {
-					...options,
-					signal: controller.signal
-				});
-				return response;
-			} finally {
-				clearTimeout(timeoutId);
-			}
-		},
-		catch: (error) => (error instanceof Error ? error : new Error(String(error)))
-	});
 }
 
 /**
@@ -63,7 +38,23 @@ export function fetchStable(
 	maxRetries: number = 2,
 	retryDelay: number = 1000
 ): Effect.Effect<Response, Error> {
-	const fetchEffect = fetchWithTimeout(url, options, timeout);
+	const fetchEffect = Effect.tryPromise({
+		try: async () => {
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+			try {
+				const response = await fetch(url, {
+					...options,
+					signal: controller.signal
+				});
+				return response;
+			} finally {
+				clearTimeout(timeoutId);
+			}
+		},
+		catch: (error) => (error instanceof Error ? error : new Error(String(error)))
+	});
 
 	// Создаем расписание с экспоненциальной задержкой и ограничением количества попыток
 	const retrySchedule = pipe(
@@ -80,3 +71,25 @@ export function fetchStable(
 		})
 	);
 }
+
+
+
+/**
+ * Обертка над fetchStable для работы с JSON API
+ * Обрабатывает сетевые ошибки, проверяет HTTP статус и парсит JSON
+ */
+export const fetchJson = (url: string, options: RequestInit = {}): Effect.Effect<any, Error> =>
+	Effect.gen(function* () {
+		const response = yield* fetchStable(url, options);
+
+		if (!response.ok) {
+			yield* Effect.fail(new Error(`HTTP ${response.status}: ${response.statusText}: ${response.body}`));
+		}
+
+		const data = yield* Effect.tryPromise({
+			try: () => response.json(),
+			catch: () => new Error(`Failed to parse JSON: ${response.body}`)
+		});
+
+		return data;
+	});

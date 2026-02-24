@@ -4,9 +4,8 @@
 	import Card from '$lib/components/ui/card.svelte';
 	import { Upload } from 'lucide-svelte';
 
-	const dispatch = createEventDispatcher<{
-		upload: { file: File };
-		error: { message: string };
+	let { upload } = $props<{
+		upload: (file: File) => void;
 	}>();
 
 	const acceptedTypes = [
@@ -21,21 +20,21 @@
 	function handleFile(file: File) {
 		// Валидация типа файла
 		if (!acceptedTypes.includes(file.type)) {
-			dispatch('error', {
-				message: `Неподдерживаемый тип файла: ${file.type}. Поддерживаются: PDF, DOCX, XLSX, PNG, JPG, JPEG`
-			});
+			// dispatch('error', {
+			// 	message: `Неподдерживаемый тип файла: ${file.type}. Поддерживаются: PDF, DOCX, XLSX, PNG, JPG, JPEG`
+			// });
 			return;
 		}
 
 		// Валидация размера файла
 		if (file.size > config.maxFileSizeBytes) {
-			dispatch('error', {
-				message: `Файл слишком большой: ${(file.size / 1024 / 1024).toFixed(2)} МБ. Максимальный размер: ${config.maxFileSizeMB} МБ`
-			});
+			// dispatch('error', {
+			// 	message: `Файл слишком большой: ${(file.size / 1024 / 1024).toFixed(2)} МБ. Максимальный размер: ${config.maxFileSizeMB} МБ`
+			// });
 			return;
 		}
 
-		dispatch('upload', { file });
+		upload(file);
 	}
 
 	function handleFileInputChange(event: Event) {
@@ -106,16 +105,16 @@
 		cursor: pointer;
 	}
 
-	:global(.file-upload-container div[class*="rounded-none"]) {
+	:global(.file-upload-container div[class*='rounded-none']) {
 		border: 1px dashed hsl(var(--border));
 	}
 
-	.file-upload-container:hover :global(div[class*="rounded-none"]) {
+	.file-upload-container:hover :global(div[class*='rounded-none']) {
 		border-color: hsl(var(--primary));
 		background: hsl(var(--accent));
 	}
 
-	.file-upload-container.dragging :global(div[class*="rounded-none"]) {
+	.file-upload-container.dragging :global(div[class*='rounded-none']) {
 		border-color: hsl(var(--primary));
 		background: hsl(var(--accent));
 	}
