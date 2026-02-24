@@ -1,15 +1,18 @@
 <script lang="ts">
 	import ApplicationList from '$lib/components/ApplicationList.svelte';
 	import type { Application } from '$lib/business/types.js';
+	import ApplicationCard from '$lib/components/objects/ApplicationCard.svelte';
 
-	let selectedApplication: Application | null = null;
+	let selectedApplication: Application | null = $state(null);
 
 	function handleSelect(application: Application) {
+		console.log(application);
 		selectedApplication = application;
 	}
 
 	function handleUpload(application: Application) {
-		selectedApplication =application;
+		
+		selectedApplication = application;
 	}
 </script>
 
@@ -18,7 +21,9 @@
 		<ApplicationList select={handleSelect} upload={handleUpload} />
 	</div>
 	<div class="right-panel">
-		<!-- <ApplicationDetails applicationId={selectedApplication?.id || null} /> -->
+		{#if selectedApplication}
+			<ApplicationCard application={selectedApplication} />
+		{/if}
 	</div>
 </div>
 

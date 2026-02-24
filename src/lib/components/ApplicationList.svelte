@@ -8,15 +8,15 @@
 	import { Applications } from '$lib/api/rest';
 	import type { CreateApplicationResponse } from '$lib/api/types';
 	import Button from './ui/button.svelte';
+	import ApplicationBadge from './objects/ApplicationBadge.svelte';
 
-	let { select, upload } = $props<{
+	let {
+		select,
+		upload
+	}: {
 		select: (application: Application) => void;
 		upload: (application: Application) => void;
-	}>();
-
-	let selectedApplicationId: string | undefined = $state(undefined);
-	let isLoadingApplications = $state(false);
-	let errors: string[] | undefined = $state(undefined);
+	} = $props();
 
 	let applications: Application[] = $state([]);
 
@@ -59,12 +59,9 @@
 		<FileUpload upload={uploadApplicationFile} />
 	</div>
 
-	<div class="px-1 py-1 border-b border-border">
+	<div class="px-1 py-1 border-b border-border overflow-x-auto">
 		{#each applications as application}
-			<div class="application-item">
-				<div class="application-item-name">{application.originalFilename}</div>
-				<div class="application-item-date">{application.uploadDate}</div>
-			</div>
+			<ApplicationBadge {application} select={select} format="small" />
 		{/each}
 	</div>
 </div>
