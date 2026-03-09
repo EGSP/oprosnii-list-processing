@@ -19,20 +19,22 @@ import type { ApplicationGetProperties } from '$lib/storage/applications';
 const API_BASE = '/api';
 
 
-export const Applications = {
-	upload: (file: File): Effect.Effect<CreateApplicationResponse, Error> => {
-		const formData = new FormData();
-		formData.append('file', file);
-		return fetchJson(`${API_BASE}/applications?method=upload`, {
-			method: 'POST',
-			body: formData
-		});
-	},
-	get: (properties: ApplicationGetProperties): Effect.Effect<Application[], Error> => {
-		return fetchJson(`${API_BASE}/applications?method=get`, {
-			method: 'POST',
-			body: JSON.stringify(properties)
-		});
+export const REST = {
+	Applications: {
+		upload: (file: File): Effect.Effect<CreateApplicationResponse, Error> => {
+			const formData = new FormData();
+			formData.append('file', file);
+			return fetchJson(`${API_BASE}/applications?method=upload`, {
+				method: 'POST',
+				body: formData
+			});
+		},
+		get: (properties: ApplicationGetProperties): Effect.Effect<Application[], Error> => {
+			return fetchJson(`${API_BASE}/applications?method=get`, {
+				method: 'POST',
+				body: JSON.stringify(properties)
+			});
+		}
 	}
 }
 

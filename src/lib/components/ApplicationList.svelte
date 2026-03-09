@@ -5,7 +5,7 @@
 	import FileUpload from './FileUpload.svelte';
 	import { Effect } from 'effect';
 
-	import { Applications } from '$lib/api/rest';
+	import { REST } from '$lib/api/rest';
 	import type { CreateApplicationResponse } from '$lib/api/types';
 	import Button from './ui/button.svelte';
 	import ApplicationBadge from './objects/ApplicationBadge.svelte';
@@ -27,7 +27,7 @@
 	async function loadApplications() {
 		applications = await Effect.runPromise(
 			Effect.gen(function* () {
-				const applications = yield* Applications.get({ options: { simplify: true } });
+				const applications = yield* REST.Applications.get({ options: { simplify: true } });
 
 				return applications.sort(
 					(a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
@@ -38,7 +38,7 @@
 
 	async function uploadApplicationFile(file: File) {
 		const newApplication: CreateApplicationResponse = await Effect.runPromise(
-			Applications.upload(file)
+			REST.Applications.upload(file)
 		);
 		if (!newApplication) {
 			console.log(newApplication);
