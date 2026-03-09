@@ -1,53 +1,35 @@
-// import { error } from '@sveltejs/kit';
-// import type { RequestHandler } from './$types.js';
-// import { readFile, getApplication } from '$lib/storage/index.js';
-// import {
-// 	requireValidUUID,
-// 	getContentTypeFromFilename,
-// 	handleStorageError
-// } from '$lib/api/index.js';
+import type { RequestHandler } from './$types';
+import { ApplicationFiles } from '$lib/storage/files';
+import { Effect } from 'effect';
 
-// /**
-//  * GET /api/applications/:id/file - Получение файла заявки
-//  */
-// export const GET: RequestHandler = async ({ params }: { params: { id: string } }) => {
-// 	try {
-// 		const { id } = params;
+const extensionToMime: Record<string, string> = {
+	pdf: 'application/pdf',
+	jpg: 'image/jpeg',
+	jpeg: 'image/jpeg',
+	png: 'image/png'
+};
 
-// 		// Валидация UUID
-// 		const uuidError = requireValidUUID(id);
-// 		if (uuidError) {
-// 			return uuidError;
-// 		}
+export const GET: RequestHandler = async ({ params }) => {
+	const { id } = params;
 
-// 		// Проверяем существование заявки
-// 		const application = getApplication(id);
-// 		if (!application) {
-// 			return error(404, { message: 'Заявка не найдена' });
-// 		}
+	const response = await Effect.runPromise(
+		Effect.gen(function* () {
+			const path = yield* ApplicationFiles.path(id);
+			const buffer = yield* ApplicationFiles.read(id);
+			const fullBuffer = buffer.buffer as ArrayBuffer;
+			const finalArrayBuffer = fullBuffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+			const ext = path.split('.').pop()?.toLowerCase() ?? '';
+			const contentType = extensionToMime[ext] ?? 'application/octet-stream';
 
-// 		// Получаем файл
-// 		const fileData = readFile(id);
+			return new Response(finalArrayBuffer, {
+				status: 200,
+				headers: {
+					'Content-Type': contentType,
+					'Content-Disposition': `inline; filename="${id}.${ext}"`
+				}
+			});
+		})
+	);
 
-// 		if (!fileData) {
-// 			return error(404, { message: 'Файл заявки не найден' });
-// 		}
-
-// 		// Определяем Content-Type
-// 		const contentType = getContentTypeFromFilename(fileData.filename);
-
-// 		// Конвертируем Buffer в Uint8Array для Response
-// 		// Buffer в Node.js является подклассом Uint8Array, но для совместимости с Web API используем явное преобразование
-// 		const uint8Array = new Uint8Array(fileData.buffer);
-
-// 		// Возвращаем файл
-// 		return new Response(uint8Array, {
-// 			headers: {
-// 				'Content-Type': contentType,
-// 				'Content-Disposition': `attachment; filename="${application.originalFilename}"`
-// 			}
-// 		});
-// 	} catch (err) {
-// 		return handleStorageError(err);
-// 	}
-// };
+	return response;
+};

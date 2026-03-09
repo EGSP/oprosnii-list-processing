@@ -108,7 +108,7 @@ export function fetchOCRData(processingOperation: ProcessingOperation): Effect.E
 
 export function extractText(applicationId: string, fileInfo: FileInfo): Effect.Effect<ProcessingOperation, Error> {
 	const config = aiConfig.yandexOCR;
-	if (fileInfo.type !== 'pdf' && fileInfo.type !== 'image')
+	if (fileInfo.category !== 'pdf' && fileInfo.category !== 'image')
 		return Effect.fail(new OCRError('Не поддерживаемый тип файла'));
 
 	return Effect.gen(function* () {

@@ -52,7 +52,7 @@
 <div class="application-list">
 	<div class="px-1 py-1 border-b border-border">
 		<h2 class="m-0 text-base font-semibold text-foreground">Заявки</h2>
-		<Button onclick={loadApplications}>Загрузить заявки</Button>
+		<Button onclick={loadApplications}>Обновить список</Button>
 	</div>
 
 	<div class="px-1 py-1 border-b border-border">

@@ -11,40 +11,36 @@ import { logger } from '../utils/logger.js';
 import { PDFDocument } from 'pdf-lib';
 import { Effect, pipe } from 'effect';
 import { getOCRData } from '$lib/ai/ocr.js';
+import { getFileCategory } from './filesUtils.js';
 
 
 
-export type FileType = 'pdf' | 'document' | 'spreadsheet' | 'image';
+export type FileCategory = 'pdf' | 'document' | 'spreadsheet' | 'image';
 /**
  * Тип информации о файле (без buffer)
  */
 export type FileInfo = {
 	name: string;
-	type: FileType;
+	category: FileCategory;
 	extension: string;
 	pageCount: number;
 	extractedText?: string;
 }
 
-/**
- * Сохраняет файл заявки в хранилище
- * @param fileBuffer - Buffer с содержимым файла
- * @param applicationId - GUID заявки
- * @param originalFilename - Оригинальное имя файла (для сохранения расширения)
- * @returns Effect с путем к сохраненному файлу
- */
-export function saveUploadedFile(
-	fileBuffer: Buffer,
-	applicationId: string,
-	originalFilename: string
-): Effect.Effect<string, Error> {
-	return Effect.try({
-		try: () => {
-			// Создаем директорию для заявки
+
+export const ApplicationFiles = {
+	/**
+	  * Сохраняет файл заявки в хранилище
+	  * @param fileBuffer - Buffer с содержимым файла
+	  * @param applicationId - GUID заявки
+	  * @param originalFilename - Оригинальное имя файла (для сохранения расширения)
+	  * @returns Effect с путем к сохраненному файлу
+	  */
+	save: (fileBuffer: Buffer, applicationId: string, originalFilename: string): Effect.Effect<string, Error> => {
+		return Effect.gen(function* () {
 			const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
 			mkdirSync(applicationDir, { recursive: true });
 
-			// Сохраняем оригинальное расширение
 			const extension = originalFilename.split('.').pop() || '';
 			const filename = `${applicationId}.${extension}`;
 			const filePath = join(applicationDir, filename);
@@ -52,211 +48,54 @@ export function saveUploadedFile(
 			writeFileSync(filePath, fileBuffer);
 
 			return filePath;
-		},
-		catch: () => new Error(`Failed to save file for application ${applicationId}`)
-	});
-}
-
-/**
- * Получает путь к файлу заявки. Файл должен иметь GUID в имени. GUID - это ID заявки.
- */
-export function getFilePath(applicationId: string): Effect.Effect<string, Error> {
-	return Effect.gen(function* () {
-		const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
-
-		const dirExists = yield* Effect.sync(() => existsSync(applicationDir));
-		if (!dirExists) {
-			return yield* Effect.fail(new Error(`Application directory not found for application ${applicationId}`));
-		}
-
-		// Ищем файл в директории заявки
-		// Файл может иметь GUID как имя, с любым расширением
-		const files = yield* Effect.try({
-			try: () => readdirSync(applicationDir),
-			catch: () => new Error(`Failed to read directory for application ${applicationId}`)
 		});
-		
-		const file = files.find((f: string) => f.startsWith(applicationId));
+	},
+	/**
+	  * Получает путь к файлу заявки. Файл должен иметь GUID в имени. GUID - это ID заявки.
+	  * @param applicationId - GUID заявки
+	  * @returns Effect с путем к файлу заявки
+	  */
+	path: (applicationId: string): Effect.Effect<string, Error> => {
+		return Effect.gen(function* () {
+			const applicationDir = join(process.cwd(), config.uploadsDirectory, applicationId);
 
-		if (!file) {
-			return yield* Effect.fail(new Error(`File not found for application ${applicationId}. Files: ${files.join(', ')}`));
-		}
+			const dirExists = yield* Effect.sync(() => existsSync(applicationDir));
+			if (!dirExists) {
+				return yield* Effect.fail(new Error(`Application directory not found for application ${applicationId}`));
+			}
 
-		return join(applicationDir, file);
-	});
-}
-
-/**
- * Возвращает имя файла с расширением из полного пути
- * @param path - Полный путь к файлу
- * @returns Имя файла с расширением
- */
-export function getFileNameWithExtension(path: string): string {
-	const parts = path.split(/[\\/]/);
-	return parts[parts.length - 1];
-}
-
-/**
- * Возвращает имя файла без расширения из полного пути
- * @param path - Полный путь к файлу
- * @returns Имя файла без расширения
- */
-export function getFileNameWithoutExtension(path: string): string {
-	return path.split('.').slice(0, -1).join('.');
-}
-
-
-function getFileType(path: string): Effect.Effect<FileType, Error> {
-	return Effect.gen(function* () {
-		const extension = path.split('.').pop()?.toLowerCase();
-		if (!extension) {
-			return yield* Effect.fail(new Error('Не удалось определить расширение файла'));
-		}
-		
-		switch (extension) {
-			case 'pdf':
-				return 'pdf' as FileType;
-			case 'docx':
-			case 'doc':
-				return 'document' as FileType;
-			case 'xlsx':
-			case 'xls':
-				return 'spreadsheet' as FileType;
-			case 'jpeg':
-			case 'jpg':
-			case 'png':
-				return 'image' as FileType;
-			default:
-				return yield* Effect.fail(new Error(`Неизвестное расширение файла: ${extension}`));
-		}
-	});
-}
-
-function getFileExtension(path: string): Effect.Effect<string, Error> {
-	return Effect.gen(function* () {
-		const extension = path.split('.').pop()?.toLowerCase();
-		if (!extension) {
-			return yield* Effect.fail(new Error('Не удалось определить расширение файла'));
-		}
-		return extension;
-	});
-}
-
-/**
- * Читает файл
- */
-export function readFile(path: string): Effect.Effect<Buffer, Error> {
-	return Effect.gen(function* () {
-		if (!path) {
-			return yield* Effect.fail(new Error(`Invalid file path: ${path}`));
-		}
-
-		const exists = yield* Effect.sync(() => existsSync(path));
-		if (!exists) {
-			return yield* Effect.fail(new Error(`File not found for path ${path}`));
-		}
-
-		const buffer = yield* Effect.try({
-			try: () => readFileSync(path),
-			catch: () => new Error(`Failed to read file at path ${path}`)
-		});
-
-		return buffer;
-	});
-}
-
-/**
- * Читает файл заявки
- * @param applicationId - GUID заявки
- * @returns Effect с Buffer с содержимым файла
- */
-export function readApplicationFile(applicationId: string): Effect.Effect<Buffer, Error> {
-	return Effect.gen(function* () {
-		const filePath = yield* getFilePath(applicationId);
-		const buffer = yield* readFile(filePath);
-		return buffer;
-	});
-}
-
-/**
- * Определяет количество страниц в PDF файле
- */
-function getPDFPageCount(buffer: Buffer): Effect.Effect<number, Error> {
-	const uint8Array = new Uint8Array(buffer);
-	return Effect.tryPromise({
-		try: async () => {
-			const pdfDoc = await PDFDocument.load(uint8Array);
-			const pages = pdfDoc.getPages();
-			return pages.length;
-		},
-		catch: (error) => {
-			logger.warn('Не удалось определить количество страниц PDF', {
-				error: error instanceof Error ? error.message : String(error)
+			// Ищем файл в директории заявки
+			// Файл может иметь GUID как имя, с любым расширением
+			const files = yield* Effect.try({
+				try: () => readdirSync(applicationDir),
+				catch: () => new Error(`Failed to read directory for application ${applicationId}`)
 			});
-			return new Error('Не удалось определить количество страниц PDF');
-		}
-	});
+
+			const file = files.find((f: string) => f.startsWith(applicationId));
+
+			if (!file) {
+				return yield* Effect.fail(new Error(`File not found for application ${applicationId}. Files: ${files.join(', ')}`));
+			}
+
+			return join(applicationDir, file);
+		});
+	},
+	read: (applicationId: string): Effect.Effect<Buffer, Error> => {
+		return Effect.gen(function* () {
+			const filePath = yield* ApplicationFiles.path(applicationId);
+			return readFileSync(filePath);
+		});
+	},
+	category: (applicationId: string): Effect.Effect<FileCategory, Error> => {
+		return Effect.gen(function* () {
+			const path = yield* ApplicationFiles.path(applicationId);
+
+			const category = getFileCategory(path);
+			if (!category) {
+				return yield* Effect.fail(new Error('Не удалось определить категорию файла'));
+			}
+			return category;
+		});
+	},
 }
 
-function getPageCount(fileType: FileType, buffer: Buffer): Effect.Effect<number, Error> {
-	if (fileType === 'pdf') {
-		return getPDFPageCount(buffer);
-	}
-	return Effect.succeed(1);
-}
-
-/**
- * Получает полную информацию о файле заявки
- *
- * Возвращает все необходимые данные о файле в одном месте:
- * - buffer, filename, mimeType, fileType, pageCount, size
- * - extractedText формируется из операций
- *
- * @param applicationId - GUID заявки
- * @returns Effect с информацией о файле
- */
-// export function getFileInfo(applicationId: string): Effect.Effect<FileInfo, Error> {
-// 	return Effect.gen(function* () {
-// 		const filePath = yield* getFilePath(applicationId);
-// 		const buffer = yield* readFile(filePath);
-// 		const type = yield* getFileType(filePath);
-// 		const extension = yield* getFileExtension(filePath);
-// 		const pageCount = yield* getPageCount(type, buffer);
-		
-// 		let extractedText: string | undefined;
-// 		const textExtractionOperationIds = yield* findOperations(applicationId, 'extractText');
-
-// 		if (textExtractionOperationIds.length > 0) {
-// 			const texts = yield* Effect.all(
-// 				textExtractionOperationIds.map((operationId) =>
-// 					Effect.gen(function* () {
-// 						const operation = yield* getOperation(operationId);
-// 						if (operation.status !== 'completed') return '';
-						
-// 						if (operation.data.service) {
-// 							// Конвертируем Result в Effect для getOCRData
-// 							const ocrDataResult = getOCRData(operation);
-// 							if (ocrDataResult.isOk()) {
-// 								return ocrDataResult.value;
-// 							}
-// 							return '';
-// 						} else {
-// 							return operation.data?.result as string || '';
-// 						}
-// 					})
-// 				),
-// 				{ concurrency: 'unbounded' }
-// 			);
-			
-// 			extractedText = texts.filter((text) => text).join('\n');
-// 		}
-
-// 		return {
-// 			name: getFileNameWithoutExtension(filePath),
-// 			extension,
-// 			type,
-// 			pageCount,
-// 			extractedText
-// 		} as FileInfo;
-// 	});
-// }

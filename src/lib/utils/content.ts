@@ -6,7 +6,8 @@
  * Поддерживает форматы таблиц: xls, xlsx, xlsb, xlsm, xltx
  */
 
-import { getFileNameWithExtension, getFilePath, readApplicationFile, type FileInfo } from '$lib/storage/files';
+import { ApplicationFiles, type FileInfo } from '$lib/storage/files';
+import { getFileNameWithExtension } from '$lib/storage/filesUtils';
 import { Effect } from 'effect';
 
 // Ленивая загрузка textract через динамический импорт (для ESM совместимости)
@@ -144,13 +145,13 @@ export function extractTextFromSpreadsheets(
  */
 export function extractTextFromApplicationFile(applicationId: string, fileInfo: FileInfo): Effect.Effect<string, Error> {
 	return Effect.gen(function* () {
-		const fileBuffer = yield* readApplicationFile(applicationId);
-		const filePath = yield* getFilePath(applicationId);
+		const fileBuffer = yield* ApplicationFiles.read(applicationId);
+		const filePath = yield* ApplicationFiles.path(applicationId);
 		const filenameWithExtension = getFileNameWithExtension(filePath);
 		
-		if (fileInfo.type === 'document') {
+		if (fileInfo.category === 'document') {
 			return yield* extractTextFromDocuments(fileBuffer, filenameWithExtension);
-		} else if (fileInfo.type === 'spreadsheet') {
+		} else if (fileInfo.category === 'spreadsheet') {
 			return yield* extractTextFromSpreadsheets(fileBuffer, filenameWithExtension);
 		}
 		return yield* Effect.fail(new Error('Неподдерживаемый тип файла'));

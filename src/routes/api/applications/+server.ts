@@ -1,6 +1,6 @@
 import { error, fail, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { DB, saveUploadedFile } from '$lib/storage/index.js';
+import { ApplicationFiles } from '$lib/storage/index.js';
 import {
 	validateFileSize,
 	validateFileType
@@ -51,7 +51,7 @@ const UPLOAD_HANDLER = async (request: Request) => {
 	const application = await Effect.runPromise(
 		Effect.gen(function* () {
 			const application = yield* ApplicationsDB.create(file.name);
-			yield* saveUploadedFile(buffer, application.id, file.name);
+			yield* ApplicationFiles.save(buffer, application.id, file.name);
 			return application;
 		})
 	).catch((error) => new Error(error.message));

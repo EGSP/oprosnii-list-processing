@@ -9,15 +9,6 @@ import {
 	extractText
 } from '$lib/ai/ocr.js';
 import {
-	getFileInfo,
-	findOperations,
-	createOperation,
-	getApplication,
-	getOperation,
-	findOperationsByFilter,
-	updateOperation,
-	getOperationsByFilter,
-	deleteOperations,
 	type Application
 } from '../storage/index.js';
 import { Effect } from 'effect';
@@ -109,7 +100,7 @@ export function processProductTypeResolve(application: Application): Effect.Effe
 
 		// Create fresh operation
 		const text = yield* getExtractedText(application.id);
-		if (!text || text.length === 0) 
+		if (!text || text.length === 0)
 			return yield* Effect.fail(new Error('Текст извлеченный из базы данных заявки - пустой.'));
 
 		const processingOperation = yield* createOperation(application.id, 'resolveProductType');
